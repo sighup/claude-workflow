@@ -2,7 +2,7 @@
 name: cw-execute
 description: "Execute a single task from the native task board using the 11-phase protocol: orient, baseline, context, implement, verify-local, proof, sanitize, commit, verify-full, report, clean exit."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion
 ---
 
 # CW-Execute: Single Task Execution
@@ -32,7 +32,22 @@ You have no memory of previous executions.
 - **Always commit on success** - partial work is lost between sessions
 - **Update task status** via TaskUpdate - next worker depends on it
 - **Leave codebase clean** - no uncommitted changes after completion
+- **Proof artifacts are BLOCKING** - cannot proceed to commit without proof files
 - **Security sanitization is BLOCKING** - cannot commit unsanitized proofs
+
+## Proof File Requirements (MANDATORY)
+
+Every task execution MUST produce proof artifacts in the repository:
+
+```
+docs/specs/[spec-dir]/[NN]-proofs/
+├── {task_id}-01-{type}.txt    # First proof artifact
+├── {task_id}-02-{type}.txt    # Second proof artifact
+├── {task_id}-proofs.md        # Summary file (REQUIRED)
+└── ...
+```
+
+**The commit in Phase 8 MUST include proof files.** A commit without proof artifacts is incomplete and will fail validation.
 
 ## The 11-Phase Protocol
 
@@ -101,13 +116,91 @@ Execute proof artifacts and capture evidence.
 
 1. Determine proof directory from spec_path: `./docs/specs/[spec-dir]/[NN]-proofs/`
 2. Create the proof directory if it doesn't exist
-3. For each proof artifact in `metadata.proof_artifacts`:
+3. Read `metadata.proof_capture` for the capture method decided during planning
+4. For each proof artifact in `metadata.proof_artifacts`:
+
+**Automated proofs** (test, cli, file, url):
    a. Execute the command/check per artifact type
    b. Capture output to `{task_id}-{index+1:02d}-{type}.txt`
    c. Include header: type, command, expected, timestamp
    d. Compare result against expected
    e. Record PASS or FAIL
-4. Create summary: `{task_id}-proofs.md`
+
+**Visual proofs** (screenshot, browser, visual):
+
+Based on `metadata.proof_capture.visual_method`:
+
+| Method | Action |
+|--------|--------|
+| `auto` | Use the tool specified in `metadata.proof_capture.tool` to capture |
+| `manual` | Prompt user: "Please verify: [description]. Confirmed? (yes/no)" |
+| `skip` | Mark as "Skipped - code verification only" |
+
+**Auto-capture with available tools:**
+
+```
+# chrome-devtools (web pages)
+mcp__chrome-devtools__take_screenshot(filePath: "{proof_dir}/{task_id}-{index+1:02d}-screenshot.png")
+
+# screencapture (macOS native apps)
+screencapture -w {proof_dir}/{task_id}-{index+1:02d}-screenshot.png
+
+# scrot (Linux)
+scrot -s {proof_dir}/{task_id}-{index+1:02d}-screenshot.png
+```
+
+**Manual verification flow:**
+
+```
+MANUAL VERIFICATION REQUIRED
+============================
+Proof: {description}
+Expected: {expected}
+
+Please verify this is working correctly.
+Enter 'yes' to confirm, 'no' if it fails, or describe the issue:
+>
+```
+
+Record user response in proof file:
+```
+Type: visual (manual)
+Description: {description}
+Expected: {expected}
+Timestamp: {ISO timestamp}
+User Confirmed: yes|no
+User Notes: {any notes provided}
+Status: PASS|FAIL
+```
+
+5. Create summary: `{task_id}-proofs.md` (REQUIRED)
+
+**Phase 6 Gate Check (BLOCKING):**
+
+Before proceeding to Phase 7, verify:
+
+```bash
+# Check proof directory exists
+ls -la docs/specs/[spec-dir]/[NN]-proofs/
+
+# Verify required files exist
+ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*.txt
+ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-proofs.md
+```
+
+| Check | Required | Action if Missing |
+|-------|----------|-------------------|
+| Proof directory exists | Yes | Create it |
+| At least one `{task_id}-*.txt` file | Yes | Execute proof artifacts |
+| `{task_id}-proofs.md` summary | Yes | Create summary |
+| All proof artifacts have status | Yes | Re-run failed proofs |
+
+**BLOCK**: Do not proceed to Phase 7 until all proof files exist.
+
+If proof artifacts cannot be executed (e.g., environment issues):
+1. Create proof file with status `BLOCKED` and reason
+2. Document workaround or manual steps needed
+3. Still create the summary file
 
 See `references/proof-artifact-types.md` for type-specific instructions.
 
@@ -127,14 +220,34 @@ Remove sensitive data from proof files. **Cannot proceed until clean.**
 
 ### Phase 8: COMMIT
 
-Create atomic commit.
+Create atomic commit with implementation AND proof artifacts.
+
+**Pre-Commit Checklist (all must pass):**
+
+```bash
+# 1. Verify proof files exist (BLOCKING)
+test -d "docs/specs/[spec-dir]/[NN]-proofs" || { echo "ERROR: Proof directory missing"; exit 1; }
+test -f "docs/specs/[spec-dir]/[NN]-proofs/{task_id}-proofs.md" || { echo "ERROR: Proof summary missing"; exit 1; }
+ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*.txt >/dev/null 2>&1 || { echo "ERROR: No proof artifacts"; exit 1; }
+
+# 2. Verify sanitization complete
+grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proofs/{task_id}-* && { echo "ERROR: Unsanitized secrets"; exit 1; }
+```
+
+**If pre-commit checks fail:** Return to the blocking phase (Phase 6 or 7) and complete it.
+
+**Commit Steps:**
 
 1. Stage implementation files:
    - All files from `metadata.scope.files_to_create`
    - All files from `metadata.scope.files_to_modify`
-2. Stage proof files: `docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*`
-3. Create commit using `metadata.commit.template`
-4. Verify: `git log --oneline -1`
+2. Stage proof files: `git add docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*`
+3. Verify staged files include both implementation AND proofs:
+   ```bash
+   git diff --cached --name-only | grep -E "(src/|lib/|proof)"
+   ```
+4. Create commit using `metadata.commit.template`
+5. Verify commit includes proof files: `git show --name-only HEAD | grep proofs`
 
 ### Phase 9: VERIFY-FULL
 
@@ -148,29 +261,35 @@ Post-commit verification.
 
 ### Phase 10: REPORT
 
-Update task board.
+Update task board with proof artifact locations.
 
 ```
 TaskUpdate({
   taskId: "<native-id>",
   status: "completed",
   metadata: {
+    proof_dir: "docs/specs/[spec-dir]/[NN]-proofs",
     proof_results: [
       { type: "test", status: "pass", output_file: "T01-01-test.txt" },
       { type: "cli", status: "pass", output_file: "T01-02-cli.txt" }
     ],
+    proof_summary: "T01-proofs.md",
+    commit_sha: "<sha from git log>",
     completed_at: "2026-01-24T15:30:00Z"
   }
 })
 ```
 
+The `proof_dir` and `proof_summary` fields allow cw-validate to locate artifacts.
+
 ### Phase 11: CLEAN EXIT
 
-Leave pristine state.
+Leave pristine state with verified proof trail.
 
 1. `git status --porcelain` - should be empty
-2. Run `metadata.verification.post` one final time
-3. Output execution summary:
+2. Verify proof files are in commit: `git show --name-only HEAD | grep proofs`
+3. Run `metadata.verification.post` one final time
+4. Output execution summary:
 
 ```
 CW-EXECUTE COMPLETE
@@ -178,14 +297,22 @@ CW-EXECUTE COMPLETE
 Task: T01 - [subject]
 Status: COMPLETED
 
-Proof Artifacts:
-  [PASS] T01-01-test.txt
-  [PASS] T01-02-cli.txt
-  [    ] T01-proofs.md (summary)
+Proof Artifacts (committed):
+  [PASS] docs/specs/.../01-proofs/T01-01-test.txt
+  [PASS] docs/specs/.../01-proofs/T01-02-cli.txt
+  [SUMM] docs/specs/.../01-proofs/T01-proofs.md
 
 Commit: abc1234 feat(scope): description
+  - Implementation files: X
+  - Proof files: Y
 
 Progress: X/Y tasks complete
+```
+
+**Final Verification:**
+```bash
+# Confirm proof files exist in repository
+git ls-files docs/specs/*/[NN]-proofs/{task_id}-*
 ```
 
 ## Error Handling
@@ -211,11 +338,26 @@ Each phase allows max 3 retries before failure:
      metadata: {
        last_failure: "2026-01-24T15:30:00Z",
        failure_count: N,
-       failure_reason: "..."
+       failure_reason: "...",
+       failed_phase: "PROOF|SANITIZE|COMMIT|etc",
+       proof_status: "none|partial|complete"
      }
    })
    ```
-4. Exit with error summary
+4. Exit with error summary including which phase failed
+
+### Proof Creation Failures
+
+If proof artifacts cannot be created:
+
+| Scenario | Action |
+|----------|--------|
+| Command fails | Create proof file with FAIL status, include error output |
+| Environment missing | Create proof file with BLOCKED status, document what's needed |
+| Manual verification declined | Create proof file with REJECTED status, include user feedback |
+| Tool unavailable | Create proof file with SKIPPED status per `proof_capture.visual_method` |
+
+**Never skip proof file creation entirely.** Even failures must be documented in a proof file so validation can detect gaps.
 
 ### Resuming Interrupted Tasks
 

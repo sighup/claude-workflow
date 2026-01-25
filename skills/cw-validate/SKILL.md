@@ -40,7 +40,7 @@ All 6 gates must pass for overall PASS:
 |------|------|----------|
 | **A** | No CRITICAL or HIGH severity issues | Yes |
 | **B** | No `Unknown` entries in coverage matrix | Yes |
-| **C** | All proof artifacts accessible and functional | Yes |
+| **C** | All proof artifacts accessible and functional (auto, manual confirmed, or code-verified) | Yes |
 | **D** | Changed files in scope or justified in commits | Yes |
 | **E** | Implementation follows repository standards | Yes |
 | **F** | No real credentials in proof artifacts | Yes |
@@ -80,14 +80,34 @@ For each functional requirement in the spec:
 For each proof artifact in completed tasks:
 
 1. Read the proof type and command from metadata
-2. Re-execute where possible:
+2. Check `metadata.proof_capture` for the capture method used
+
+**Automated proofs** - Re-execute where possible:
    - `test`: Re-run test command
    - `cli`: Re-run CLI command
    - `file`: Check file existence and content
    - `url`: Make HTTP request (if server running)
-   - `browser`: Note as "manual verification needed"
+
+**Visual proofs** - Handle based on capture method:
+
+| Capture Method | Validation Action |
+|----------------|-------------------|
+| `auto` | Verify screenshot file exists in proof directory |
+| `manual` | Check proof file for "User Confirmed: yes" |
+| `skip` | Accept code-level verification (mark as "Verified via code") |
+
+**Manual confirmation is valid proof** when:
+- Proof file exists with `User Confirmed: yes`
+- Timestamp is from the implementation session
+- No conflicting evidence (e.g., broken tests)
+
 3. Compare current output to expected
-4. Record PASS/FAIL with evidence
+4. Record status with evidence:
+   - `Verified` - Automated proof passes or manual confirmation recorded
+   - `Verified (manual)` - User confirmed during execution
+   - `Verified (code)` - Skipped visual, code evidence sufficient
+   - `Failed` - Proof failed or user rejected
+   - `Missing` - No proof file found
 
 ### Step 5: Apply Gates
 
@@ -131,10 +151,12 @@ Produce the validation report and save to:
 
 ## Coverage Matrix: Proof Artifacts
 
-| Task | Artifact | Type | Status | Current Result |
-|------|----------|------|--------|----------------|
-| T01 | Login test suite | test | Verified | 5/5 tests pass |
-| T01 | Curl login endpoint | cli | Verified | 200 + JWT |
+| Task | Artifact | Type | Capture | Status | Current Result |
+|------|----------|------|---------|--------|----------------|
+| T01 | Login test suite | test | auto | Verified | 5/5 tests pass |
+| T01 | Curl login endpoint | cli | auto | Verified | 200 + JWT |
+| T01 | Dashboard screenshot | screenshot | manual | Verified (manual) | User confirmed |
+| T01 | Error state visual | visual | skip | Verified (code) | Code evidence |
 
 ## Validation Issues
 
