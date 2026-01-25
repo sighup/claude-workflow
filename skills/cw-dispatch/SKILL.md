@@ -19,7 +19,26 @@ Always begin your response with: **CW-DISPATCH**
 TaskList()
 ```
 
-If TaskList() returns "No tasks found", report that and exit.
+### MANDATORY: Report Raw Task Counts
+
+After TaskList() returns, you MUST report the exact counts before any other analysis:
+
+```
+TASK BOARD STATUS
+=================
+Total tasks:    [exact number from TaskList]
+Completed:      [count where status=completed]
+Pending:        [count where status=pending]
+  - Unblocked:  [pending with no blockedBy or all blockedBy completed]
+  - Blocked:    [pending with incomplete blockedBy]
+In Progress:    [count where status=in_progress]
+```
+
+**CRITICAL VERIFICATION**:
+- ONLY claim "No tasks to dispatch" if the "Pending Unblocked" count is **literally 0**
+- If TaskList returns actual task data, you MUST process it - do not skip to completion
+- If you see task IDs (T01, T02, etc.) in TaskList output, tasks exist - analyze them
+- NEVER fabricate completion reports - only report what TaskList actually returned
 
 ## Overview
 
@@ -62,13 +81,20 @@ The `cw-execute` skill contains the 11-phase protocol including:
 TaskList()
 ```
 
+**You MUST have already reported the raw task counts (see MANDATORY FIRST ACTION).**
+
 Categorize tasks:
 - **Ready**: status=pending, no blockedBy (or all blockedBy completed)
 - **Blocked**: has incomplete blockedBy dependencies
 - **In Progress**: already assigned to a worker
 - **Completed**: done
 
-If no ready tasks exist, report status and exit.
+**Exit conditions (ONLY if verified against actual counts):**
+- If TaskList returns "No tasks found" (empty board): exit with "No tasks on board"
+- If Ready count = 0 but Blocked > 0: exit with "No unblocked tasks - waiting on dependencies"
+- If Ready count = 0 and Pending = 0: exit with "All tasks completed"
+
+**ANTI-HALLUCINATION CHECK**: Before exiting, verify your exit reason matches the counts you reported above. If you claimed "Pending Unblocked: 32" but are about to say "no tasks", STOP and re-read TaskList output.
 
 ### Step 2: Identify Parallel Groups
 
@@ -197,6 +223,18 @@ When Swarms becomes available, this dispatch logic moves into the team lead agen
 Today:   /cw-dispatch -> Task tool calls -> workers
 Swarms:  Lead agent -> spawns workers -> workers read board
 ```
+
+## Pre-Exit Verification
+
+Before outputting any completion or "no tasks" message, verify:
+
+1. **Re-check your reported counts**: Look at the TASK BOARD STATUS you printed earlier
+2. **Match your conclusion to the data**:
+   - "No tasks to dispatch" requires Pending Unblocked = 0
+   - "All complete" requires Pending = 0 AND In Progress = 0
+3. **If counts don't match your conclusion**: Re-read TaskList output and correct
+
+**WARNING**: If you find yourself writing a detailed "completion report" with stats like "151 proof artifacts" or "63 library files" that you did NOT just count from TaskList, you are hallucinating. STOP and re-run TaskList.
 
 ## What Comes Next
 

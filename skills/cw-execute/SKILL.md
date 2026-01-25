@@ -273,6 +273,10 @@ Post-commit verification.
 
 Update task board with proof artifact locations.
 
+**Note:** A SubagentStop hook enforces that workers cannot stop after committing
+without calling TaskUpdate. If you attempt to exit after Phase 8 but before completing
+this phase, you will be prompted to call TaskUpdate before stopping.
+
 ```
 TaskUpdate({
   taskId: "<native-id>",

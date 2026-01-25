@@ -2,7 +2,7 @@
 name: cw-spec
 description: "Generate a structured specification with demoable units, functional requirements, and proof artifact definitions. Use when starting a new feature to define what will be built before any code is written."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Write, WebFetch, WebSearch
+allowed-tools: Glob, Grep, Read, Write, WebFetch, WebSearch, AskUserQuestion, Skill
 ---
 
 # CW-Spec: Specification Generator
@@ -80,7 +80,22 @@ Evaluate whether the feature is appropriately sized.
 - Refactoring one module maintaining backward compatibility
 - Single user story with end-to-end flow
 
-**ALWAYS** report scope assessment to the user. If inappropriate, pause and suggest alternatives.
+**ALWAYS** report scope assessment to the user. If inappropriate, use AskUserQuestion to present alternatives:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "This feature seems too large for a single spec. How should we proceed?",
+    header: "Scope",
+    options: [
+      { label: "Split into phases", description: "Create multiple specs, implement incrementally" },
+      { label: "Reduce scope", description: "Focus on core functionality only" },
+      { label: "Proceed anyway", description: "Accept larger scope with more demoable units" }
+    ],
+    multiSelect: false
+  }]
+})
+```
 
 ### Step 4: Clarifying Questions
 
@@ -99,10 +114,32 @@ Ask questions to understand "what" and "why" (not "how"):
 
 **Process:**
 1. Create questions file: `[NN]-questions-[round]-[feature-name].md`
-2. Present questions with multiple-choice options
-3. **STOP and wait** for user answers
-4. Read answers, ask follow-ups if needed (increment round number)
+2. **Use the AskUserQuestion tool** to prompt the user interactively:
+   ```
+   AskUserQuestion({
+     questions: [
+       {
+         question: "What problem does this feature solve?",
+         header: "Problem",
+         options: [
+           { label: "Option A", description: "Description of option A" },
+           { label: "Option B", description: "Description of option B" }
+         ],
+         multiSelect: false
+       }
+     ]
+   })
+   ```
+3. **STOP and wait** for user answers before proceeding
+4. If answers reveal gaps, ask follow-ups (increment round number in questions file)
 5. Only proceed to spec generation when you have sufficient detail
+
+**AskUserQuestion Guidelines:**
+- Group related questions (max 4 per call)
+- Provide 2-4 concrete options per question (users can always select "Other")
+- Use `multiSelect: true` when multiple choices are valid
+- Keep headers short (max 12 chars): "Scope", "Auth", "Storage", etc.
+- Write clear option descriptions explaining implications
 
 ### Step 5: Spec Generation
 
@@ -190,4 +227,24 @@ Each demoable unit must be:
 
 ## What Comes Next
 
-Once the spec is complete and approved, instruct the user to run `/cw-plan` to transform the specification into an executable task graph.
+Once the spec is complete and approved, use AskUserQuestion to offer next steps:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "The specification is complete. What would you like to do next?",
+    header: "Next Step",
+    options: [
+      { label: "Run /cw-plan", description: "Transform this spec into an executable task graph" },
+      { label: "Review spec again", description: "Make additional changes before planning" },
+      { label: "Done for now", description: "Save the spec and continue later" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+If the user selects "Run /cw-plan", invoke the skill:
+```
+Skill({ skill: "cw-plan" })
+```

@@ -2,7 +2,7 @@
 name: cw-plan
 description: "Transform a specification into a native task graph with dependencies. Creates parent tasks (demoable units) first, then sub-tasks after approval. Each task carries self-contained metadata for autonomous execution."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion
+allowed-tools: Glob, Grep, Read, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, Skill
 ---
 
 # CW-Plan: Specification to Task Graph
@@ -203,7 +203,26 @@ Before presenting to user:
 
 ## What Comes Next
 
-After task graph is created:
-- `/cw-dispatch` to spawn parallel workers for independent tasks
-- `/cw-execute` to run a single task manually
-- `cw-loop` shell script for autonomous execution
+After the task graph is complete, use AskUserQuestion to let the user choose their execution approach:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "The task graph is ready for execution. How would you like to proceed?",
+    header: "Execution",
+    options: [
+      { label: "Parallel (/cw-dispatch)", description: "Spawn parallel workers for independent tasks (recommended)" },
+      { label: "Single task (/cw-execute)", description: "Execute one task manually with full control" },
+      { label: "Autonomous (cw-loop)", description: "Run cw-loop shell script for hands-off execution" },
+      { label: "Done for now", description: "Save the task graph and execute later" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Based on user selection:
+- **Parallel**: `Skill({ skill: "cw-dispatch" })`
+- **Single task**: `Skill({ skill: "cw-execute" })`
+- **Autonomous**: Instruct user to run `./scripts/cw-loop` from their terminal
+- **Done for now**: Confirm task graph is saved and ready when they return

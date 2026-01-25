@@ -1,5 +1,18 @@
 {
   "name": "claude-workflow",
-  "version": "1.2.0",
-  "description": "Unified spec-to-execution workflow system. Combines spec rigor, autonomous execution, and native task orchestration with parallel agent dispatch. Swarms-ready architecture."
+  "version": "1.3.0",
+  "description": "Unified spec-to-execution workflow system. Combines spec rigor, autonomous execution, and native task orchestration with parallel agent dispatch. Swarms-ready architecture.",
+  "hooks": {
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/verify-task-update.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }
