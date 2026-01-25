@@ -163,11 +163,24 @@ while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
     NEXT=$(get_next_task_id)
     log_info "Next task: $NEXT ($PENDING pending unblocked)"
 
+    # Capture completed count before execution
+    COMPLETED_BEFORE=$(get_completed_count)
+
     # Execute task(s)
     log_info "Invoking Claude with $SKILL_NAME..."
     if invoke_claude "$SKILL_PROMPT" "$CW_MODEL"; then
         log_success "Execution completed"
         FAILURES=0
+
+        # Verify task progress was recorded
+        COMPLETED_AFTER=$(get_completed_count)
+        if [ "$COMPLETED_AFTER" -eq "$COMPLETED_BEFORE" ]; then
+            log_warning "No tasks were marked completed. Worker may have bypassed cw-execute."
+            log_warning "Check that workers invoke the Skill tool with 'cw-execute'."
+        else
+            NEWLY_DONE=$((COMPLETED_AFTER - COMPLETED_BEFORE))
+            log_info "Tasks completed this iteration: $NEWLY_DONE"
+        fi
     else
         FAILURES=$((FAILURES + 1))
         log_error "Execution failed (failure $FAILURES/$CW_MAX_FAILURES)"

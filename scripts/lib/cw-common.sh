@@ -278,6 +278,16 @@ is_complete() {
     [ "$result" = "true" ]
 }
 
+# Get count of completed tasks
+get_completed_count() {
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        echo "0"
+        return
+    fi
+
+    jq -s '[.[] | select(.status == "completed")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
+}
+
 # Get task counts by status
 get_task_counts() {
     if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
