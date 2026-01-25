@@ -98,13 +98,19 @@ check_claude() {
 
 CW_INVOKE_RETRIES="${CW_INVOKE_RETRIES:-3}"    # retries per invocation
 CW_RETRY_DELAY="${CW_RETRY_DELAY:-10}"          # seconds between retries
+CW_PRINT="${CW_PRINT:-false}"                   # buffer output (true) or stream (false)
 
 invoke_claude() {
     local PROMPT="$1"
     local MODEL="${2:-$CW_MODEL}"
     local ATTEMPT=0
 
-    local CMD=(claude --print --model "$MODEL" --dangerously-skip-permissions)
+    local CMD=(claude --model "$MODEL" --dangerously-skip-permissions)
+
+    # Add --print flag to buffer output if requested
+    if [ "$CW_PRINT" = "true" ]; then
+        CMD+=(--print)
+    fi
 
     # Resume the discovered session to access its tasks
     if [ -n "$CW_SESSION_ID" ]; then

@@ -13,6 +13,7 @@
 #   -n, --max-iter N      Maximum iterations (default: 50)
 #   -s, --sleep N         Seconds between iterations (default: 5)
 #   -d, --dispatch        Use cw-dispatch for parallel execution (default: cw-execute)
+#   -p, --print           Buffer output instead of streaming (quieter but no progress)
 #   -h, --help            Show this help message
 #
 # Arguments:
@@ -24,6 +25,7 @@
 #   CW_SLEEP              Seconds between iterations (default: 5)
 #   CW_MAX_FAILURES       Max consecutive failures before abort (default: 3)
 #   CW_TIMEOUT            Claude invocation timeout in seconds (default: 0/none)
+#   CW_PRINT              Buffer output instead of streaming (default: false)
 #   CW_NON_INTERACTIVE    Skip confirmation prompt if "true"
 #
 
@@ -50,6 +52,7 @@ show_help() {
     echo "  -n, --max-iter N      Maximum iterations (default: $CW_MAX_ITERATIONS)"
     echo "  -s, --sleep N         Seconds between iterations (default: $CW_SLEEP)"
     echo "  -d, --dispatch        Use cw-dispatch for parallel execution"
+    echo "  -p, --print           Buffer output instead of streaming"
     echo "  -h, --help            Show this help"
     echo ""
     echo "Arguments:"
@@ -72,6 +75,7 @@ while [[ $# -gt 0 ]]; do
         -n|--max-iter) CW_MAX_ITERATIONS="$2"; shift 2 ;;
         -s|--sleep) CW_SLEEP="$2"; shift 2 ;;
         -d|--dispatch) USE_DISPATCH=true; shift ;;
+        -p|--print) CW_PRINT=true; shift ;;
         -h|--help) show_help; exit 0 ;;
         -*) log_error "Unknown option: $1"; show_help; exit 4 ;;
         *) PROJECT_PATH="$1"; shift ;;
@@ -96,6 +100,7 @@ log_info "Max iterations: $CW_MAX_ITERATIONS"
 log_info "Sleep between: ${CW_SLEEP}s"
 log_info "Max failures: $CW_MAX_FAILURES"
 log_info "Mode: $([ "$USE_DISPATCH" = true ] && echo "dispatch (parallel)" || echo "execute (sequential)")"
+log_info "Output: $([ "$CW_PRINT" = "true" ] && echo "buffered (--print)" || echo "streaming")"
 
 # =============================================================================
 # Session Discovery
