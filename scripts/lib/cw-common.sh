@@ -179,68 +179,76 @@ get_all_tasks() {
         return 1
     fi
 
-    find "$CW_TASKS_DIR" -name "*.json" -exec cat {} \; 2>/dev/null | jq -s '.'
+    # Use jq to properly merge all task files into a single array
+    jq -s '.' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "[]"
 }
 
 # Get count of pending unblocked tasks
 # A task is unblocked if blockedBy is empty or all blockedBy tasks are completed
 get_pending_count() {
-    local all_tasks
-    all_tasks=$(get_all_tasks)
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        echo "0"
+        return
+    fi
 
-    # Get list of completed task IDs
-    local completed_ids
-    completed_ids=$(echo "$all_tasks" | jq -r '[.[] | select(.status=="completed") | .id] | @json')
-
-    # Count pending tasks where all blockedBy are completed (or blockedBy is empty)
-    echo "$all_tasks" | jq --argjson completed "$completed_ids" '
-        [.[] | select(
+    # Single jq call: compute completed IDs, then count pending unblocked
+    jq -s '
+        . as $all |
+        [$all[] | select(.status == "completed") | .id] as $completed |
+        [$all[] | select(
             .status == "pending" and
-            ((.blockedBy // []) | length == 0 or ((.blockedBy // []) | all(. as $id | $completed | index($id))))
+            ((.blockedBy // []) - $completed | length == 0)
         )] | length
-    '
+    ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
 }
 
 # Get next task ID (first pending unblocked task)
 get_next_task_id() {
-    local all_tasks
-    all_tasks=$(get_all_tasks)
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        echo ""
+        return
+    fi
 
-    local completed_ids
-    completed_ids=$(echo "$all_tasks" | jq -r '[.[] | select(.status=="completed") | .id] | @json')
-
-    echo "$all_tasks" | jq -r --argjson completed "$completed_ids" '
-        [.[] | select(
+    # Single jq call: compute completed IDs, then find first pending unblocked
+    jq -rs '
+        . as $all |
+        [$all[] | select(.status == "completed") | .id] as $completed |
+        [$all[] | select(
             .status == "pending" and
-            ((.blockedBy // []) | length == 0 or ((.blockedBy // []) | all(. as $id | $completed | index($id))))
-        )] | sort_by(.id) | .[0].id // empty
-    '
+            ((.blockedBy // []) - $completed | length == 0)
+        )] | sort_by(.id | tonumber? // .id) | .[0].id // empty
+    ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
 }
 
 # Check if all tasks are complete
 is_complete() {
-    local all_tasks
-    all_tasks=$(get_all_tasks)
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        return 1
+    fi
 
-    local pending in_progress
-    pending=$(echo "$all_tasks" | jq '[.[] | select(.status=="pending")] | length')
-    in_progress=$(echo "$all_tasks" | jq '[.[] | select(.status=="in_progress")] | length')
+    local result
+    result=$(jq -s '
+        ([.[] | select(.status == "pending")] | length == 0) and
+        ([.[] | select(.status == "in_progress")] | length == 0)
+    ' "$CW_TASKS_DIR"/*.json 2>/dev/null)
 
-    [ "$pending" -eq 0 ] && [ "$in_progress" -eq 0 ]
+    [ "$result" = "true" ]
 }
 
 # Get task counts by status
 get_task_counts() {
-    local all_tasks
-    all_tasks=$(get_all_tasks)
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'
+        return
+    fi
 
-    echo "$all_tasks" | jq '{
+    jq -s '{
         total: length,
         completed: [.[] | select(.status=="completed")] | length,
         pending: [.[] | select(.status=="pending")] | length,
         in_progress: [.[] | select(.status=="in_progress")] | length,
         failed: [.[] | select(.metadata.failure_count > 0)] | length
-    }'
+    }' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'
 }
 
 # =============================================================================
@@ -274,19 +282,35 @@ print_task_status() {
 
 # Show task list
 show_task_list() {
-    local all_tasks
-    all_tasks=$(get_all_tasks)
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        log_warning "No tasks directory found."
+        return 1
+    fi
 
-    if [ "$(echo "$all_tasks" | jq 'length')" -eq 0 ]; then
+    local count
+    count=$(ls "$CW_TASKS_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
+
+    if [ "$count" -eq 0 ]; then
         log_warning "No tasks found."
         return 1
     fi
 
-    echo "$all_tasks" | jq -r '.[] |
+    jq -rs '.[] |
         if .status == "completed" then "  \u001b[32m[✓]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         elif .metadata.failure_count > 0 then "  \u001b[31m[✗]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         elif .status == "in_progress" then "  \u001b[33m[~]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         else "  [ ] \(.metadata.task_id // .id): \(.subject)"
         end
-    ' | sort
+    ' "$CW_TASKS_DIR"/*.json 2>/dev/null | sort
+}
+
+# Get task subject by ID
+get_task_subject() {
+    local task_id="$1"
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        echo ""
+        return
+    fi
+
+    jq -rs --arg id "$task_id" '.[] | select(.id == $id) | .subject' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
 }
