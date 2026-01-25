@@ -1,0 +1,164 @@
+#!/bin/bash
+#
+# cw-loop - Autonomous execution loop for Claude Workflow
+#
+# Orchestrates task execution by exporting manifest state, checking for
+# available work, and invoking Claude to execute one task per iteration.
+#
+# Usage:
+#   ./cw-loop [OPTIONS]
+#
+# Options:
+#   -m, --model MODEL     Claude model to use (default: sonnet)
+#   -n, --max-iter N      Maximum iterations (default: 50)
+#   -s, --sleep N         Seconds between iterations (default: 5)
+#   -h, --help            Show this help message
+#
+# Environment Variables:
+#   CW_MODEL              Claude model (default: sonnet)
+#   CW_MAX_ITERATIONS     Maximum iterations (default: 50)
+#   CW_SLEEP              Seconds between iterations (default: 5)
+#   CW_MAX_FAILURES       Max consecutive failures before abort (default: 3)
+#   CW_TIMEOUT            Claude invocation timeout in seconds (default: 0/none)
+#   CW_NON_INTERACTIVE    Skip confirmation prompt if "true"
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+show_help() {
+    echo "Usage: cw-loop [OPTIONS]"
+    echo ""
+    echo "Autonomous execution loop for Claude Workflow tasks."
+    echo ""
+    echo "Options:"
+    echo "  -m, --model MODEL     Claude model (default: $CW_MODEL)"
+    echo "  -n, --max-iter N      Maximum iterations (default: $CW_MAX_ITERATIONS)"
+    echo "  -s, --sleep N         Seconds between iterations (default: $CW_SLEEP)"
+    echo "  -h, --help            Show this help"
+    echo ""
+    echo "Environment Variables:"
+    echo "  CW_MODEL, CW_MAX_ITERATIONS, CW_SLEEP, CW_MAX_FAILURES, CW_TIMEOUT"
+    echo ""
+    echo "Exit Codes:"
+    echo "  0  All tasks completed successfully"
+    echo "  1  Max iterations exhausted"
+    echo "  2  Max consecutive failures reached"
+    echo "  3  No available tasks (all blocked)"
+    echo "  4  Missing dependencies"
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -m|--model) CW_MODEL="$2"; shift 2 ;;
+        -n|--max-iter) CW_MAX_ITERATIONS="$2"; shift 2 ;;
+        -s|--sleep) CW_SLEEP="$2"; shift 2 ;;
+        -h|--help) show_help; exit 0 ;;
+        *) log_error "Unknown option: $1"; show_help; exit 4 ;;
+    esac
+done
+
+# =============================================================================
+# Preflight Checks
+# =============================================================================
+
+check_jq || exit 4
+check_claude || exit 4
+
+print_banner "Claude Workflow - Autonomous Loop"
+
+log_info "Model: $CW_MODEL"
+log_info "Max iterations: $CW_MAX_ITERATIONS"
+log_info "Sleep between: ${CW_SLEEP}s"
+log_info "Max failures: $CW_MAX_FAILURES"
+
+# =============================================================================
+# Initial Manifest Export
+# =============================================================================
+
+log_header "Exporting initial task state"
+export_manifest
+
+if [ ! -f "$CW_MANIFEST" ]; then
+    log_error "Failed to export manifest. Ensure tasks exist on the task board."
+    log_info "Run '/cw-plan' first to create tasks from a spec."
+    exit 4
+fi
+
+print_manifest_status
+show_task_list
+
+# Confirm before starting
+if [ "${CW_NON_INTERACTIVE}" != "true" ]; then
+    echo ""
+    echo -e "${YELLOW}Ready to start autonomous execution.${NC}"
+    echo "Press Enter to continue or Ctrl+C to cancel..."
+    read -r
+fi
+
+# =============================================================================
+# Main Loop
+# =============================================================================
+
+ITERATION=0
+FAILURES=0
+
+while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
+    ITERATION=$((ITERATION + 1))
+
+    log_header "Iteration $ITERATION / $CW_MAX_ITERATIONS"
+
+    # Re-export manifest to get fresh state
+    export_manifest
+
+    # Check completion
+    if is_complete; then
+        log_success "All tasks completed!"
+        print_manifest_status
+        exit 0
+    fi
+
+    # Check for available work
+    PENDING=$(get_pending_count)
+    if [ "$PENDING" -eq 0 ]; then
+        log_warning "No unblocked pending tasks available."
+        print_manifest_status
+        exit 3
+    fi
+
+    NEXT=$(get_next_task_id)
+    log_info "Next task: $NEXT ($PENDING pending unblocked)"
+
+    # Execute one task
+    log_info "Invoking Claude to execute task..."
+    if invoke_claude "Use the Skill tool to invoke 'cw-execute'. Execute the next available task from the task board." "$CW_MODEL"; then
+        log_success "Task execution completed"
+        FAILURES=0
+    else
+        FAILURES=$((FAILURES + 1))
+        log_error "Task execution failed (failure $FAILURES/$CW_MAX_FAILURES)"
+
+        if [ $FAILURES -ge $CW_MAX_FAILURES ]; then
+            log_error "Max consecutive failures reached. Aborting."
+            print_manifest_status
+            exit 2
+        fi
+    fi
+
+    # Sleep between iterations
+    if [ $ITERATION -lt $CW_MAX_ITERATIONS ]; then
+        log_info "Sleeping ${CW_SLEEP}s before next iteration..."
+        sleep "$CW_SLEEP"
+    fi
+done
+
+log_warning "Max iterations ($CW_MAX_ITERATIONS) exhausted."
+export_manifest
+print_manifest_status
+exit 1

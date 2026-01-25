@@ -1,0 +1,108 @@
+#!/bin/bash
+#
+# cw-status - Display task progress from manifest
+#
+# Reads cw-manifest.json and displays current task state.
+# Does NOT invoke Claude - purely reads the last exported state.
+#
+# Usage:
+#   ./cw-status [OPTIONS]
+#
+# Options:
+#   -l, --list            Show full task list
+#   -f, --failed          Show only failed tasks
+#   -p, --pending         Show only pending unblocked tasks
+#   -j, --json            Output raw JSON summary
+#   -r, --refresh         Re-export manifest before displaying
+#   -h, --help            Show this help
+#
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+SHOW_LIST=false
+SHOW_FAILED=false
+SHOW_PENDING=false
+OUTPUT_JSON=false
+REFRESH=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -l|--list) SHOW_LIST=true; shift ;;
+        -f|--failed) SHOW_FAILED=true; shift ;;
+        -p|--pending) SHOW_PENDING=true; shift ;;
+        -j|--json) OUTPUT_JSON=true; shift ;;
+        -r|--refresh) REFRESH=true; shift ;;
+        -h|--help)
+            echo "Usage: cw-status [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  -l, --list      Show full task list"
+            echo "  -f, --failed    Show only failed tasks"
+            echo "  -p, --pending   Show only pending unblocked tasks"
+            echo "  -j, --json      Output raw JSON summary"
+            echo "  -r, --refresh   Re-export manifest first (requires Claude)"
+            echo "  -h, --help      Show this help"
+            exit 0
+            ;;
+        *) log_error "Unknown option: $1"; exit 1 ;;
+    esac
+done
+
+# =============================================================================
+# Main
+# =============================================================================
+
+if [ "$REFRESH" = true ]; then
+    check_claude || exit 1
+    export_manifest
+fi
+
+if [ ! -f "$CW_MANIFEST" ]; then
+    log_error "No manifest found at $CW_MANIFEST"
+    log_info "Run '/cw-manifest' or 'cw-status --refresh' to export task state."
+    exit 1
+fi
+
+# Check staleness
+EXPORTED_AT=$(jq -r '.exported_at // "unknown"' "$CW_MANIFEST")
+
+if [ "$OUTPUT_JSON" = true ]; then
+    jq '.summary' "$CW_MANIFEST"
+    exit 0
+fi
+
+print_banner "Claude Workflow Status"
+log_info "Manifest exported: $EXPORTED_AT"
+
+if [ "$SHOW_FAILED" = true ]; then
+    echo ""
+    echo -e "${RED}Failed Tasks:${NC}"
+    jq -r '.tasks[] | select(.status=="failed") | "  [\(.task_id)] \(.subject)"' "$CW_MANIFEST"
+    FAILED_COUNT=$(jq '[.tasks[] | select(.status=="failed")] | length' "$CW_MANIFEST")
+    if [ "$FAILED_COUNT" -eq 0 ]; then
+        echo "  (none)"
+    fi
+elif [ "$SHOW_PENDING" = true ]; then
+    echo ""
+    echo -e "${YELLOW}Pending Unblocked Tasks:${NC}"
+    jq -r '.tasks[] | select(.status=="pending" and (.blocked_by|length)==0) | "  [\(.task_id)] \(.subject) (complexity: \(.complexity))"' "$CW_MANIFEST"
+    PENDING_COUNT=$(get_pending_count)
+    if [ "$PENDING_COUNT" -eq 0 ]; then
+        echo "  (none - all pending tasks are blocked)"
+    fi
+elif [ "$SHOW_LIST" = true ]; then
+    echo ""
+    show_task_list
+else
+    print_manifest_status
+fi
+
+# Show spec path
+SPEC_PATH=$(jq -r '.spec_path // "unknown"' "$CW_MANIFEST")
+echo -e "  Spec: ${CYAN}$SPEC_PATH${NC}"
+echo ""

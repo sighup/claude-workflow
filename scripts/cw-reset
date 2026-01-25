@@ -1,0 +1,117 @@
+#!/bin/bash
+#
+# cw-reset - Reset failed or stuck tasks
+#
+# Invokes Claude to reset task statuses on the native task board.
+# Use when tasks are stuck in failed/in_progress state and need retry.
+#
+# Usage:
+#   ./cw-reset [OPTIONS] [TASK_IDS...]
+#
+# Options:
+#   -a, --all-failed      Reset all failed tasks to pending
+#   -s, --stuck           Reset in_progress tasks (likely abandoned)
+#   -h, --help            Show this help
+#
+# Examples:
+#   ./cw-reset T01 T03          Reset specific tasks
+#   ./cw-reset --all-failed     Reset all failed tasks
+#   ./cw-reset --stuck          Reset abandoned in_progress tasks
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+RESET_ALL_FAILED=false
+RESET_STUCK=false
+TASK_IDS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -a|--all-failed) RESET_ALL_FAILED=true; shift ;;
+        -s|--stuck) RESET_STUCK=true; shift ;;
+        -h|--help)
+            echo "Usage: cw-reset [OPTIONS] [TASK_IDS...]"
+            echo ""
+            echo "Reset failed or stuck tasks to pending status."
+            echo ""
+            echo "Options:"
+            echo "  -a, --all-failed    Reset all failed tasks"
+            echo "  -s, --stuck         Reset in_progress (abandoned) tasks"
+            echo "  -h, --help          Show this help"
+            echo ""
+            echo "Examples:"
+            echo "  cw-reset T01 T03"
+            echo "  cw-reset --all-failed"
+            echo "  cw-reset --stuck"
+            exit 0
+            ;;
+        T*) TASK_IDS+=("$1"); shift ;;
+        *) log_error "Unknown option: $1"; exit 1 ;;
+    esac
+done
+
+# =============================================================================
+# Validation
+# =============================================================================
+
+check_claude || exit 1
+
+if [ "$RESET_ALL_FAILED" = false ] && [ "$RESET_STUCK" = false ] && [ ${#TASK_IDS[@]} -eq 0 ]; then
+    log_error "Specify task IDs, --all-failed, or --stuck"
+    echo "Run 'cw-reset --help' for usage."
+    exit 1
+fi
+
+# =============================================================================
+# Build Reset Prompt
+# =============================================================================
+
+PROMPT="Reset the following tasks on the native task board to 'pending' status using TaskUpdate.
+
+Also clear any failure metadata (set last_failure to null, failure_count to 0).
+
+"
+
+if [ "$RESET_ALL_FAILED" = true ]; then
+    PROMPT+="Find ALL tasks with status 'completed' that have failure metadata, or any tasks that are not 'completed' or 'pending'. Reset failed tasks to pending.
+
+Use TaskList to find them, then TaskUpdate each one to status='pending'."
+    log_info "Resetting all failed tasks..."
+fi
+
+if [ "$RESET_STUCK" = true ]; then
+    PROMPT+="Find ALL tasks with status 'in_progress' (these are likely abandoned from a crashed session). Reset them to 'pending'.
+
+Use TaskList to find them, then TaskUpdate each one to status='pending' and clear owner."
+    log_info "Resetting stuck in_progress tasks..."
+fi
+
+if [ ${#TASK_IDS[@]} -gt 0 ]; then
+    PROMPT+="Reset these specific tasks to pending status: ${TASK_IDS[*]}
+
+Use TaskList to find their native IDs, then TaskUpdate each to status='pending' and clear owner."
+    log_info "Resetting tasks: ${TASK_IDS[*]}"
+fi
+
+# =============================================================================
+# Execute Reset
+# =============================================================================
+
+if invoke_claude "$PROMPT" "haiku"; then
+    log_success "Tasks reset successfully"
+
+    # Re-export manifest
+    log_info "Re-exporting manifest..."
+    export_manifest
+    print_manifest_status
+else
+    log_error "Reset failed"
+    exit 1
+fi

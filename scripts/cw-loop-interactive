@@ -1,0 +1,160 @@
+#!/bin/bash
+#
+# cw-loop-interactive - Human-in-the-loop execution for Claude Workflow
+#
+# Like cw-loop but pauses after each task for user review.
+# The user can approve, retry, skip, or abort after each execution.
+#
+# Usage:
+#   ./cw-loop-interactive [OPTIONS]
+#
+# Options:
+#   -m, --model MODEL     Claude model to use (default: sonnet)
+#   -h, --help            Show this help message
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+show_help() {
+    echo "Usage: cw-loop-interactive [OPTIONS]"
+    echo ""
+    echo "Human-in-the-loop task execution. Pauses after each task for review."
+    echo ""
+    echo "Options:"
+    echo "  -m, --model MODEL     Claude model (default: $CW_MODEL)"
+    echo "  -h, --help            Show this help"
+    echo ""
+    echo "Interactive Commands (after each task):"
+    echo "  [Enter]   Continue to next task"
+    echo "  r         Retry the current task"
+    echo "  s         Skip current task"
+    echo "  q         Quit"
+    echo "  v         Validate (run /cw-validate)"
+    echo "  d         Show diff since last commit"
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -m|--model) CW_MODEL="$2"; shift 2 ;;
+        -h|--help) show_help; exit 0 ;;
+        *) log_error "Unknown option: $1"; show_help; exit 1 ;;
+    esac
+done
+
+# =============================================================================
+# Preflight
+# =============================================================================
+
+check_jq || exit 1
+check_claude || exit 1
+
+print_banner "Claude Workflow - Interactive Mode"
+log_info "Model: $CW_MODEL"
+
+# Initial export
+export_manifest
+
+if [ ! -f "$CW_MANIFEST" ]; then
+    log_error "No manifest. Run '/cw-plan' first."
+    exit 1
+fi
+
+print_manifest_status
+show_task_list
+
+# =============================================================================
+# Interactive Loop
+# =============================================================================
+
+while true; do
+    echo ""
+    log_header "Task Selection"
+
+    # Re-export
+    export_manifest
+
+    # Check completion
+    if is_complete; then
+        log_success "All tasks completed!"
+        echo ""
+        echo -e "${GREEN}Run /cw-validate to verify implementation.${NC}"
+        exit 0
+    fi
+
+    PENDING=$(get_pending_count)
+    if [ "$PENDING" -eq 0 ]; then
+        log_warning "No unblocked tasks. Remaining tasks are blocked or failed."
+        show_task_list
+        exit 0
+    fi
+
+    NEXT=$(get_next_task_id)
+    SUBJECT=$(jq -r ".tasks[] | select(.task_id==\"$NEXT\") | .subject" "$CW_MANIFEST")
+
+    echo ""
+    echo -e "  Next: ${CYAN}$NEXT${NC} - $SUBJECT"
+    echo ""
+    echo -e "  ${YELLOW}[Enter]${NC} Execute  ${YELLOW}[s]${NC} Skip  ${YELLOW}[q]${NC} Quit  ${YELLOW}[d]${NC} Diff"
+    echo -n "  > "
+    read -r ACTION
+
+    case "$ACTION" in
+        q|Q)
+            log_info "Quitting."
+            exit 0
+            ;;
+        s|S)
+            log_info "Skipping $NEXT"
+            continue
+            ;;
+        d|D)
+            echo ""
+            git diff --stat HEAD~1 2>/dev/null || git diff --stat
+            echo ""
+            continue
+            ;;
+        v|V)
+            log_info "Running validation..."
+            invoke_claude "Use the Skill tool to invoke 'cw-validate'." "$CW_MODEL"
+            continue
+            ;;
+        r|R)
+            ;; # Fall through to execute (retry)
+        *)
+            ;; # Fall through to execute
+    esac
+
+    # Execute
+    log_info "Executing $NEXT..."
+    echo ""
+
+    if invoke_claude "Use the Skill tool to invoke 'cw-execute'. Execute the next available task from the task board." "$CW_MODEL"; then
+        log_success "Task completed"
+    else
+        log_error "Task execution failed"
+    fi
+
+    # Post-task prompt
+    echo ""
+    print_manifest_status
+
+    echo -e "  ${YELLOW}[Enter]${NC} Next  ${YELLOW}[r]${NC} Retry  ${YELLOW}[v]${NC} Validate  ${YELLOW}[q]${NC} Quit"
+    echo -n "  > "
+    read -r POST_ACTION
+
+    case "$POST_ACTION" in
+        q|Q) log_info "Quitting."; exit 0 ;;
+        r|R) log_info "Retrying..."; continue ;;
+        v|V)
+            invoke_claude "Use the Skill tool to invoke 'cw-validate'." "$CW_MODEL"
+            ;;
+        *) ;; # Continue to next
+    esac
+done
