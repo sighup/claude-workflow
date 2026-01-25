@@ -101,6 +101,12 @@ invoke_claude() {
     local MODEL="${2:-$CW_MODEL}"
 
     local CMD=(claude --print --model "$MODEL" --dangerously-skip-permissions)
+
+    # Resume the discovered session to access its tasks
+    if [ -n "$CW_SESSION_ID" ]; then
+        CMD+=(--resume "$CW_SESSION_ID")
+    fi
+
     CMD+=(-p "$PROMPT")
 
     local TIMEOUT_CMD=()
