@@ -2,17 +2,21 @@
 #
 # cw-loop - Autonomous execution loop for Claude Workflow
 #
-# Orchestrates task execution by exporting manifest state, checking for
-# available work, and invoking Claude to execute one task per iteration.
+# Orchestrates task execution by reading task state directly from
+# ~/.claude/tasks and invoking Claude to execute tasks until complete.
 #
 # Usage:
-#   ./cw-loop [OPTIONS]
+#   ./cw-loop [OPTIONS] [PROJECT_PATH]
 #
 # Options:
 #   -m, --model MODEL     Claude model to use (default: sonnet)
 #   -n, --max-iter N      Maximum iterations (default: 50)
 #   -s, --sleep N         Seconds between iterations (default: 5)
+#   -d, --dispatch        Use cw-dispatch for parallel execution (default: cw-execute)
 #   -h, --help            Show this help message
+#
+# Arguments:
+#   PROJECT_PATH          Project directory (default: current directory)
 #
 # Environment Variables:
 #   CW_MODEL              Claude model (default: sonnet)
@@ -32,16 +36,24 @@ source "$SCRIPT_DIR/lib/cw-common.sh"
 # Argument Parsing
 # =============================================================================
 
+USE_DISPATCH=false
+PROJECT_PATH=""
+
 show_help() {
-    echo "Usage: cw-loop [OPTIONS]"
+    echo "Usage: cw-loop [OPTIONS] [PROJECT_PATH]"
     echo ""
     echo "Autonomous execution loop for Claude Workflow tasks."
+    echo "Reads task state directly from ~/.claude/tasks (no manifest needed)."
     echo ""
     echo "Options:"
     echo "  -m, --model MODEL     Claude model (default: $CW_MODEL)"
     echo "  -n, --max-iter N      Maximum iterations (default: $CW_MAX_ITERATIONS)"
     echo "  -s, --sleep N         Seconds between iterations (default: $CW_SLEEP)"
+    echo "  -d, --dispatch        Use cw-dispatch for parallel execution"
     echo "  -h, --help            Show this help"
+    echo ""
+    echo "Arguments:"
+    echo "  PROJECT_PATH          Project directory (default: current directory)"
     echo ""
     echo "Environment Variables:"
     echo "  CW_MODEL, CW_MAX_ITERATIONS, CW_SLEEP, CW_MAX_FAILURES, CW_TIMEOUT"
@@ -51,7 +63,7 @@ show_help() {
     echo "  1  Max iterations exhausted"
     echo "  2  Max consecutive failures reached"
     echo "  3  No available tasks (all blocked)"
-    echo "  4  Missing dependencies"
+    echo "  4  Missing dependencies or no session found"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -59,10 +71,15 @@ while [[ $# -gt 0 ]]; do
         -m|--model) CW_MODEL="$2"; shift 2 ;;
         -n|--max-iter) CW_MAX_ITERATIONS="$2"; shift 2 ;;
         -s|--sleep) CW_SLEEP="$2"; shift 2 ;;
+        -d|--dispatch) USE_DISPATCH=true; shift ;;
         -h|--help) show_help; exit 0 ;;
-        *) log_error "Unknown option: $1"; show_help; exit 4 ;;
+        -*) log_error "Unknown option: $1"; show_help; exit 4 ;;
+        *) PROJECT_PATH="$1"; shift ;;
     esac
 done
+
+# Default to current directory
+PROJECT_PATH="${PROJECT_PATH:-$(pwd)}"
 
 # =============================================================================
 # Preflight Checks
@@ -73,25 +90,26 @@ check_claude || exit 4
 
 print_banner "Claude Workflow - Autonomous Loop"
 
+log_info "Project: $PROJECT_PATH"
 log_info "Model: $CW_MODEL"
 log_info "Max iterations: $CW_MAX_ITERATIONS"
 log_info "Sleep between: ${CW_SLEEP}s"
 log_info "Max failures: $CW_MAX_FAILURES"
+log_info "Mode: $([ "$USE_DISPATCH" = true ] && echo "dispatch (parallel)" || echo "execute (sequential)")"
 
 # =============================================================================
-# Initial Manifest Export
+# Session Discovery
 # =============================================================================
 
-log_header "Exporting initial task state"
-export_manifest
+log_header "Discovering session"
 
-if [ ! -f "$CW_MANIFEST" ]; then
-    log_error "Failed to export manifest. Ensure tasks exist on the task board."
+if ! discover_session "$PROJECT_PATH"; then
+    log_error "No session with tasks found."
     log_info "Run '/cw-plan' first to create tasks from a spec."
     exit 4
 fi
 
-print_manifest_status
+print_task_status
 show_task_list
 
 # Confirm before starting
@@ -109,18 +127,24 @@ fi
 ITERATION=0
 FAILURES=0
 
+# Select skill based on mode
+if [ "$USE_DISPATCH" = true ]; then
+    SKILL_NAME="cw-dispatch"
+    SKILL_PROMPT="Use the Skill tool to invoke 'cw-dispatch'. Execute available tasks in parallel from the task board."
+else
+    SKILL_NAME="cw-execute"
+    SKILL_PROMPT="Use the Skill tool to invoke 'cw-execute'. Execute the next available task from the task board."
+fi
+
 while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
     ITERATION=$((ITERATION + 1))
 
     log_header "Iteration $ITERATION / $CW_MAX_ITERATIONS"
 
-    # Re-export manifest to get fresh state
-    export_manifest
-
-    # Check completion
+    # Check completion (reads directly from task files)
     if is_complete; then
         log_success "All tasks completed!"
-        print_manifest_status
+        print_task_status
         exit 0
     fi
 
@@ -128,28 +152,31 @@ while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
     PENDING=$(get_pending_count)
     if [ "$PENDING" -eq 0 ]; then
         log_warning "No unblocked pending tasks available."
-        print_manifest_status
+        print_task_status
         exit 3
     fi
 
     NEXT=$(get_next_task_id)
     log_info "Next task: $NEXT ($PENDING pending unblocked)"
 
-    # Execute one task
-    log_info "Invoking Claude to execute task..."
-    if invoke_claude "Use the Skill tool to invoke 'cw-execute'. Execute the next available task from the task board." "$CW_MODEL"; then
-        log_success "Task execution completed"
+    # Execute task(s)
+    log_info "Invoking Claude with $SKILL_NAME..."
+    if invoke_claude "$SKILL_PROMPT" "$CW_MODEL"; then
+        log_success "Execution completed"
         FAILURES=0
     else
         FAILURES=$((FAILURES + 1))
-        log_error "Task execution failed (failure $FAILURES/$CW_MAX_FAILURES)"
+        log_error "Execution failed (failure $FAILURES/$CW_MAX_FAILURES)"
 
         if [ $FAILURES -ge $CW_MAX_FAILURES ]; then
             log_error "Max consecutive failures reached. Aborting."
-            print_manifest_status
+            print_task_status
             exit 2
         fi
     fi
+
+    # Show current status
+    print_task_status
 
     # Sleep between iterations
     if [ $ITERATION -lt $CW_MAX_ITERATIONS ]; then
@@ -159,6 +186,5 @@ while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
 done
 
 log_warning "Max iterations ($CW_MAX_ITERATIONS) exhausted."
-export_manifest
-print_manifest_status
+print_task_status
 exit 1

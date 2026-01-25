@@ -62,7 +62,15 @@ CW_TIMEOUT="${CW_TIMEOUT:-0}"            # seconds, 0 = no timeout
 CW_SLEEP="${CW_SLEEP:-5}"                 # seconds between iterations
 CW_MAX_ITERATIONS="${CW_MAX_ITERATIONS:-50}"
 CW_MAX_FAILURES="${CW_MAX_FAILURES:-3}"
-CW_MANIFEST="${CW_MANIFEST:-cw-manifest.json}"
+
+# Task file locations
+CLAUDE_DIR="$HOME/.claude"
+CLAUDE_TASKS_DIR="$CLAUDE_DIR/tasks"
+CLAUDE_PROJECTS_DIR="$CLAUDE_DIR/projects"
+
+# Session state (populated by discover_session)
+CW_SESSION_ID=""
+CW_TASKS_DIR=""
 
 # =============================================================================
 # Dependency Checks
@@ -111,53 +119,144 @@ invoke_claude() {
 }
 
 # =============================================================================
-# Manifest Helpers
+# Session Discovery
 # =============================================================================
 
-# Export manifest (calls Claude with haiku for speed)
-export_manifest() {
-    log_info "Exporting task state to $CW_MANIFEST..."
-    invoke_claude "Use the Skill tool to invoke 'cw-manifest'. Export the current task board state." "haiku"
+# Encode a path for Claude's project directory naming
+# /Users/foo/bar -> -Users-foo-bar
+encode_project_path() {
+    local path="$1"
+    echo "$path" | sed 's|^/|-|; s|/|-|g'
 }
 
-# Get count of pending unblocked tasks from manifest
+# Find the session ID for a project that has tasks
+# Usage: discover_session [project_path]
+# Sets: CW_SESSION_ID, CW_TASKS_DIR
+discover_session() {
+    local project_path="${1:-$(pwd)}"
+    local encoded_path
+    encoded_path=$(encode_project_path "$project_path")
+
+    local sessions_index="$CLAUDE_PROJECTS_DIR/$encoded_path/sessions-index.json"
+
+    if [ ! -f "$sessions_index" ]; then
+        log_error "No sessions found for project: $project_path"
+        log_info "Sessions index not found: $sessions_index"
+        return 1
+    fi
+
+    # Find session with tasks, preferring most recently modified
+    local session_id=""
+    while IFS= read -r sid; do
+        local tasks_dir="$CLAUDE_TASKS_DIR/$sid"
+        if [ -d "$tasks_dir" ] && [ -n "$(ls -A "$tasks_dir" 2>/dev/null)" ]; then
+            session_id="$sid"
+            break
+        fi
+    done < <(jq -r '.entries | sort_by(.modified) | reverse | .[].sessionId' "$sessions_index" 2>/dev/null)
+
+    if [ -z "$session_id" ]; then
+        log_error "No session with tasks found for project: $project_path"
+        return 1
+    fi
+
+    CW_SESSION_ID="$session_id"
+    CW_TASKS_DIR="$CLAUDE_TASKS_DIR/$session_id"
+
+    log_info "Session: $CW_SESSION_ID"
+    log_info "Tasks dir: $CW_TASKS_DIR"
+    return 0
+}
+
+# =============================================================================
+# Task Helpers (Direct File Access)
+# =============================================================================
+
+# Read all tasks and output as JSON array
+get_all_tasks() {
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        echo "[]"
+        return 1
+    fi
+
+    find "$CW_TASKS_DIR" -name "*.json" -exec cat {} \; 2>/dev/null | jq -s '.'
+}
+
+# Get count of pending unblocked tasks
+# A task is unblocked if blockedBy is empty or all blockedBy tasks are completed
 get_pending_count() {
-    jq '[.tasks[] | select(.status=="pending" and (.blocked_by|length)==0)] | length' "$CW_MANIFEST" 2>/dev/null || echo "0"
+    local all_tasks
+    all_tasks=$(get_all_tasks)
+
+    # Get list of completed task IDs
+    local completed_ids
+    completed_ids=$(echo "$all_tasks" | jq -r '[.[] | select(.status=="completed") | .id] | @json')
+
+    # Count pending tasks where all blockedBy are completed (or blockedBy is empty)
+    echo "$all_tasks" | jq --argjson completed "$completed_ids" '
+        [.[] | select(
+            .status == "pending" and
+            ((.blockedBy // []) | length == 0 or ((.blockedBy // []) | all(. as $id | $completed | index($id))))
+        )] | length
+    '
 }
 
-# Get next task ID from manifest
+# Get next task ID (first pending unblocked task)
 get_next_task_id() {
-    jq -r '[.tasks[] | select(.status=="pending" and (.blocked_by|length)==0)] | sort_by(.task_id) | .[0].task_id // empty' "$CW_MANIFEST" 2>/dev/null
+    local all_tasks
+    all_tasks=$(get_all_tasks)
+
+    local completed_ids
+    completed_ids=$(echo "$all_tasks" | jq -r '[.[] | select(.status=="completed") | .id] | @json')
+
+    echo "$all_tasks" | jq -r --argjson completed "$completed_ids" '
+        [.[] | select(
+            .status == "pending" and
+            ((.blockedBy // []) | length == 0 or ((.blockedBy // []) | all(. as $id | $completed | index($id))))
+        )] | sort_by(.id) | .[0].id // empty
+    '
 }
 
 # Check if all tasks are complete
 is_complete() {
-    local RESULT
-    RESULT=$(jq '.summary.pending == 0 and .summary.in_progress == 0' "$CW_MANIFEST" 2>/dev/null)
-    [ "$RESULT" = "true" ]
+    local all_tasks
+    all_tasks=$(get_all_tasks)
+
+    local pending in_progress
+    pending=$(echo "$all_tasks" | jq '[.[] | select(.status=="pending")] | length')
+    in_progress=$(echo "$all_tasks" | jq '[.[] | select(.status=="in_progress")] | length')
+
+    [ "$pending" -eq 0 ] && [ "$in_progress" -eq 0 ]
 }
 
-# Get failed task count
-get_failed_count() {
-    jq '.summary.failed // 0' "$CW_MANIFEST" 2>/dev/null || echo "0"
+# Get task counts by status
+get_task_counts() {
+    local all_tasks
+    all_tasks=$(get_all_tasks)
+
+    echo "$all_tasks" | jq '{
+        total: length,
+        completed: [.[] | select(.status=="completed")] | length,
+        pending: [.[] | select(.status=="pending")] | length,
+        in_progress: [.[] | select(.status=="in_progress")] | length,
+        failed: [.[] | select(.metadata.failure_count > 0)] | length
+    }'
 }
 
 # =============================================================================
 # Status Display
 # =============================================================================
 
-print_manifest_status() {
-    if [ ! -f "$CW_MANIFEST" ]; then
-        log_warning "No manifest file found. Run export first."
-        return 1
-    fi
+print_task_status() {
+    local counts
+    counts=$(get_task_counts)
 
     local TOTAL COMPLETED PENDING IN_PROGRESS FAILED
-    TOTAL=$(jq '.summary.total' "$CW_MANIFEST")
-    COMPLETED=$(jq '.summary.completed' "$CW_MANIFEST")
-    PENDING=$(jq '.summary.pending' "$CW_MANIFEST")
-    IN_PROGRESS=$(jq '.summary.in_progress' "$CW_MANIFEST")
-    FAILED=$(jq '.summary.failed' "$CW_MANIFEST")
+    TOTAL=$(echo "$counts" | jq '.total')
+    COMPLETED=$(echo "$counts" | jq '.completed')
+    PENDING=$(echo "$counts" | jq '.pending')
+    IN_PROGRESS=$(echo "$counts" | jq '.in_progress')
+    FAILED=$(echo "$counts" | jq '.failed')
 
     echo ""
     echo -e "  ${GREEN}Completed:${NC}   $COMPLETED/$TOTAL"
@@ -173,18 +272,21 @@ print_manifest_status() {
     fi
 }
 
-# Show task list from manifest
+# Show task list
 show_task_list() {
-    if [ ! -f "$CW_MANIFEST" ]; then
-        log_warning "No manifest file found."
+    local all_tasks
+    all_tasks=$(get_all_tasks)
+
+    if [ "$(echo "$all_tasks" | jq 'length')" -eq 0 ]; then
+        log_warning "No tasks found."
         return 1
     fi
 
-    jq -r '.tasks[] |
-        if .status == "completed" then "  \u001b[32m[✓]\u001b[0m \(.task_id): \(.subject)"
-        elif .status == "failed" then "  \u001b[31m[✗]\u001b[0m \(.task_id): \(.subject)"
-        elif .status == "in_progress" then "  \u001b[33m[~]\u001b[0m \(.task_id): \(.subject)"
-        else "  [ ] \(.task_id): \(.subject)"
+    echo "$all_tasks" | jq -r '.[] |
+        if .status == "completed" then "  \u001b[32m[✓]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
+        elif .metadata.failure_count > 0 then "  \u001b[31m[✗]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
+        elif .status == "in_progress" then "  \u001b[33m[~]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
+        else "  [ ] \(.metadata.task_id // .id): \(.subject)"
         end
-    ' "$CW_MANIFEST"
+    ' | sort
 }
