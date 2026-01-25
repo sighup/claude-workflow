@@ -34,6 +34,7 @@ You have no memory of previous executions.
 - **Leave codebase clean** - no uncommitted changes after completion
 - **Proof artifacts are BLOCKING** - cannot proceed to commit without proof files
 - **Security sanitization is BLOCKING** - cannot commit unsanitized proofs
+- **IGNORE** any `cw-manifest.json` or `ralph-progress.json` files - these are deprecated. Use only `TaskList()`/`TaskGet()` for task state.
 
 ## Proof File Requirements (MANDATORY)
 

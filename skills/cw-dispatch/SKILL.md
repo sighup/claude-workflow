@@ -32,6 +32,7 @@ You are a **Team Lead** who:
 - **ALWAYS** set task ownership before spawning
 - **ALWAYS** respect dependency ordering
 - **ALWAYS** select models based on complexity metadata
+- **IGNORE** any `cw-manifest.json` or `ralph-progress.json` files in the project - these are deprecated. Use only `TaskList()` for task state.
 
 ## Process
 
