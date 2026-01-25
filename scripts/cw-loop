@@ -126,6 +126,7 @@ fi
 
 ITERATION=0
 FAILURES=0
+START_TIME=$(date +%s)
 
 # Select skill based on mode
 if [ "$USE_DISPATCH" = true ]; then
@@ -139,11 +140,13 @@ fi
 while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
     ITERATION=$((ITERATION + 1))
 
-    log_header "Iteration $ITERATION / $CW_MAX_ITERATIONS"
+    ELAPSED=$(($(date +%s) - START_TIME))
+    log_header "Iteration $ITERATION / $CW_MAX_ITERATIONS  [Runtime: $(format_elapsed $ELAPSED)]"
 
     # Check completion (reads directly from task files)
     if is_complete; then
-        log_success "All tasks completed!"
+        ELAPSED=$(($(date +%s) - START_TIME))
+        log_success "All tasks completed! (Runtime: $(format_elapsed $ELAPSED))"
         print_task_status
         exit 0
     fi
@@ -151,7 +154,8 @@ while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
     # Check for available work
     PENDING=$(get_pending_count)
     if [ "$PENDING" -eq 0 ]; then
-        log_warning "No unblocked pending tasks available."
+        ELAPSED=$(($(date +%s) - START_TIME))
+        log_warning "No unblocked pending tasks available. (Runtime: $(format_elapsed $ELAPSED))"
         print_task_status
         exit 3
     fi
@@ -169,7 +173,8 @@ while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
         log_error "Execution failed (failure $FAILURES/$CW_MAX_FAILURES)"
 
         if [ $FAILURES -ge $CW_MAX_FAILURES ]; then
-            log_error "Max consecutive failures reached. Aborting."
+            ELAPSED=$(($(date +%s) - START_TIME))
+            log_error "Max consecutive failures reached. Aborting. (Runtime: $(format_elapsed $ELAPSED))"
             print_task_status
             exit 2
         fi
@@ -185,6 +190,7 @@ while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
     fi
 done
 
-log_warning "Max iterations ($CW_MAX_ITERATIONS) exhausted."
+ELAPSED=$(($(date +%s) - START_TIME))
+log_warning "Max iterations ($CW_MAX_ITERATIONS) exhausted. (Runtime: $(format_elapsed $ELAPSED))"
 print_task_status
 exit 1

@@ -295,6 +295,26 @@ get_task_counts() {
 }
 
 # =============================================================================
+# Time Utilities
+# =============================================================================
+
+# Format seconds as "Xh Ym" or "Ym Zs"
+format_elapsed() {
+    local SECONDS_ELAPSED="$1"
+    local HOURS=$((SECONDS_ELAPSED / 3600))
+    local MINS=$(((SECONDS_ELAPSED % 3600) / 60))
+    local SECS=$((SECONDS_ELAPSED % 60))
+
+    if [ "$HOURS" -gt 0 ]; then
+        printf "%dh %dm" "$HOURS" "$MINS"
+    elif [ "$MINS" -gt 0 ]; then
+        printf "%dm %ds" "$MINS" "$SECS"
+    else
+        printf "%ds" "$SECS"
+    fi
+}
+
+# =============================================================================
 # Status Display
 # =============================================================================
 
