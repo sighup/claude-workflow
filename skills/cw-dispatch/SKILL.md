@@ -38,11 +38,23 @@ You are a **Team Lead** who:
 
 ### Step 1: Survey Task Board
 
+**CRITICAL: Use ONLY the TaskList() tool. Do NOT read any JSON files from the project.**
+
 ```
 TaskList()
 ```
 
-Categorize tasks:
+This returns the native Claude Code task board stored in `~/.claude/tasks/`.
+
+**DO NOT** look for or read:
+- `*-tasks-*.json` files in docs/specs/
+- `cw-manifest.json`
+- `ralph-progress.json`
+- Any other task JSON files in the project directory
+
+These are deprecated formats. The ONLY source of truth is `TaskList()`.
+
+Categorize tasks from TaskList output:
 - **Ready**: status=pending, no blockedBy (or all blockedBy completed)
 - **Blocked**: has incomplete blockedBy dependencies
 - **In Progress**: already assigned to a worker
