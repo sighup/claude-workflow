@@ -98,18 +98,18 @@ check_claude() {
 
 CW_INVOKE_RETRIES="${CW_INVOKE_RETRIES:-3}"    # retries per invocation
 CW_RETRY_DELAY="${CW_RETRY_DELAY:-10}"          # seconds between retries
-CW_PRINT="${CW_PRINT:-false}"                   # buffer output (true) or stream (false)
+CW_VERBOSE="${CW_VERBOSE:-false}"               # stream JSON output for visibility
 
 invoke_claude() {
     local PROMPT="$1"
     local MODEL="${2:-$CW_MODEL}"
     local ATTEMPT=0
 
-    local CMD=(claude --model "$MODEL" --dangerously-skip-permissions)
+    local CMD=(claude --print --model "$MODEL" --dangerously-skip-permissions)
 
-    # Add --print flag to buffer output if requested
-    if [ "$CW_PRINT" = "true" ]; then
-        CMD+=(--print)
+    # Add streaming JSON output for real-time visibility
+    if [ "$CW_VERBOSE" = "true" ]; then
+        CMD+=(--verbose --output-format stream-json)
     fi
 
     # Resume the discovered session to access its tasks
@@ -132,7 +132,7 @@ invoke_claude() {
         local TMPFILE
         TMPFILE=$(mktemp)
 
-        # Capture both stdout and stderr, show stdout in real-time
+        # Run command, capturing stderr for error detection
         "${TIMEOUT_CMD[@]}" "${CMD[@]}" 2>"$TMPFILE" || EXIT_CODE=$?
 
         local STDERR
