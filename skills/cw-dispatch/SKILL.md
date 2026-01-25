@@ -39,9 +39,20 @@ You are a **Team Lead** who:
 - **NEVER** execute tasks yourself - always delegate to workers
 - **NEVER** spawn workers for blocked tasks
 - **NEVER** assign the same task to multiple workers
+- **NEVER** give workers direct implementation instructions - they MUST invoke `cw-execute`
+- **NEVER** use TodoWrite - use the native TaskList/TaskUpdate tools only
 - **ALWAYS** set task ownership before spawning
 - **ALWAYS** respect dependency ordering
 - **ALWAYS** select models based on complexity metadata
+
+### Why Workers Must Invoke cw-execute
+
+The `cw-execute` skill contains the 11-phase protocol including:
+- Phase 10 (REPORT): Calls `TaskUpdate({ status: "completed" })` to mark tasks done
+- Phase 6 (PROOF): Creates proof artifacts for validation
+- Phase 8 (COMMIT): Creates atomic commits with implementation + proofs
+
+**If workers receive direct prompts instead of invoking cw-execute, the task board will NOT be updated and progress tracking breaks.**
 
 ## Process
 
@@ -99,35 +110,35 @@ TaskUpdate({
 
 ### Step 5: Spawn Workers
 
-Send a **single message** with multiple Task tool calls for parallel execution:
+Send a **single message** with multiple Task tool calls for parallel execution.
+
+**CRITICAL: Use EXACTLY this prompt template. Do NOT give workers direct implementation instructions.**
 
 ```
 Task({
   subagent_type: "general-purpose",
   model: "<selected-model>",
   description: "Execute task T01",
-  prompt: "You are worker-1. Execute the task assigned to you on the task board.
+  prompt: "You are worker-1.
 
-Use the Skill tool to invoke 'cw-execute'. This will guide you through the 11-phase execution protocol.
+MANDATORY FIRST ACTION: Use the Skill tool to invoke 'cw-execute'.
 
-Your task has owner='worker-1'. Find it via TaskList, then follow the cw-execute protocol exactly.
+Do NOT implement anything directly. The cw-execute skill contains the 11-phase protocol that:
+1. Reads your assigned task from TaskList (owner='worker-1')
+2. Guides implementation following project patterns
+3. Creates proof artifacts
+4. Commits changes
+5. Calls TaskUpdate to mark the task COMPLETED
 
-Critical: Do not modify files outside your task's scope. Do not touch tasks owned by other workers."
-})
+Without cw-execute, the task board will not be updated and progress tracking breaks.
 
-Task({
-  subagent_type: "general-purpose",
-  model: "<selected-model>",
-  description: "Execute task T04",
-  prompt: "You are worker-2. Execute the task assigned to you on the task board.
-
-Use the Skill tool to invoke 'cw-execute'. This will guide you through the 11-phase execution protocol.
-
-Your task has owner='worker-2'. Find it via TaskList, then follow the cw-execute protocol exactly.
-
-Critical: Do not modify files outside your task's scope. Do not touch tasks owned by other workers."
+Constraints:
+- Do not modify files outside your task's scope
+- Do not touch tasks owned by other workers"
 })
 ```
+
+Repeat for each worker with incrementing worker-N identifiers.
 
 ### Step 6: Monitor and Report
 
