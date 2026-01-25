@@ -70,7 +70,10 @@ For autonomous (unattended) execution without an interactive Claude session:
 
 ```bash
 # Autonomous loop - executes tasks until complete or failure
-./scripts/cw-loop
+./scripts/cw-loop                     # Quiet mode (default)
+./scripts/cw-loop --verbose           # Stream output for visibility
+./scripts/cw-loop --dispatch          # Use parallel task execution
+./scripts/cw-loop -m opus -n 100      # Custom model and iterations
 
 # Human-in-the-loop - pauses after each task for review
 ./scripts/cw-loop-interactive
@@ -95,6 +98,7 @@ For autonomous (unattended) execution without an interactive Claude session:
 | `CW_MAX_FAILURES` | `3` | Consecutive failures before abort |
 | `CW_TIMEOUT` | `0` | Claude invocation timeout (0=none) |
 | `CW_NON_INTERACTIVE` | `false` | Skip confirmation prompts |
+| `CW_VERBOSE` | `false` | Stream JSON output for real-time visibility |
 
 ## Execution Protocol (11 Phases)
 
