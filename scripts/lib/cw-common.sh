@@ -96,9 +96,13 @@ check_claude() {
 # Claude Invocation
 # =============================================================================
 
+CW_INVOKE_RETRIES="${CW_INVOKE_RETRIES:-3}"    # retries per invocation
+CW_RETRY_DELAY="${CW_RETRY_DELAY:-10}"          # seconds between retries
+
 invoke_claude() {
     local PROMPT="$1"
     local MODEL="${2:-$CW_MODEL}"
+    local ATTEMPT=0
 
     local CMD=(claude --print --model "$MODEL" --dangerously-skip-permissions)
 
@@ -114,14 +118,47 @@ invoke_claude() {
         TIMEOUT_CMD=(timeout "$CW_TIMEOUT")
     fi
 
-    local EXIT_CODE=0
-    "${TIMEOUT_CMD[@]}" "${CMD[@]}" || EXIT_CODE=$?
+    while [ "$ATTEMPT" -lt "$CW_INVOKE_RETRIES" ]; do
+        ATTEMPT=$((ATTEMPT + 1))
 
-    if [ "$EXIT_CODE" -eq 124 ]; then
-        log_error "Claude invocation timed out after ${CW_TIMEOUT}s"
-        return 1
-    fi
-    return $EXIT_CODE
+        local EXIT_CODE=0
+        local OUTPUT
+        local TMPFILE
+        TMPFILE=$(mktemp)
+
+        # Capture both stdout and stderr, show stdout in real-time
+        "${TIMEOUT_CMD[@]}" "${CMD[@]}" 2>"$TMPFILE" || EXIT_CODE=$?
+
+        local STDERR
+        STDERR=$(cat "$TMPFILE")
+        rm -f "$TMPFILE"
+
+        # Check for timeout
+        if [ "$EXIT_CODE" -eq 124 ]; then
+            log_error "Claude invocation timed out after ${CW_TIMEOUT}s (attempt $ATTEMPT/$CW_INVOKE_RETRIES)"
+        # Check for known crash patterns in stderr
+        elif echo "$STDERR" | grep -qE "No messages returned|unhandled|SIGTERM|SIGKILL"; then
+            log_error "Claude CLI crashed: $(echo "$STDERR" | head -1) (attempt $ATTEMPT/$CW_INVOKE_RETRIES)"
+            EXIT_CODE=1
+        # Success
+        elif [ "$EXIT_CODE" -eq 0 ]; then
+            [ -n "$STDERR" ] && echo "$STDERR" >&2
+            return 0
+        else
+            log_error "Claude invocation failed with exit code $EXIT_CODE (attempt $ATTEMPT/$CW_INVOKE_RETRIES)"
+            [ -n "$STDERR" ] && echo "$STDERR" >&2
+        fi
+
+        # Retry with exponential backoff
+        if [ "$ATTEMPT" -lt "$CW_INVOKE_RETRIES" ]; then
+            local DELAY=$((CW_RETRY_DELAY * ATTEMPT))
+            log_warning "Retrying in ${DELAY}s..."
+            sleep "$DELAY"
+        fi
+    done
+
+    log_error "All $CW_INVOKE_RETRIES attempts failed"
+    return 1
 }
 
 # =============================================================================
