@@ -6,11 +6,14 @@
 # The user can approve, retry, skip, or abort after each execution.
 #
 # Usage:
-#   ./cw-loop-interactive [OPTIONS]
+#   ./cw-loop-interactive [OPTIONS] [PROJECT_PATH]
 #
 # Options:
 #   -m, --model MODEL     Claude model to use (default: sonnet)
 #   -h, --help            Show this help message
+#
+# Arguments:
+#   PROJECT_PATH          Project directory (default: current directory)
 #
 
 set -e
@@ -22,14 +25,20 @@ source "$SCRIPT_DIR/lib/cw-common.sh"
 # Argument Parsing
 # =============================================================================
 
+PROJECT_PATH=""
+
 show_help() {
-    echo "Usage: cw-loop-interactive [OPTIONS]"
+    echo "Usage: cw-loop-interactive [OPTIONS] [PROJECT_PATH]"
     echo ""
     echo "Human-in-the-loop task execution. Pauses after each task for review."
+    echo "Reads task state directly from ~/.claude/tasks (no manifest needed)."
     echo ""
     echo "Options:"
     echo "  -m, --model MODEL     Claude model (default: $CW_MODEL)"
     echo "  -h, --help            Show this help"
+    echo ""
+    echo "Arguments:"
+    echo "  PROJECT_PATH          Project directory (default: current directory)"
     echo ""
     echo "Interactive Commands (after each task):"
     echo "  [Enter]   Continue to next task"
@@ -44,9 +53,13 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -m|--model) CW_MODEL="$2"; shift 2 ;;
         -h|--help) show_help; exit 0 ;;
-        *) log_error "Unknown option: $1"; show_help; exit 1 ;;
+        -*) log_error "Unknown option: $1"; show_help; exit 1 ;;
+        *) PROJECT_PATH="$1"; shift ;;
     esac
 done
+
+# Default to current directory
+PROJECT_PATH="${PROJECT_PATH:-$(pwd)}"
 
 # =============================================================================
 # Preflight
@@ -56,18 +69,26 @@ check_jq || exit 1
 check_claude || exit 1
 
 print_banner "Claude Workflow - Interactive Mode"
+log_info "Project: $PROJECT_PATH"
 log_info "Model: $CW_MODEL"
 
-# Initial export
-export_manifest
-
-if [ ! -f "$CW_MANIFEST" ]; then
-    log_error "No manifest. Run '/cw-plan' first."
+# Discover session
+if ! discover_session "$PROJECT_PATH"; then
+    log_error "No session with tasks found. Run '/cw-plan' first."
     exit 1
 fi
 
-print_manifest_status
+print_task_status
 show_task_list
+
+# =============================================================================
+# Helper: Get task subject by ID
+# =============================================================================
+
+get_task_subject() {
+    local task_id="$1"
+    get_all_tasks | jq -r --arg id "$task_id" '.[] | select(.id == $id) | .subject'
+}
 
 # =============================================================================
 # Interactive Loop
@@ -77,10 +98,7 @@ while true; do
     echo ""
     log_header "Task Selection"
 
-    # Re-export
-    export_manifest
-
-    # Check completion
+    # Check completion (reads directly from task files)
     if is_complete; then
         log_success "All tasks completed!"
         echo ""
@@ -96,7 +114,7 @@ while true; do
     fi
 
     NEXT=$(get_next_task_id)
-    SUBJECT=$(jq -r ".tasks[] | select(.task_id==\"$NEXT\") | .subject" "$CW_MANIFEST")
+    SUBJECT=$(get_task_subject "$NEXT")
 
     echo ""
     echo -e "  Next: ${CYAN}$NEXT${NC} - $SUBJECT"
@@ -143,7 +161,7 @@ while true; do
 
     # Post-task prompt
     echo ""
-    print_manifest_status
+    print_task_status
 
     echo -e "  ${YELLOW}[Enter]${NC} Next  ${YELLOW}[r]${NC} Retry  ${YELLOW}[v]${NC} Validate  ${YELLOW}[q]${NC} Quit"
     echo -n "  > "
