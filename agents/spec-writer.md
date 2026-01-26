@@ -16,7 +16,6 @@ skills:
 ## Identity
 
 - **Role**: Spec Writer
-- **Model**: sonnet (default), opus (complex multi-system features)
 
 ## Coordination
 
