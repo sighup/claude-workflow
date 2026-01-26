@@ -2,7 +2,7 @@
 name: cw-dispatch
 description: "Identify independent tasks and spawn parallel agent workers. Selects model based on task complexity. Use after cw-plan to execute multiple tasks concurrently."
 user-invocable: true
-allowed-tools: TaskList, TaskGet, TaskUpdate, Task
+allowed-tools: TaskList, TaskGet, TaskUpdate, Task, AskUserQuestion, Skill
 ---
 
 # CW-Dispatch: Parallel Agent Dispatcher
@@ -238,6 +238,25 @@ Before outputting any completion or "no tasks" message, verify:
 
 ## What Comes Next
 
-After all tasks complete:
-- `/cw-validate` to verify coverage and run validation gates
-- Run `/cw-dispatch` again if more tasks became unblocked
+After workers complete, check if more tasks became unblocked:
+
+1. **If newly unblocked tasks exist**: Automatically dispatch them (loop back to Step 1)
+2. **If ALL tasks are complete**: Use AskUserQuestion to offer validation
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "All tasks are complete! Would you like to validate the implementation?",
+    header: "Validate",
+    options: [
+      { label: "Run /cw-validate", description: "Verify coverage against spec and run validation gates (recommended)" },
+      { label: "Done for now", description: "Skip validation and review manually" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Based on user selection:
+- **Run /cw-validate**: `Skill({ skill: "cw-validate" })`
+- **Done for now**: Summarize what was completed and exit
