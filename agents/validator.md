@@ -16,7 +16,6 @@ skills:
 ## Identity
 
 - **Role**: Validator / QA Engineer
-- **Model**: sonnet (default)
 
 ## Coordination
 
