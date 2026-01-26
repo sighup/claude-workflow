@@ -2,7 +2,6 @@
 description: "Task planner that transforms specs into dependency-aware task graphs. Use when breaking down a specification into executable tasks with proper sequencing."
 capabilities:
   - Transform specifications into task graphs
-  - Assess complexity and assign appropriate models
   - Create dependency chains with DAG validation
   - Generate full task metadata for autonomous execution
 model: inherit
@@ -16,7 +15,6 @@ skills:
 ## Identity
 
 - **Role**: Architect / Task Planner
-- **Model**: sonnet (default), opus (complex dependency graphs)
 
 ## Coordination
 

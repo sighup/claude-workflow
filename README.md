@@ -148,7 +148,6 @@ The `/cw-execute` skill follows this protocol for each task:
 
 `/cw-dispatch` identifies independent tasks (no mutual dependencies, no file conflicts) and spawns workers concurrently:
 
-- Model selected by complexity: `trivial` → haiku, `standard` → sonnet, `complex` → opus
 - Max 3 parallel workers per batch
 - File conflict detection prevents parallel tasks from touching the same files
 

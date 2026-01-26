@@ -177,14 +177,6 @@ Sub-task IDs use dot notation: T01.1, T01.2, T01.3
 
 See `references/task-metadata-schema.md` for the complete field reference.
 
-## Complexity Assignment Guide
-
-| Indicator | Level | Model |
-|-----------|-------|-------|
-| 1-2 requirements, config/boilerplate only | `trivial` | haiku |
-| 3-5 requirements, typical feature work | `standard` | sonnet |
-| 6+ requirements, new patterns, architectural | `complex` | opus |
-
 ## Spec-to-Task Mapping
 
 Ensure complete coverage:

@@ -16,7 +16,6 @@ skills:
 ## Identity
 
 - **Role**: Implementer / Coding Worker
-- **Model**: haiku (trivial), sonnet (standard), opus (complex)
 
 ## Coordination
 
