@@ -6,7 +6,7 @@ capabilities:
   - Re-execute proof artifacts for verification
   - Generate coverage matrices and validation reports
 model: inherit
-tools: Glob, Grep, Read, Write, Bash, TaskList, TaskGet
+tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate
 skills:
   - cw-validate
 ---
