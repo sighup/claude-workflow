@@ -4,13 +4,26 @@ A Claude Code plugin that unifies spec-driven development, autonomous task execu
 
 ## Install
 
-Add the plugin to your Claude Code project:
+### From Git (recommended)
 
 ```bash
-claude plugins add /path/to/claude-workflow
+# Add the marketplace
+claude plugin marketplace add https://github.com/sighup/claude-workflow.git
+
+# Install at project scope (shared with team via .claude/settings.json)
+claude plugin install claude-workflow@claude-workflow --scope project
+
+# Or install at user scope (personal, across all projects)
+claude plugin install claude-workflow@claude-workflow --scope user
 ```
 
-Or add it globally in `~/.claude/plugins.json`.
+### Interactive installation
+
+```bash
+/plugin
+# Navigate to Marketplaces tab → Add → paste the git URL
+# Then go to Discover tab → select claude-workflow → choose scope
+```
 
 ## Workflow
 
