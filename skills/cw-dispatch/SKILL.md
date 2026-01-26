@@ -200,15 +200,6 @@ If a worker fails (task remains in_progress or goes back to pending):
 3. If permanent: report to user, skip task
 4. If `failure_count >= 3`: mark as blocked, require human intervention
 
-## Swarms Readiness
-
-When Swarms becomes available, this dispatch logic moves into the team lead agent natively. The task board schema and worker instructions remain the same - only the orchestration mechanism changes.
-
-```
-Today:   /cw-dispatch -> Task tool calls -> workers
-Swarms:  Lead agent -> spawns workers -> workers read board
-```
-
 ## Pre-Exit Verification
 
 Before outputting any completion or "no tasks" message, verify:
@@ -243,5 +234,31 @@ AskUserQuestion({
 ```
 
 Based on user selection:
-- **Run /cw-validate**: `Skill({ skill: "cw-validate" })`
+- **Run /cw-validate**: Spawn the validator as a sub-agent (see below)
 - **Done for now**: Summarize what was completed and exit
+
+### Spawning the Validator
+
+When user selects validation, spawn the validator as a sub-agent to keep context isolated:
+
+```
+Task({
+  subagent_type: "general-purpose",
+  description: "Validate implementation against spec",
+  prompt: "You are the validator.
+
+MANDATORY FIRST ACTION: Use the Skill tool to invoke 'cw-validate'.
+
+Do NOT validate anything directly. The cw-validate skill contains the 6-gate validation protocol that:
+1. Reads the task board for completed tasks
+2. Collects evidence from proofs and git history
+3. Applies all 6 validation gates
+4. Generates the validation report
+
+Without cw-validate, validation will be incomplete and inconsistent.
+
+Constraints:
+- Read-only access to implementation code
+- Never mark PASS if any gate fails
+- Always produce the full coverage matrix"
+})
