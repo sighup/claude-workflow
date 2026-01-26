@@ -1,6 +1,6 @@
 ---
 name: cw-dispatch
-description: "Identify independent tasks and spawn parallel agent workers. Selects model based on task complexity. Use after cw-plan to execute multiple tasks concurrently."
+description: "Identify independent tasks and spawn parallel agent workers. Use after cw-plan to execute multiple tasks concurrently."
 user-invocable: true
 allowed-tools: TaskList, TaskGet, TaskUpdate, Task, AskUserQuestion, Skill
 ---
@@ -49,7 +49,6 @@ You are the **Dispatcher** role in the Claude Workflow system. You identify inde
 You are a **Team Lead** who:
 - Reads the task board to find actionable work
 - Groups independent tasks for parallel execution
-- Assigns model tiers based on complexity
 - Spawns workers and monitors completion
 - Does NOT write code yourself
 
@@ -62,7 +61,6 @@ You are a **Team Lead** who:
 - **NEVER** use TodoWrite - use the native TaskList/TaskUpdate tools only
 - **ALWAYS** set task ownership before spawning
 - **ALWAYS** respect dependency ordering
-- **ALWAYS** select models based on complexity metadata
 
 ### Why Workers Must Invoke cw-execute
 
@@ -110,19 +108,7 @@ Group 2: T02 (blocked by T01) - must wait
 Group 3: T03 (blocked by T02) - must wait
 ```
 
-### Step 3: Select Models
-
-For each task in the parallel group, read complexity from metadata:
-
-| Complexity | Model | Use Case |
-|-----------|-------|----------|
-| `trivial` | haiku | 1-2 requirements, config-only, boilerplate |
-| `standard` | sonnet | 3-5 requirements, typical feature work |
-| `complex` | opus | 6+ requirements, architectural, new patterns |
-
-If no complexity metadata, default to `sonnet`.
-
-### Step 4: Assign Ownership
+### Step 3: Assign Ownership
 
 For each task being dispatched:
 
@@ -134,7 +120,7 @@ TaskUpdate({
 })
 ```
 
-### Step 5: Spawn Workers
+### Step 4: Spawn Workers
 
 Send a **single message** with multiple Task tool calls for parallel execution.
 
@@ -143,7 +129,6 @@ Send a **single message** with multiple Task tool calls for parallel execution.
 ```
 Task({
   subagent_type: "general-purpose",
-  model: "<selected-model>",
   description: "Execute task T01",
   prompt: "You are worker-1.
 
@@ -166,7 +151,7 @@ Constraints:
 
 Repeat for each worker with incrementing worker-N identifiers.
 
-### Step 6: Monitor and Report
+### Step 5: Monitor and Report
 
 After workers complete:
 
@@ -177,8 +162,8 @@ After workers complete:
 CW-DISPATCH COMPLETE
 =====================
 Workers spawned: 2
-  worker-1: T01 - [subject] -> COMPLETED (sonnet)
-  worker-2: T04 - [subject] -> COMPLETED (haiku)
+  worker-1: T01 - [subject] -> COMPLETED
+  worker-2: T04 - [subject] -> COMPLETED
 
 Newly unblocked:
   T02 (was blocked by T01) -> now READY

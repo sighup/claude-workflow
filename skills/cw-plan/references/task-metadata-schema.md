@@ -93,14 +93,6 @@ Each requirement must be:
 | `file` | `path`, `contains` | File existence/content check |
 | `browser` | `prompt`, `expected` | Browser-based verification |
 
-### Complexity Levels
-
-| Level | Criteria | Model |
-|-------|----------|-------|
-| `trivial` | 1-2 requirements, config-only changes | haiku |
-| `standard` | 3-5 requirements, typical feature work | sonnet |
-| `complex` | 6+ requirements, architectural changes | opus |
-
 ## Dependency Representation
 
 Dependencies use the native task system's `addBlockedBy` mechanism:
