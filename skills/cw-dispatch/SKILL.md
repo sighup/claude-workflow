@@ -262,3 +262,21 @@ Constraints:
 - Never mark PASS if any gate fails
 - Always produce the full coverage matrix"
 })
+```
+
+### Relaying Validation Results
+
+**CRITICAL**: Sub-agent results are not automatically visible to users. After the validator completes, you MUST relay the validation summary to the user.
+
+The validator will output a summary in this format:
+```
+VALIDATION COMPLETE
+===================
+Overall: PASS | FAIL
+Gates: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F]
+...
+```
+
+Output this summary directly to the user, then:
+- **If PASS**: Inform user implementation is ready for review/merge
+- **If FAIL**: Show blocking issues and recommend running `/cw-dispatch` again after fixes
