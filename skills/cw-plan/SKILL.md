@@ -140,9 +140,27 @@ Then set dependencies using `TaskUpdate` with `addBlockedBy`:
 TaskUpdate({ taskId: "t02-id", addBlockedBy: ["t01-id"] })
 ```
 
-After creating all parent tasks, **STOP** and present them:
+After creating all parent tasks, **STOP** and use AskUserQuestion to get approval:
 
-> "I've created [N] parent tasks representing demoable units. Each carries full execution metadata. Review the task graph above and respond with 'Generate sub-tasks' to decompose into implementation steps, or provide feedback to adjust."
+```
+AskUserQuestion({
+  questions: [{
+    question: "I've created [N] parent tasks representing demoable units. How would you like to proceed?",
+    header: "Tasks",
+    options: [
+      { label: "Generate sub-tasks", description: "Decompose parent tasks into implementation steps" },
+      { label: "Execute as-is", description: "Skip sub-tasks, execute parent tasks directly" },
+      { label: "Adjust tasks", description: "Provide feedback to modify the task graph" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Based on user selection:
+- **Generate sub-tasks**: Proceed to Phase 3
+- **Execute as-is**: Skip to "What Comes Next" section
+- **Adjust tasks**: Wait for feedback, then revise parent tasks
 
 ### Phase 3: Sub-Task Creation (After User Approval)
 
