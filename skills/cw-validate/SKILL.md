@@ -196,6 +196,26 @@ These automatically become CRITICAL or HIGH:
 - Undeclared file changes without justification
 - Test suite or build broken after implementation
 
+## Output Requirements
+
+**CRITICAL**: When validation completes, you MUST output an executive summary so the caller can relay results to the user. Sub-agent results are not automatically visible to users.
+
+Always end with this output format:
+
+```
+VALIDATION COMPLETE
+===================
+Overall: PASS | FAIL
+Gates: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F]
+
+Requirements: X/Y verified (Z%)
+Proof Artifacts: X/Y working (Z%)
+
+[If FAIL: List blocking issues with severity]
+
+Report saved: [path to validation report]
+```
+
 ## What Comes Next
 
 After validation:

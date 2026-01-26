@@ -1,6 +1,6 @@
 {
   "name": "claude-workflow",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Unified spec-to-execution workflow system. Combines spec rigor, autonomous execution, and native task orchestration with parallel agent dispatch. Swarms-ready architecture.",
   "hooks": {
     "SubagentStop": [
