@@ -41,58 +41,6 @@ You are the **Architect** role in the Claude Workflow system. Your job is to rea
 4. **Identify Dependencies**: Map logical ordering between demoable units
 5. **Evaluate Complexity**: Assign `trivial`, `standard`, or `complex` to each unit
 
-### Phase 1.5: Proof Capture Capability
-
-Before creating tasks, determine how visual/screenshot proof artifacts will be captured.
-
-**1. Identify Visual Proofs**
-
-Scan the spec's proof artifacts for types that require visual capture:
-- `screenshot` - Static image of UI state
-- `browser` - Web page interaction/state
-- `visual` - Any UI verification
-
-If no visual proofs exist, skip to Phase 2.
-
-**2. Detect Available Tools**
-
-Check what capture tools are available in the environment:
-
-| Tool | Detection | Captures |
-|------|-----------|----------|
-| chrome-devtools MCP | Check if `mcp__chrome-devtools__take_screenshot` exists | Web pages |
-| screencapture (macOS) | `which screencapture` | Native apps, screen |
-| scrot (Linux) | `which scrot` | Screen, windows |
-
-**3. Ask User for Preference**
-
-Present options based on detected capabilities:
-
-```
-For visual proof artifacts (screenshots), how should they be captured?
-
-Available options:
-[ ] Auto-capture with [detected tool] (if available)
-[ ] Manual - I will capture and verify screenshots myself
-[ ] Skip - Accept code-level verification only
-```
-
-**4. Store Decision**
-
-Record the proof capture method in task metadata:
-
-```json
-{
-  "proof_capture": {
-    "visual_method": "auto|manual|skip",
-    "tool": "chrome-devtools|screencapture|scrot|null",
-    "manual_confirmation_required": true|false
-  }
-}
-```
-
-This metadata is inherited by all tasks created in this planning session.
-
 ### Phase 2: Parent Task Creation
 
 For each demoable unit in the spec, create a native task:
@@ -115,12 +63,8 @@ TaskCreate({
       { id: "R01.1", text: "...", testable: true }
     ],
     proof_artifacts: [
-      { type: "test|cli|url|file|screenshot|visual", command: "...", expected: "...", capture_method: "auto|manual|skip" }
+      { type: "test|cli|url|file|screenshot|visual", command: "...", expected: "..." }
     ],
-    proof_capture: {
-      visual_method: "auto|manual|skip",
-      tool: "chrome-devtools|screencapture|scrot|null"
-    },
     commit: { template: "feat(scope): description" },
     verification: {
       pre: ["npm run lint", "npm run build"],
@@ -223,6 +167,7 @@ AskUserQuestion({
     options: [
       { label: "Parallel (/cw-dispatch)", description: "Spawn parallel workers for independent tasks (recommended)" },
       { label: "Single task (/cw-execute)", description: "Execute one task manually with full control" },
+      { label: "Setup proof capture (/cw-proof-setup)", description: "Configure visual proof capture tools before execution" },
       { label: "Autonomous (cw-loop)", description: "Run cw-loop shell script for hands-off execution" },
       { label: "Done for now", description: "Save the task graph and execute later" }
     ],
@@ -234,5 +179,6 @@ AskUserQuestion({
 Based on user selection:
 - **Parallel**: `Skill({ skill: "cw-dispatch" })`
 - **Single task**: `Skill({ skill: "cw-execute" })`
+- **Setup proof capture**: `Skill({ skill: "cw-proof-setup" })` - recommended if spec has visual proof artifacts
 - **Autonomous**: Instruct user to run `./scripts/cw-loop` from their terminal
 - **Done for now**: Confirm task graph is saved and ready when they return

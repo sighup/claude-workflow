@@ -126,7 +126,11 @@ Execute proof artifacts and capture evidence.
 
 1. Determine proof directory from spec_path: `./docs/specs/[spec-dir]/[NN]-proofs/`
 2. Create the proof directory if it doesn't exist
-3. Read `metadata.proof_capture` for the capture method decided during planning
+3. **Check for visual proof configuration:**
+   - Read `metadata.proof_capture` for the capture method
+   - If visual proofs exist in `metadata.proof_artifacts` (screenshot, browser, visual) but `proof_capture` is not configured:
+     - Suggest: "Visual proofs detected but not configured. Run `/cw-proof-setup` to configure capture tools, or proceed with manual verification."
+     - Default to `manual` method if user chooses to proceed
 4. For each proof artifact in `metadata.proof_artifacts`:
 
 **Automated proofs** (test, cli, file, url):
