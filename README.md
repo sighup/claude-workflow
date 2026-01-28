@@ -69,6 +69,9 @@ Every task on the board carries self-contained metadata enabling autonomous exec
   "proof_artifacts": [
     { "type": "test", "command": "npm test -- src/auth/login.test.ts", "expected": "All pass" }
   ],
+  "pr_config": {
+    "pr_group": "pr-01-auth-backend"
+  },
   "verification": {
     "pre": ["npm run lint"],
     "post": ["npm test"]
@@ -143,6 +146,52 @@ The `/cw-execute` skill follows this protocol for each task:
 | D | Changed files in declared scope or justified |
 | E | Implementation follows repository standards |
 | F | No real credentials in proof artifacts |
+
+## PR Size Optimization
+
+The workflow helps optimize pull requests for easier code review.
+
+### PR Strategy
+
+During `/cw-spec`, choose a PR strategy:
+
+| Strategy | Behavior |
+|----------|----------|
+| `per-unit` | Each demoable unit = separate PR (recommended for large features) |
+| `single` | All work in one PR (good for small, cohesive features) |
+| `decide-during-planning` | Choose PR boundaries during `/cw-plan` |
+
+### PR Groups
+
+Tasks are assigned `pr_config.pr_group` metadata to track PR boundaries:
+
+```json
+{
+  "pr_config": {
+    "pr_group": "pr-01-auth-backend"
+  }
+}
+```
+
+**Functional integrity rule**: PR groups always align with demoable unit boundaries. A demoable unit is never split across multiple PRs.
+
+### Size Thresholds
+
+`/cw-plan` warns when PR groups exceed recommended sizes:
+
+| Metric | Warning Threshold |
+|--------|-------------------|
+| Files changed | > 15 per PR group |
+| Demoable units | > 4 in single PR group |
+| Complex tasks | > 2 in single PR group |
+
+### PR Construction Guide
+
+After validation passes, `/cw-validate` outputs a PR Construction Guide with:
+- PR group summary (tasks, files, LOC per group)
+- Recommended merge order based on dependencies
+- Suggested `gh pr create` commands
+- Confirmation that each PR is a functional, concern-focused changeset
 
 ## Parallel Dispatch
 

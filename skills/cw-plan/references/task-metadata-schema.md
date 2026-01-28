@@ -48,12 +48,18 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
     "post": ["npm test"]                          // Must pass after commit
   },
 
+  // PR Configuration
+  "pr_config": {
+    "pr_group": "pr-01-auth-backend"     // Tasks with same group = intended for same PR
+  },
+
   // Worker Assignment
   "role": "implementer",                 // implementer | validator | spec-writer
   "complexity": "standard",             // trivial | standard | complex
 
   // Results (filled by worker after execution)
   "proof_results": null,                 // Filled with pass/fail per artifact
+  "commit_stats": null,                  // Filled with files_changed, insertions, deletions
   "completed_at": null                   // ISO timestamp when completed
 }
 ```
@@ -93,6 +99,21 @@ Each requirement must be:
 | `file` | `path`, `contains` | File existence/content check |
 | `browser` | `prompt`, `expected` | Browser-based verification |
 
+### PR Configuration
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pr_config.pr_group` | string | No | Identifier for PR grouping. Tasks with the same `pr_group` are intended for the same PR. Format: `pr-NN-short-name` (e.g., `pr-01-auth-backend`) |
+
+**Functional integrity rule**: PR groups must align with demoable unit boundaries. A demoable unit should never be split across multiple PRs.
+
+Valid groupings:
+- 1 demoable unit = 1 PR (smallest functional unit)
+- N demoable units = 1 PR (larger but still functional)
+
+Invalid grouping:
+- 1 demoable unit split across 2+ PRs (breaks functionality)
+
 ## Dependency Representation
 
 Dependencies use the native task system's `addBlockedBy` mechanism:
@@ -121,6 +142,11 @@ When a worker completes a task, it fills:
     { "type": "test", "status": "pass", "output_file": "T01-01-test.txt" },
     { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
   ],
+  "commit_stats": {
+    "files_changed": 5,
+    "insertions": 150,
+    "deletions": 30
+  },
   "completed_at": "2026-01-24T15:30:00Z"
 }
 ```

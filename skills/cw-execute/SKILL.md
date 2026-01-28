@@ -258,6 +258,14 @@ grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proof
    ```
 4. Create commit using `metadata.commit.template`
 5. Verify commit includes proof files: `git show --name-only HEAD | grep proofs`
+6. **Capture commit stats** for PR size tracking:
+   ```bash
+   git diff --stat HEAD~1..HEAD
+   ```
+   Extract and store:
+   - `files_changed`: Number of files modified
+   - `insertions`: Lines added
+   - `deletions`: Lines removed
 
 ### Phase 9: VERIFY-FULL
 
@@ -289,6 +297,11 @@ TaskUpdate({
     ],
     proof_summary: "T01-proofs.md",
     commit_sha: "<sha from git log>",
+    commit_stats: {
+      files_changed: 5,
+      insertions: 150,
+      deletions: 30
+    },
     completed_at: "2026-01-24T15:30:00Z"
   }
 })

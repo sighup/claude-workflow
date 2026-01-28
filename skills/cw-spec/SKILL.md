@@ -141,6 +141,27 @@ Ask questions to understand "what" and "why" (not "how"):
 - Keep headers short (max 12 chars): "Scope", "Auth", "Storage", etc.
 - Write clear option descriptions explaining implications
 
+**PR Strategy Question:**
+
+After gathering functional requirements, ask about PR preferences:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "How would you like to organize PRs for this feature?",
+    header: "PR Strategy",
+    options: [
+      { label: "One PR per unit (Recommended)", description: "Each demoable unit = separate PR. Best for large features with reviewable chunks." },
+      { label: "Single PR", description: "All work in one PR. Good for small, cohesive features." },
+      { label: "Decide during planning", description: "Choose PR boundaries after seeing task scope in /cw-plan." }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Store the response in the spec's metadata section for use by `/cw-plan`.
+
 ### Step 5: Spec Generation
 
 Generate the specification using this structure:
@@ -190,6 +211,10 @@ Generate the specification using this structure:
 
 ## Success Metrics
 [How success is measured, with targets where possible]
+
+## PR Preferences
+- **Strategy**: [per-unit | single | decide-during-planning]
+- **Notes**: [any constraints mentioned, e.g., CI time limits, review capacity]
 
 ## Open Questions
 [Remaining questions, or "No open questions at this time."]

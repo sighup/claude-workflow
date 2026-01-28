@@ -213,11 +213,104 @@ Proof Artifacts: X/Y working (Z%)
 
 [If FAIL: List blocking issues with severity]
 
+[If PASS: Include PR Construction Summary]
+PR Groups: N groups ready for review
+Merge Order: pr-01 → pr-02 → ...
+Total: X files, +Y/-Z lines across N PRs
+
 Report saved: [path to validation report]
 ```
+
+## Step 7: PR Construction Guide
+
+After all validation gates pass, generate a PR Construction Guide section.
+
+**1. Aggregate PR Group Data**
+
+For each unique `pr_config.pr_group` across completed tasks:
+- Collect task IDs in that group
+- Sum `commit_stats` (files_changed, insertions, deletions)
+- List proof artifacts and their statuses
+- Identify dependencies between PR groups
+
+**2. Determine PR Dependencies**
+
+PR group A depends on PR group B if:
+- Any task in A has `addBlockedBy` pointing to a task in B
+- A's tasks modify files created by B's tasks
+
+**3. Generate Merge Order**
+
+Sort PR groups topologically based on dependencies.
+
+**4. Output PR Construction Guide**
+
+Add this section to the validation report after the Evidence Appendix:
+
+```markdown
+## PR Construction Guide
+
+**Strategy**: [per-unit | single | custom] (from spec metadata)
+
+### PR Summary
+
+| PR Group | Tasks | Files | Est. LOC | Depends On | Status |
+|----------|-------|-------|----------|------------|--------|
+| pr-01-auth-backend | T01, T02 | 8 | ~250 | - | Ready |
+| pr-02-auth-ui | T03 | 4 | ~120 | pr-01 | Ready after pr-01 |
+
+### Recommended Merge Order
+
+1. **pr-01-auth-backend** - No dependencies, can merge immediately
+2. **pr-02-auth-ui** - Merge after pr-01
+
+### PR Details
+
+#### PR 1: pr-01-auth-backend
+- **Demoable Unit(s)**: Unit 1 - User login endpoint
+- **Commits**: T01 (abc1234), T02 (def5678)
+- **Files**: 8 files, +250/-30 lines
+- **Proof Artifacts**: 3 passing (test, cli, file)
+- **Functional**: Yes - independently deployable
+
+**Suggested commands:**
+\`\`\`bash
+# Create PR (commits already on branch)
+gh pr create --title "feat(auth): add backend authentication" --body "..."
+\`\`\`
+
+#### PR 2: pr-02-auth-ui
+- **Demoable Unit(s)**: Unit 2 - Login page UI
+- **Commits**: T03 (789abcd)
+- **Files**: 4 files, +120/-10 lines
+- **Proof Artifacts**: 2 passing (browser, test)
+- **Depends on**: pr-01 (merge first, or use stacked PR pattern)
+- **Functional**: Yes - requires pr-01 merged first
+
+**Suggested commands:**
+\`\`\`bash
+# After pr-01 merged:
+gh pr create --title "feat(auth): add login UI" --body "..."
+
+# Or for stacked PRs (pr-01 as base):
+gh pr create --base feat/auth-backend --title "feat(auth): add login UI" --body "..."
+\`\`\`
+
+### Notes
+
+- Each PR represents one or more complete demoable units with passing proof artifacts
+- PRs are designed as functional, concern-focused changesets
+- The merge order ensures each PR is independently functional when merged
+```
+
+**5. Handle Missing PR Config**
+
+If tasks don't have `pr_config.pr_group` (backward compatibility):
+- Group all tasks into a single implicit PR group: `pr-01-[feature-name]`
+- Note in output: "PR grouping not configured; all tasks grouped as single PR"
 
 ## What Comes Next
 
 After validation:
-- **PASS**: Implementation ready for final code review and merge
+- **PASS**: Implementation ready for final code review. Use the PR Construction Guide to create focused, reviewable PRs.
 - **FAIL**: Report shows exactly what needs fixing; fix issues and re-validate

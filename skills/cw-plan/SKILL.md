@@ -93,6 +93,46 @@ Record the proof capture method in task metadata:
 
 This metadata is inherited by all tasks created in this planning session.
 
+### Phase 1.7: PR Strategy Configuration
+
+Determine how tasks will be grouped for PR creation.
+
+**1. Check Spec for PR Preferences**
+
+Read the spec's "PR Preferences" section (if present):
+- `per-unit`: Each demoable unit gets its own `pr_group`
+- `single`: All tasks share the same `pr_group`
+- `decide-during-planning`: Prompt user during planning
+
+**2. If Strategy Not Set, Ask User**
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "How would you like to organize PRs for this feature?",
+    header: "PR Strategy",
+    options: [
+      { label: "One PR per unit (Recommended)", description: "Each demoable unit = separate PR. Best for large features." },
+      { label: "Single PR", description: "All work in one PR. Good for small features." },
+      { label: "Custom grouping", description: "I'll specify which units should be grouped together." }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+**3. Assign PR Groups**
+
+Based on the chosen strategy:
+
+| Strategy | PR Group Assignment |
+|----------|---------------------|
+| `per-unit` | Each parent task gets `pr-NN-[unit-name]` (e.g., `pr-01-auth-backend`) |
+| `single` | All tasks get `pr-01-[feature-name]` |
+| `custom` | Prompt user to specify groupings before creating tasks |
+
+Store the strategy for use in Phase 2.
+
 ### Phase 2: Parent Task Creation
 
 For each demoable unit in the spec, create a native task:
@@ -121,6 +161,9 @@ TaskCreate({
       visual_method: "auto|manual|skip",
       tool: "chrome-devtools|screencapture|scrot|null"
     },
+    pr_config: {
+      pr_group: "pr-01-[unit-name]"  // Assigned based on PR strategy
+    },
     commit: { template: "feat(scope): description" },
     verification: {
       pre: ["npm run lint", "npm run build"],
@@ -129,6 +172,7 @@ TaskCreate({
     role: "implementer",
     complexity: "trivial|standard|complex",
     proof_results: null,
+    commit_stats: null,
     completed_at: null
   }
 })
@@ -140,12 +184,75 @@ Then set dependencies using `TaskUpdate` with `addBlockedBy`:
 TaskUpdate({ taskId: "t02-id", addBlockedBy: ["t01-id"] })
 ```
 
-After creating all parent tasks, **STOP** and use AskUserQuestion to get approval:
+### Phase 2.5: PR Size Estimation
+
+After creating parent tasks, estimate PR sizes and warn if thresholds are exceeded.
+
+**1. Calculate Metrics Per PR Group**
+
+For each unique `pr_group`, aggregate:
+- Total files to create/modify (from `scope`)
+- Number of demoable units in the group
+- Overall complexity (count of trivial/standard/complex tasks)
+
+**2. Default Thresholds**
+
+| Metric | Warning Threshold | Rationale |
+|--------|-------------------|-----------|
+| Files changed | > 15 per PR group | Hard to review in one sitting |
+| Demoable units | > 4 in single PR group | Too many concerns in one PR |
+| Complex tasks | > 2 in single PR group | High cognitive load for reviewers |
+
+**3. Warn and Suggest Re-Grouping**
+
+If any PR group exceeds thresholds:
 
 ```
 AskUserQuestion({
   questions: [{
-    question: "I've created [N] parent tasks representing demoable units. How would you like to proceed?",
+    question: "PR group '[group-name]' has [N] files across [M] demoable units. This may be hard to review. How should we proceed?",
+    header: "PR Size",
+    options: [
+      { label: "Split by unit (Recommended)", description: "Each demoable unit becomes its own PR group" },
+      { label: "Split custom", description: "I'll specify how to divide the units" },
+      { label: "Keep as-is", description: "Accept larger PR scope" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+If user selects "Split by unit", update task metadata:
+```
+TaskUpdate({
+  taskId: "<id>",
+  metadata: {
+    pr_config: { pr_group: "pr-NN-[unit-name]" }
+  }
+})
+```
+
+**4. Output PR Group Summary**
+
+Display the PR grouping plan before proceeding:
+
+```
+PR Group Summary
+================
+pr-01-auth-backend: T01, T02 (8 files, 2 units)
+pr-02-auth-ui: T03 (4 files, 1 unit)
+
+Dependencies: pr-02 depends on pr-01
+```
+
+### Phase 2.7: User Approval
+
+After creating all parent tasks and validating PR sizes, **STOP** and use AskUserQuestion to get approval:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "I've created [N] parent tasks in [M] PR groups. How would you like to proceed?",
     header: "Tasks",
     options: [
       { label: "Generate sub-tasks", description: "Decompose parent tasks into implementation steps" },
