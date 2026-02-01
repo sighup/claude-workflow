@@ -27,6 +27,8 @@ claude plugin install claude-workflow@claude-workflow --scope user
 
 ## Workflow
 
+### Single Feature
+
 ```
 /cw-spec  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
   idea        task graph    parallel exec     verification
@@ -39,6 +41,26 @@ claude plugin install claude-workflow@claude-workflow --scope user
 
 Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops.
 
+### Multiple Features (Parallel Development)
+
+Use git worktrees to develop multiple specs simultaneously:
+
+```
+Main session:
+  /cw-spec "auth"  →  /cw-worktree create auth
+  /cw-spec "billing"  →  /cw-worktree create billing
+
+Worktree sessions (parallel):
+  .worktrees/feature-auth/    →  /cw-plan → /cw-dispatch → /cw-validate
+  .worktrees/feature-billing/ →  /cw-plan → /cw-dispatch → /cw-validate
+
+Main session:
+  /cw-worktree merge auth
+  /cw-worktree merge billing
+```
+
+Each worktree gets its own feature branch, allowing independent development and clean merges.
+
 ## Skills
 
 | Skill | Purpose |
@@ -48,6 +70,7 @@ Each step can also be run independently. `/cw-execute` handles single-task execu
 | `/cw-execute` | Execute one task using the 11-phase protocol (orient → commit → clean exit) |
 | `/cw-dispatch` | Find independent tasks and spawn parallel agent workers |
 | `/cw-validate` | Run 6 validation gates and produce a coverage matrix report |
+| `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
 | `/cw-manifest` | Export task board state to JSON for shell-script orchestration |
 
 ## Task Metadata
@@ -170,6 +193,9 @@ claude-workflow/
 │   │   ├── SKILL.md
 │   │   └── references/validation-gates.md
 │   ├── cw-dispatch/SKILL.md         # Dispatcher
+│   ├── cw-worktree/                  # Worktree Manager
+│   │   ├── SKILL.md
+│   │   └── references/worktree-lifecycle.md
 │   └── cw-manifest/SKILL.md         # Manifest bridge
 ├── scripts/
 │   ├── lib/cw-common.sh             # Shared shell utilities
