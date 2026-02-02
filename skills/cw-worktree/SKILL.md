@@ -62,15 +62,67 @@ Branch:    feature/{feature-name}
 - Feature names should be lowercase with hyphens
 - Match the spec naming where possible (e.g., spec `01-spec-auth` → worktree `auth`)
 
+## Feature Discovery Pattern
+
+When analyzing a codebase, spec, or issue tracker and you identify **multiple potential features** to build, use AskUserQuestion with `multiSelect: true` to let the user choose which ones to work on:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Which features would you like to create worktrees for?",
+    header: "Features",
+    options: [
+      { label: "Team Settings Page", description: "High priority - unlocks integration management" },
+      { label: "Export Buttons", description: "Medium effort - completes import/export workflow" },
+      { label: "External Issue Panel", description: "Shows linked issues on spec detail page" },
+      { label: "Jira Import Dialog", description: "Feature parity with GitHub import" }
+    ],
+    multiSelect: true
+  }]
+})
+```
+
+After selection, create worktrees for all chosen features:
+
+```bash
+# For each selected feature:
+/cw-worktree create team-settings
+/cw-worktree create export-buttons
+/cw-worktree create external-issue-panel
+```
+
+This pattern leverages the **control center** session to set up parallel development in one interaction.
+
 ## Commands
 
 Parse the user's input to determine which command to execute.
 
-### /cw-worktree create <feature-name>
+### /cw-worktree create <feature-name> [feature-name-2] [...]
 
-Creates a new worktree for a feature/spec.
+Creates one or more worktrees for features/specs.
 
-**Process:**
+**Examples:**
+```bash
+/cw-worktree create auth                      # Single feature
+/cw-worktree create auth billing search       # Multiple features
+```
+
+When multiple names are provided, run the creation process for each feature sequentially. Report a summary at the end:
+
+```
+WORKTREES CREATED
+=================
+✓ .worktrees/feature-auth       → feature/auth
+✓ .worktrees/feature-billing    → feature/billing
+✓ .worktrees/feature-search     → feature/search
+
+Open new terminals to start development:
+  cd .worktrees/feature-auth && claude
+  cd .worktrees/feature-billing && claude
+  cd .worktrees/feature-search && claude
+```
+
+**Process (for each feature):**
 
 1. **Validate feature name:**
    ```bash
