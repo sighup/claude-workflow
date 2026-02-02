@@ -97,30 +97,26 @@ This pattern leverages the **control center** session to set up parallel develop
 
 When you've scoped out a feature during discovery (identified components, routes, requirements), **generate a starter prompt** that the user can paste into the worktree session. This carries the context from the control center into the feature session.
 
-Include the starter prompt in the worktree creation output:
+Include the starter prompt in the worktree creation output as plain text (easy to copy):
 
 ```
-STARTER PROMPT
-══════════════
-Copy and paste this into your worktree session to begin:
+STARTER PROMPT (copy into worktree session)
+═══════════════════════════════════════════
 
-┌────────────────────────────────────────────────────────────────────────┐
-│ Build the Team Integration Settings Page:                              │
-│                                                                        │
-│ Route: /settings/team/[teamId]/integrations                            │
-│                                                                        │
-│ Components needed:                                                     │
-│ - IntegrationCard: Display connection status with provider logo        │
-│ - GitHubIntegrationForm: Repository selection, webhook secret setup    │
-│ - JiraIntegrationForm: OAuth connect button, project selection         │
-│ - StatusMappingEditor: Configure external status → spec status maps    │
-│ - AutomationRulesEditor: Configure which columns trigger spec creation │
-│                                                                        │
-│ This enables teams to configure integrations through UI instead of     │
-│ direct API calls.                                                      │
-│                                                                        │
-│ Run: /cw-spec team-integration-settings                                │
-└────────────────────────────────────────────────────────────────────────┘
+Build the Team Integration Settings Page.
+
+Route: /settings/team/[teamId]/integrations
+
+Components needed:
+- IntegrationCard: Display connection status with provider logo
+- GitHubIntegrationForm: Repository selection, webhook secret setup
+- JiraIntegrationForm: OAuth connect button, project selection
+- StatusMappingEditor: Configure external status → spec status maps
+- AutomationRulesEditor: Configure which columns trigger spec creation
+
+This enables teams to configure integrations through UI instead of direct API calls.
+
+Run: /cw-spec team-integration-settings
 ```
 
 **When to generate a starter prompt:**
@@ -276,26 +272,23 @@ Open new terminals to start development:
 
 9. **Include starter prompt (if context was gathered):**
 
-   If the feature was scoped during discovery (components identified, requirements discussed), include a starter prompt the user can paste into the worktree session:
+   If the feature was scoped during discovery (components identified, requirements discussed), include a starter prompt the user can paste into the worktree session. Use plain text for easy copying:
 
    ```
-   STARTER PROMPT
-   ══════════════
-   Copy and paste this into your worktree session to begin:
+   STARTER PROMPT (copy into worktree session)
+   ═══════════════════════════════════════════
 
-   ┌────────────────────────────────────────────────────────────────────┐
-   │ Build {feature-name}:                                              │
-   │                                                                    │
-   │ {Brief description of what the feature does}                       │
-   │                                                                    │
-   │ Components/files to create:                                        │
-   │ - {Component1}: {purpose}                                          │
-   │ - {Component2}: {purpose}                                          │
-   │                                                                    │
-   │ {Any routes, APIs, or patterns to follow}                          │
-   │                                                                    │
-   │ Run: /cw-spec {feature-name}                                       │
-   └────────────────────────────────────────────────────────────────────┘
+   Build {feature-name}.
+
+   {Brief description of what the feature does}
+
+   Components/files to create:
+   - {Component1}: {purpose}
+   - {Component2}: {purpose}
+
+   {Any routes, APIs, or patterns to follow}
+
+   Run: /cw-spec {feature-name}
    ```
 
 ---
