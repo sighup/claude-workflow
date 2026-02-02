@@ -93,6 +93,53 @@ After selection, create worktrees for all chosen features:
 
 This pattern leverages the **control center** session to set up parallel development in one interaction.
 
+## Starter Prompt Generation
+
+When you've scoped out a feature during discovery (identified components, routes, requirements), **generate a starter prompt** that the user can paste into the worktree session. This carries the context from the control center into the feature session.
+
+Include the starter prompt in the worktree creation output:
+
+```
+STARTER PROMPT
+══════════════
+Copy and paste this into your worktree session to begin:
+
+┌────────────────────────────────────────────────────────────────────────┐
+│ Build the Team Integration Settings Page:                              │
+│                                                                        │
+│ Route: /settings/team/[teamId]/integrations                            │
+│                                                                        │
+│ Components needed:                                                     │
+│ - IntegrationCard: Display connection status with provider logo        │
+│ - GitHubIntegrationForm: Repository selection, webhook secret setup    │
+│ - JiraIntegrationForm: OAuth connect button, project selection         │
+│ - StatusMappingEditor: Configure external status → spec status maps    │
+│ - AutomationRulesEditor: Configure which columns trigger spec creation │
+│                                                                        │
+│ This enables teams to configure integrations through UI instead of     │
+│ direct API calls.                                                      │
+│                                                                        │
+│ Run: /cw-spec team-integration-settings                                │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+**When to generate a starter prompt:**
+- Feature requirements were discussed before worktree creation
+- Specific components, routes, or APIs were identified
+- Context from issue trackers, specs, or codebase analysis was gathered
+
+**What to include:**
+- Feature name and purpose (1-2 sentences)
+- Key components/files to create
+- Routes or API endpoints involved
+- Reference files or patterns to follow
+- The `/cw-spec` command to run
+
+**When NOT to generate a starter prompt:**
+- Simple `/cw-worktree create <name>` without prior discussion
+- User already knows what they want to build
+- No context was gathered during discovery
+
 ## Commands
 
 Parse the user's input to determine which command to execute.
@@ -225,6 +272,30 @@ Open new terminals to start development:
 
    To sync with main before PR (from worktree session):
      /cw-worktree sync {feature-name}
+   ```
+
+9. **Include starter prompt (if context was gathered):**
+
+   If the feature was scoped during discovery (components identified, requirements discussed), include a starter prompt the user can paste into the worktree session:
+
+   ```
+   STARTER PROMPT
+   ══════════════
+   Copy and paste this into your worktree session to begin:
+
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ Build {feature-name}:                                              │
+   │                                                                    │
+   │ {Brief description of what the feature does}                       │
+   │                                                                    │
+   │ Components/files to create:                                        │
+   │ - {Component1}: {purpose}                                          │
+   │ - {Component2}: {purpose}                                          │
+   │                                                                    │
+   │ {Any routes, APIs, or patterns to follow}                          │
+   │                                                                    │
+   │ Run: /cw-spec {feature-name}                                       │
+   └────────────────────────────────────────────────────────────────────┘
    ```
 
 ---
