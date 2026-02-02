@@ -51,15 +51,20 @@ Main session:
   /cw-spec "billing"  →  /cw-worktree create billing
 
 Worktree sessions (parallel):
-  .worktrees/feature-auth/    →  /cw-plan → /cw-dispatch → /cw-validate
-  .worktrees/feature-billing/ →  /cw-plan → /cw-dispatch → /cw-validate
+  cd .worktrees/feature-auth && claude
+    → SessionStart hook auto-configures task list
+    → /cw-plan → /cw-dispatch → /cw-validate
+    → Exit anytime, resume later with same tasks
+
+  cd .worktrees/feature-billing && claude
+    → /cw-plan → /cw-dispatch → /cw-validate
 
 Main session:
   /cw-worktree merge auth
   /cw-worktree merge billing
 ```
 
-Each worktree gets its own feature branch, allowing independent development and clean merges.
+Each worktree gets its own feature branch and **isolated task list** (via `SessionStart` hook). Tasks persist in `~/.claude/tasks/feature-{name}/`, enabling seamless resume across sessions.
 
 ## Skills
 
