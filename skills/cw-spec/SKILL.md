@@ -227,7 +227,33 @@ Each demoable unit must be:
 
 ## What Comes Next
 
-Once the spec is complete and approved, use AskUserQuestion to offer next steps:
+Once the spec is complete and approved, use AskUserQuestion to offer next steps.
+
+**First, check if already in a worktree:**
+```bash
+# If current directory contains .worktrees/feature-, we're already isolated
+pwd | grep -q '\.worktrees/feature-' && echo "IN_WORKTREE"
+```
+
+**If NOT in a worktree, offer isolation options:**
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "The specification is complete. How would you like to develop this feature?",
+    header: "Isolation",
+    options: [
+      { label: "Create worktree (Recommended)", description: "Isolate in .worktrees/feature-{name}/ with dedicated task list" },
+      { label: "Continue here", description: "Run /cw-plan in current directory (no isolation)" },
+      { label: "Review spec again", description: "Make additional changes before proceeding" },
+      { label: "Done for now", description: "Save the spec and continue later" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+**If IN a worktree already:**
 
 ```
 AskUserQuestion({
@@ -244,7 +270,25 @@ AskUserQuestion({
 })
 ```
 
-If the user selects "Run /cw-plan", invoke the skill:
-```
-Skill({ skill: "cw-plan" })
-```
+**Handle user selection:**
+
+- **Create worktree**: Extract feature name from spec path, invoke `/cw-worktree create {feature-name}`:
+  ```
+  Skill({ skill: "cw-worktree", args: "create {feature-name}" })
+  ```
+  After worktree creation, remind user:
+  ```
+  To continue development:
+    cd .worktrees/feature-{name}
+    claude
+    /cw-plan
+  ```
+
+- **Continue here / Run /cw-plan**: Invoke the skill directly:
+  ```
+  Skill({ skill: "cw-plan" })
+  ```
+
+- **Review spec again**: Return to Step 6 for refinement
+
+- **Done for now**: Summarize what was created and exit
