@@ -54,29 +54,29 @@ feature/billing ──●── spec ──●── impl ─────┘
 ```
 
 ```bash
-# Setup (main session)
+# MAIN SESSION (control center - keep running)
 /cw-worktree create auth
 /cw-worktree create billing
+/cw-worktree list              # Check status anytime
 
-# Terminal 1: auth feature
+# TERMINAL 1: auth feature
 cd .worktrees/feature-auth && claude
 /cw-spec auth         # Spec committed to feature branch
 /cw-plan → /cw-dispatch → /cw-validate
 gh pr create          # PR contains spec + implementation
+exit
 
-# Terminal 2 (concurrent): billing feature
+# TERMINAL 2 (concurrent): billing feature
 cd .worktrees/feature-billing && claude
 /cw-spec billing → /cw-plan → /cw-dispatch → /cw-validate
 gh pr create
+exit
 
-# Sync with main if needed before merge
-/cw-worktree sync auth
-
-# Cleanup after PRs merged
+# MAIN SESSION: cleanup after PRs merged
 /cw-worktree cleanup
 ```
 
-Each worktree gets its own feature branch and **isolated task list** (via `SessionStart` hook). Tasks persist in `~/.claude/tasks/feature-{name}/`, enabling seamless resume across sessions. PRs go directly to main with spec and implementation together.
+Keep the main session running as a **control center** to create, list, and cleanup worktrees. Open new terminals for each feature's development. Each worktree gets its own feature branch and **isolated task list** (via `SessionStart` hook). Tasks persist in `~/.claude/tasks/feature-{name}/`, enabling seamless resume across sessions.
 
 ## Skills
 
