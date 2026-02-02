@@ -155,24 +155,24 @@ Creates a new worktree for a feature/spec.
    Task List: feature-{feature-name} (auto-configured via SessionStart hook)
    Status: Ready for development
 
-   Next steps:
-   1. Open new terminal: cd .worktrees/feature-{feature-name}
-   2. Start Claude Code: claude
-      (Task list automatically configured - no env vars needed!)
-   3. Create spec: /cw-spec {feature-name}
-      (Spec will be committed to the feature branch)
-   4. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
-   5. Create PR: gh pr create (PR contains spec + implementation)
+   Next steps (keep THIS session open as control center):
+   1. Open NEW terminal: cd .worktrees/feature-{feature-name} && claude
+   2. Create spec: /cw-spec {feature-name}
+   3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
+   4. Create PR: gh pr create (PR contains spec + implementation)
+   5. Exit worktree session when done
 
-   To resume work later:
+   From THIS session you can:
+     /cw-worktree list              # Check status of all worktrees
+     /cw-worktree create <other>    # Create more worktrees
+     /cw-worktree cleanup           # Remove merged worktrees
+
+   To resume worktree work later:
      cd .worktrees/feature-{feature-name} && claude
      (Tasks persist across sessions)
 
-   To sync with main before PR:
+   To sync with main before PR (from worktree session):
      /cw-worktree sync {feature-name}
-
-   To merge when complete (alternative to PR):
-     cd {project-root} && /cw-worktree merge {feature-name}
    ```
 
 ---
@@ -558,33 +558,59 @@ Removes completed or orphaned worktrees.
 
 Each worktree is a **self-contained feature unit**: one worktree = one spec + one implementation = one PR to main.
 
+### Session Layout
+
 ```
-Main Session (project root):
-  1. /cw-worktree create auth → creates .worktrees/feature-auth/ on branch feature/auth
+┌─────────────────────────────────────────────────────────┐
+│ MAIN SESSION (project root) - Control Center           │
+│ Keep this session running to manage all worktrees:     │
+│ • /cw-worktree create <feature>                        │
+│ • /cw-worktree list                                    │
+│ • /cw-worktree cleanup                                 │
+└─────────────────────────────────────────────────────────┘
+     │
+     ├──► Terminal 1: cd .worktrees/feature-auth && claude
+     │    /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
+     │
+     ├──► Terminal 2: cd .worktrees/feature-billing && claude
+     │    /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
+     │
+     └──► Terminal 3: cd .worktrees/feature-search && claude
+          /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
+```
 
-Worktree Session (.worktrees/feature-auth/):
-  2. cd .worktrees/feature-auth && claude
+### Workflow Steps
+
+```
+MAIN SESSION (control center - stays open):
+  1. /cw-worktree create auth
+  2. /cw-worktree create billing   # Create multiple if needed
+  3. /cw-worktree list             # Check status anytime
+
+NEW TERMINAL - Worktree Session (.worktrees/feature-auth/):
+  4. cd .worktrees/feature-auth && claude
      ↳ SessionStart hook auto-sets CLAUDE_CODE_TASK_LIST_ID=feature-auth
-  3. /cw-spec "auth" → creates docs/specs/01-spec-auth/ (committed to feature/auth)
-  4. /cw-plan → creates tasks (stored in ~/.claude/tasks/feature-auth/)
-  5. /cw-dispatch → runs workers (all in this worktree)
-  6. [Exit and resume anytime - tasks persist!]
-  7. /cw-validate → validates implementation
-  8. /cw-worktree sync auth → rebase on latest main (if needed)
-  9. gh pr create → PR contains spec + implementation
+  5. /cw-spec "auth" → creates docs/specs/01-spec-auth/ (committed to feature/auth)
+  6. /cw-plan → creates tasks (stored in ~/.claude/tasks/feature-auth/)
+  7. /cw-dispatch → runs workers (all in this worktree)
+  8. [Exit and resume anytime - tasks persist!]
+  9. /cw-validate → validates implementation
+  10. /cw-worktree sync auth → rebase on latest main (if needed)
+  11. gh pr create → PR contains spec + implementation
+  12. exit → done with this feature
 
-Main Session (after PR approved):
-  10. /cw-worktree cleanup → removes merged worktrees
+MAIN SESSION (after PR approved):
+  13. /cw-worktree cleanup → removes merged worktrees
 ```
 
 **Key Points:**
+- **Control center pattern** - Main session stays open to manage worktrees
 - **Worktree first** - Create worktree, then spec inside it
 - **Self-contained PRs** - Spec and implementation on same branch, reviewed together
 - **Automatic task isolation** - SessionStart hook configures task list ID based on worktree
 - **Persistent tasks** - Tasks stored in `~/.claude/tasks/feature-{name}/`, survive session restarts
 - **Seamless resume** - Just `cd` to worktree and run `claude`, tasks are there
 - **Simple PRs** - `gh pr create` from worktree, PR goes directly to main
-- **Standard git workflow** - Familiar feature-branch pattern with PRs
 
 ## Parallel Development Example
 
@@ -596,39 +622,47 @@ feature/auth ──●── spec ──●── impl ────────�
 feature/billing ──●── spec ──●── impl ─────┘
 ```
 
-### Setup (main session)
+### Main Session (control center - keep running)
 
 ```bash
+# Create all worktrees
 /cw-worktree create auth
 /cw-worktree create billing
 /cw-worktree create search
+
+# Check status anytime
+/cw-worktree list
 ```
 
-### Development (parallel terminals)
+### Terminal 1 (auth feature)
 
-**Terminal 1:**
 ```bash
 cd .worktrees/feature-auth && claude
 # Hook auto-configures: CLAUDE_CODE_TASK_LIST_ID=feature-auth
 /cw-spec auth         # Spec committed to feature/auth
 /cw-plan → /cw-dispatch → /cw-validate
 gh pr create          # PR: feature/auth → main (contains spec + impl)
+exit                  # Done with this feature
 ```
 
-**Terminal 2 (concurrent):**
+### Terminal 2 (billing feature - concurrent)
+
 ```bash
 cd .worktrees/feature-billing && claude
 # Hook auto-configures: CLAUDE_CODE_TASK_LIST_ID=feature-billing
 /cw-spec billing      # Spec committed to feature/billing
 /cw-plan → /cw-dispatch → /cw-validate
 gh pr create          # PR: feature/billing → main
+exit
 ```
 
-**Terminal 3 (concurrent):**
+### Terminal 3 (search feature - concurrent)
+
 ```bash
 cd .worktrees/feature-search && claude
 /cw-spec search → /cw-plan → /cw-dispatch → /cw-validate
 gh pr create          # PR: feature/search → main
+exit
 ```
 
 ### Resume work later
@@ -637,19 +671,20 @@ gh pr create          # PR: feature/search → main
 cd .worktrees/feature-auth && claude
 # Hook restores: CLAUDE_CODE_TASK_LIST_ID=feature-auth
 # TaskList shows your pending tasks!
-/cw-dispatch → continues where you left off
+/cw-dispatch   # Continues where you left off
 ```
 
 ### Sync before merge (if main has moved)
 
 ```bash
+# From worktree session:
 /cw-worktree sync auth    # Rebases feature/auth on origin/main
 ```
 
 ### Cleanup after PRs merged
 
 ```bash
-# From main session:
+# From MAIN SESSION (control center):
 /cw-worktree cleanup      # Removes merged worktrees
 ```
 
@@ -680,15 +715,22 @@ git branch -D feature/{name}
 
 ## What Comes Next
 
-After creating a worktree:
-1. Open new terminal in the worktree directory
-2. Run `claude` - task list is automatically configured via SessionStart hook
-3. Run `/cw-spec` to create the specification (committed to feature branch)
-4. Run `/cw-plan` to create tasks from the spec
-5. Run `/cw-dispatch` to execute tasks
-6. Exit anytime - tasks persist in `~/.claude/tasks/feature-{name}/`
-7. Resume with `cd .worktrees/feature-{name} && claude` - tasks are restored
-8. Run `/cw-validate` to verify completion
-9. Run `/cw-worktree sync` to rebase on main (if main has moved)
-10. Run `gh pr create` to open a PR (contains spec + implementation)
-11. After PR merged, run `/cw-worktree cleanup` from main session
+After creating a worktree (keep main session open as control center):
+
+**In a NEW terminal:**
+1. `cd .worktrees/feature-{name} && claude` - task list auto-configured
+2. `/cw-spec` - create specification (committed to feature branch)
+3. `/cw-plan` - create tasks from the spec
+4. `/cw-dispatch` - execute tasks (can exit and resume anytime)
+5. `/cw-validate` - verify completion
+6. `/cw-worktree sync` - rebase on main (if needed)
+7. `gh pr create` - open PR (contains spec + implementation)
+8. `exit` - done with this feature
+
+**From main session (control center):**
+- `/cw-worktree list` - check status of all worktrees
+- `/cw-worktree create <other>` - create more worktrees
+- `/cw-worktree cleanup` - remove merged worktrees (after PRs merged)
+
+**To resume work later:**
+- `cd .worktrees/feature-{name} && claude` - tasks are restored
