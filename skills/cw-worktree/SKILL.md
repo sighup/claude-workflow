@@ -33,23 +33,33 @@ You are a **DevOps Engineer** who:
 - **ALWAYS** verify clean git status before merge operations
 ## Automatic Task List Configuration
 
-When working in a worktree, the task list must be isolated to that feature to enable seamless resume across sessions. This is achieved via a **SessionStart hook** that is **bundled with the claude-workflow plugin**.
+When working in a worktree, the task list must be isolated to that feature to enable seamless resume across sessions.
 
 ### How It Works (Automatic)
 
-The plugin includes `scripts/worktree-session-init.sh` which runs on every session start:
+When `/cw-worktree create` runs, it creates `.claude/settings.local.json` in the worktree:
 
-1. Detects if you're in a directory under `.worktrees/feature-{name}/`
-2. Writes `export CLAUDE_CODE_TASK_LIST_ID=feature-{name}` to `CLAUDE_ENV_FILE`
-3. Provides context to Claude about the worktree environment
+```json
+{
+  "env": {
+    "CLAUDE_CODE_TASK_LIST_ID": "{worktree-name}"
+  }
+}
+```
 
-**No setup required** - the hook is active when the plugin is installed.
+The task list ID matches the worktree directory name (e.g., `feature-auth`, `bugfix-login`, `experiment-v2`).
+
+Claude Code reads this file on startup, ensuring the correct task list is used automatically.
+
+Additionally, a **SessionStart hook** provides context to Claude about the worktree environment (branch name, workflow commands, etc.).
+
+**No setup required** - Just run `claude` in the worktree.
 
 ### Benefits
 
-- **Zero configuration** - Just run `claude` in the worktree
+- **Zero configuration** - Just `cd` to worktree and run `claude`
 - **Persistent tasks** - Resume work anytime with the same task list
-- **Isolated task boards** - Each feature has its own task namespace at `~/.claude/tasks/feature-{name}/`
+- **Isolated task boards** - Each worktree has its own task namespace at `~/.claude/tasks/{worktree-name}/`
 - **Context awareness** - Claude knows it's in a worktree session
 
 ## Worktree Naming Convention
@@ -206,7 +216,27 @@ Open new terminals to start development:
    git worktree add ".worktrees/feature-${FEATURE}" -b "feature/${FEATURE}"
    ```
 
-6. **Setup dependencies (auto-detect project type):**
+6. **Configure isolated task list:**
+   ```bash
+   # Determine worktree directory name (e.g., "feature-auth", "bugfix-login")
+   WORKTREE_DIR="feature-${FEATURE}"
+
+   # Create .claude directory if it doesn't exist
+   mkdir -p ".worktrees/${WORKTREE_DIR}/.claude"
+
+   # Create settings.local.json with task list ID matching directory name
+   cat > ".worktrees/${WORKTREE_DIR}/.claude/settings.local.json" << EOF
+   {
+     "env": {
+       "CLAUDE_CODE_TASK_LIST_ID": "${WORKTREE_DIR}"
+     }
+   }
+   EOF
+   ```
+
+   This ensures Claude Code uses an isolated task list for this worktree - no shell setup required.
+
+7. **Setup dependencies (auto-detect project type):**
    ```bash
    cd ".worktrees/feature-${FEATURE}"
 
@@ -233,7 +263,7 @@ Open new terminals to start development:
    fi
    ```
 
-7. **Run baseline tests:**
+8. **Run baseline tests:**
    ```bash
    # Detect and run tests
    if [ -f package.json ]; then
@@ -241,13 +271,13 @@ Open new terminals to start development:
    fi
    ```
 
-8. **Report success:**
+9. **Report success:**
    ```
    WORKTREE CREATED
    ================
    Path:   .worktrees/feature-{feature-name}/
    Branch: feature/{feature-name}
-   Task List: feature-{feature-name} (auto-configured via SessionStart hook)
+   Task List: feature-{feature-name} (via .claude/settings.local.json)
    Status: Ready for development
 
    Next steps (keep THIS session open as control center):
@@ -270,7 +300,7 @@ Open new terminals to start development:
      /cw-worktree sync {feature-name}
    ```
 
-9. **Include starter prompt (if context was gathered):**
+10. **Include starter prompt (if context was gathered):**
 
    If the feature was scoped during discovery (components identified, requirements discussed), include a starter prompt the user can paste into the worktree session. Use plain text for easy copying:
 
