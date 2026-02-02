@@ -735,7 +735,7 @@ MAIN SESSION (control center - stays open):
 
 NEW TERMINAL - Worktree Session (.worktrees/feature-auth/):
   4. cd .worktrees/feature-auth && claude
-     ↳ SessionStart hook auto-sets CLAUDE_CODE_TASK_LIST_ID=feature-auth
+     ↳ Task list auto-configured via .claude/settings.local.json
   5. /cw-spec "auth" → creates docs/specs/01-spec-auth/ (committed to feature/auth)
   6. /cw-plan → creates tasks (stored in ~/.claude/tasks/feature-auth/)
   7. /cw-dispatch → runs workers (all in this worktree)
@@ -753,8 +753,8 @@ MAIN SESSION (after PR approved):
 - **Control center pattern** - Main session stays open to manage worktrees
 - **Worktree first** - Create worktree, then spec inside it
 - **Self-contained PRs** - Spec and implementation on same branch, reviewed together
-- **Automatic task isolation** - SessionStart hook configures task list ID based on worktree
-- **Persistent tasks** - Tasks stored in `~/.claude/tasks/feature-{name}/`, survive session restarts
+- **Automatic task isolation** - `.claude/settings.local.json` configures task list ID
+- **Persistent tasks** - Tasks stored in `~/.claude/tasks/{worktree-name}/`, survive session restarts
 - **Seamless resume** - Just `cd` to worktree and run `claude`, tasks are there
 - **Simple PRs** - `gh pr create` from worktree, PR goes directly to main
 

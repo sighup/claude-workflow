@@ -76,7 +76,7 @@ exit
 /cw-worktree cleanup
 ```
 
-Keep the main session running as a **control center** to create, list, and cleanup worktrees. Open new terminals for each feature's development. Each worktree gets its own feature branch and **isolated task list** (via `SessionStart` hook). Tasks persist in `~/.claude/tasks/feature-{name}/`, enabling seamless resume across sessions.
+Keep the main session running as a **control center** to create, list, and cleanup worktrees. Open new terminals for each feature's development. Each worktree gets its own feature branch and **isolated task list** (via `.claude/settings.local.json` created automatically). Tasks persist in `~/.claude/tasks/{worktree-name}/`, enabling seamless resume across sessions.
 
 ## Skills
 
