@@ -1,8 +1,20 @@
 {
   "name": "claude-workflow",
-  "version": "1.4.3",
+  "version": "1.5.0",
   "description": "Unified spec-to-execution workflow system. Combines spec rigor, autonomous execution, and native task orchestration with parallel agent dispatch. Swarms-ready architecture.",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/worktree-session-init.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "hooks": [

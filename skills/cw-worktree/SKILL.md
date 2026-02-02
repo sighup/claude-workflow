@@ -31,6 +31,26 @@ You are a **DevOps Engineer** who:
 - **ALWAYS** ensure `.worktrees/` is gitignored before creating worktrees
 - **ALWAYS** run dependency installation in new worktrees
 - **ALWAYS** verify clean git status before merge operations
+## Automatic Task List Configuration
+
+When working in a worktree, the task list must be isolated to that feature to enable seamless resume across sessions. This is achieved via a **SessionStart hook** that is **bundled with the claude-workflow plugin**.
+
+### How It Works (Automatic)
+
+The plugin includes `scripts/worktree-session-init.sh` which runs on every session start:
+
+1. Detects if you're in a directory under `.worktrees/feature-{name}/`
+2. Writes `export CLAUDE_CODE_TASK_LIST_ID=feature-{name}` to `CLAUDE_ENV_FILE`
+3. Provides context to Claude about the worktree environment
+
+**No setup required** - the hook is active when the plugin is installed.
+
+### Benefits
+
+- **Zero configuration** - Just run `claude` in the worktree
+- **Persistent tasks** - Resume work anytime with the same task list
+- **Isolated task boards** - Each feature has its own task namespace at `~/.claude/tasks/feature-{name}/`
+- **Context awareness** - Claude knows it's in a worktree session
 
 ## Worktree Naming Convention
 
@@ -132,12 +152,18 @@ Creates a new worktree for a feature/spec.
    ================
    Path:   .worktrees/feature-{feature-name}/
    Branch: feature/{feature-name}
+   Task List: feature-{feature-name} (auto-configured via SessionStart hook)
    Status: Ready for development
 
    Next steps:
    1. Open new terminal: cd .worktrees/feature-{feature-name}
    2. Start Claude Code: claude
+      (Task list automatically configured - no env vars needed!)
    3. Run: /cw-plan or /cw-dispatch
+
+   To resume work later:
+     cd .worktrees/feature-{feature-name} && claude
+     (Tasks persist across sessions)
 
    To merge when complete:
      cd {project-root} && /cw-worktree merge {feature-name}
@@ -453,21 +479,25 @@ The worktree becomes the **context** for the entire cw-* workflow:
 ```
 Main Session (project root):
   1. /cw-spec "auth" → creates docs/specs/01-spec-auth/
-  2. /cw-worktree create auth → creates .worktrees/feature-auth/
+  2. /cw-worktree create auth → creates .worktrees/feature-auth/ + sets up hook
 
 New Session (in worktree):
   3. cd .worktrees/feature-auth && claude
-  4. /cw-plan → creates tasks for the spec
+     ↳ SessionStart hook auto-sets CLAUDE_CODE_TASK_LIST_ID=feature-auth
+  4. /cw-plan → creates tasks (stored in ~/.claude/tasks/feature-auth/)
   5. /cw-dispatch → runs workers (all in this worktree)
-  6. /cw-validate → validates implementation
+  6. [Exit and resume anytime - tasks persist!]
+  7. /cw-validate → validates implementation
 
 Back in Main Session:
-  7. /cw-worktree merge auth → merges to main
+  8. /cw-worktree merge auth → merges to main
 ```
 
 **Key Points:**
+- **Automatic task isolation** - SessionStart hook configures task list ID based on worktree
+- **Persistent tasks** - Tasks stored in `~/.claude/tasks/feature-{name}/`, survive session restarts
+- **Seamless resume** - Just `cd` to worktree and run `claude`, tasks are there
 - Specs are created in `docs/specs/` which exists in all worktrees (synced via git)
-- Task boards are session-scoped (isolated per worktree session)
 - Commits go to the feature branch (not main)
 - Merge happens in project root after feature is complete
 
@@ -476,21 +506,32 @@ Back in Main Session:
 ```
 Session 1 (main):
   /cw-spec "auth"
-  /cw-worktree create auth
+  /cw-worktree create auth      # First time: also creates SessionStart hook
 
 Session 2 (main):
   /cw-spec "billing"
-  /cw-worktree create billing
+  /cw-worktree create billing   # Hook already exists, just creates worktree
 
 Session 3 (.worktrees/feature-auth/):
   cd .worktrees/feature-auth && claude
-  /cw-plan → /cw-dispatch → /cw-validate
+  # Hook auto-configures: CLAUDE_CODE_TASK_LIST_ID=feature-auth
+  /cw-plan → creates 8 tasks
+  /cw-dispatch → completes 3 tasks
+  [Take a break, exit session]
 
 Session 4 (.worktrees/feature-billing/):
   cd .worktrees/feature-billing && claude
+  # Hook auto-configures: CLAUDE_CODE_TASK_LIST_ID=feature-billing
   /cw-plan → /cw-dispatch → /cw-validate
 
-[Both features develop in parallel on separate branches]
+[Resume auth work later...]
+
+Session 5 (.worktrees/feature-auth/):
+  cd .worktrees/feature-auth && claude
+  # Hook restores: CLAUDE_CODE_TASK_LIST_ID=feature-auth
+  # TaskList shows: 5 tasks still pending!
+  /cw-dispatch → continues where you left off
+  /cw-validate
 
 Session 1 (main):
   /cw-worktree merge auth
@@ -526,8 +567,10 @@ git branch -D feature/{name}
 
 After creating a worktree:
 1. Open new terminal in the worktree directory
-2. Start Claude Code session
+2. Run `claude` - task list is automatically configured via SessionStart hook
 3. Run `/cw-plan` to create tasks from the spec
 4. Run `/cw-dispatch` to execute tasks
-5. Run `/cw-validate` to verify completion
-6. Return to main and run `/cw-worktree merge`
+5. Exit anytime - tasks persist in `~/.claude/tasks/feature-{name}/`
+6. Resume with `cd .worktrees/feature-{name} && claude` - tasks are restored
+7. Run `/cw-validate` to verify completion
+8. Return to main and run `/cw-worktree merge`
