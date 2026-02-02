@@ -43,28 +43,40 @@ Each step can also be run independently. `/cw-execute` handles single-task execu
 
 ### Multiple Features (Parallel Development)
 
-Use git worktrees to develop multiple specs simultaneously:
+Use git worktrees to develop multiple specs simultaneously. Each worktree is self-contained: one worktree = one spec + one implementation = one PR to main.
 
 ```
-Main session:
-  /cw-spec "auth"  →  /cw-worktree create auth
-  /cw-spec "billing"  →  /cw-worktree create billing
-
-Worktree sessions (parallel):
-  cd .worktrees/feature-auth && claude
-    → SessionStart hook auto-configures task list
-    → /cw-plan → /cw-dispatch → /cw-validate
-    → Exit anytime, resume later with same tasks
-
-  cd .worktrees/feature-billing && claude
-    → /cw-plan → /cw-dispatch → /cw-validate
-
-Main session:
-  /cw-worktree merge auth
-  /cw-worktree merge billing
+main ──────────────────────●── merge auth PR ──●── merge billing PR
+                          /                   /
+feature/auth ──●── spec ──●── impl ──────────┘
+                                            /
+feature/billing ──●── spec ──●── impl ─────┘
 ```
 
-Each worktree gets its own feature branch and **isolated task list** (via `SessionStart` hook). Tasks persist in `~/.claude/tasks/feature-{name}/`, enabling seamless resume across sessions.
+```bash
+# Setup (main session)
+/cw-worktree create auth
+/cw-worktree create billing
+
+# Terminal 1: auth feature
+cd .worktrees/feature-auth && claude
+/cw-spec auth         # Spec committed to feature branch
+/cw-plan → /cw-dispatch → /cw-validate
+gh pr create          # PR contains spec + implementation
+
+# Terminal 2 (concurrent): billing feature
+cd .worktrees/feature-billing && claude
+/cw-spec billing → /cw-plan → /cw-dispatch → /cw-validate
+gh pr create
+
+# Sync with main if needed before merge
+/cw-worktree sync auth
+
+# Cleanup after PRs merged
+/cw-worktree cleanup
+```
+
+Each worktree gets its own feature branch and **isolated task list** (via `SessionStart` hook). Tasks persist in `~/.claude/tasks/feature-{name}/`, enabling seamless resume across sessions. PRs go directly to main with spec and implementation together.
 
 ## Skills
 
