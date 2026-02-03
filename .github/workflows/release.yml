@@ -1,0 +1,61 @@
+name: Semantic Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: semantic-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: octo-sts/action@v1.1.1
+        id: octo-sts
+        with:
+          scope: ${{ github.repository }}
+          identity: main-semantic-release
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Get GitHub App User ID
+        id: get-user-id
+        run: echo "user-id=$(gh api "/users/octo-sts[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
+      - name: Configure git author
+        run: |
+          git config --global user.name 'octo-sts[bot]'
+          git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+octo-sts[bot]@users.noreply.github.com'
+
+      - name: Use token for pushes to origin
+        run: |
+          git remote set-url origin \
+            https://x-access-token:${{ steps.octo-sts.outputs.token }}@github.com/${{ github.repository }}.git
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install python-semantic-release
+        run: pip install "python-semantic-release>=10.0.0,<11.0.0"
+
+      - name: Semantic Release
+        run: semantic-release version
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
