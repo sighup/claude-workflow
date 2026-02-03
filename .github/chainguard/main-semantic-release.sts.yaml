@@ -1,0 +1,5 @@
+issuer: https://token.actions.githubusercontent.com
+subject: repo:sighup/claude-workflow:ref:refs/heads/main
+
+permissions:
+  contents: write
