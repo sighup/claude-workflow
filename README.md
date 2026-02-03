@@ -1,6 +1,6 @@
 # claude-workflow
 
-A Claude Code plugin that unifies spec-driven development, autonomous task execution, and parallel agent dispatch into a single workflow. Takes a feature from idea to validated implementation using structured specifications, dependency-aware task graphs, and evidence-based verification.
+A Claude Code plugin that unifies spec-driven development, autonomous task execution, and parallel agent dispatch into a single workflow. Takes a feature from idea to validated implementation using structured specifications, dependency-aware task graphs, and evidence-based verification. 
 
 ## Install
 
@@ -33,7 +33,7 @@ claude plugin install claude-workflow@claude-workflow --scope user
 /cw-spec  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
 ```
 
-Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops.
+Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. Each step provides guidance to the next step.
 
 ### Multiple Features (Parallel Development)
 
@@ -146,71 +146,3 @@ For autonomous (unattended) execution without an interactive Claude session:
 | `CW_TIMEOUT` | `0` | Claude invocation timeout (0=none) |
 | `CW_NON_INTERACTIVE` | `false` | Skip confirmation prompts |
 | `CW_VERBOSE` | `false` | Stream JSON output for real-time visibility |
-
-## Execution Protocol (11 Phases)
-
-The `/cw-execute` skill follows this protocol for each task:
-
-| Phase | Name | Purpose |
-|-------|------|---------|
-| 1 | ORIENT | Read task board, identify assigned task |
-| 2 | BASELINE | Verify codebase health before changes |
-| 3 | CONTEXT | Read pattern files, understand conventions |
-| 4 | IMPLEMENT | Create/modify files, write tests |
-| 5 | VERIFY-LOCAL | Run lint and build |
-| 6 | PROOF | Execute proof artifacts, capture evidence |
-| 7 | SANITIZE | Remove credentials from proofs (blocking) |
-| 8 | COMMIT | Atomic commit with implementation + proofs |
-| 9 | VERIFY-FULL | Run full test suite |
-| 10 | REPORT | Update task board with results |
-| 11 | CLEAN EXIT | Verify git clean, output summary |
-
-## Validation Gates
-
-`/cw-validate` applies 6 mandatory gates:
-
-| Gate | Rule |
-|------|------|
-| A | No CRITICAL or HIGH severity issues |
-| B | No Unknown entries in coverage matrix |
-| C | All proof artifacts accessible and functional |
-| D | Changed files in declared scope or justified |
-| E | Implementation follows repository standards |
-| F | No real credentials in proof artifacts |
-
-## Directory Structure
-
-```
-claude-workflow/
-├── .claude-plugin/plugin.json        # Plugin registration
-├── skills/
-│   ├── cw-spec/SKILL.md             # Spec Writer
-│   ├── cw-plan/                      # Architect
-│   │   ├── SKILL.md
-│   │   └── references/task-metadata-schema.md
-│   ├── cw-execute/                   # Implementer
-│   │   ├── SKILL.md
-│   │   └── references/
-│   │       ├── execution-protocol.md
-│   │       └── proof-artifact-types.md
-│   ├── cw-validate/                  # Validator
-│   │   ├── SKILL.md
-│   │   └── references/validation-gates.md
-│   ├── cw-dispatch/SKILL.md         # Dispatcher
-│   ├── cw-worktree/                  # Worktree Manager
-│   │   ├── SKILL.md
-│   │   └── references/worktree-lifecycle.md
-│   └── cw-manifest/SKILL.md         # Manifest bridge
-├── scripts/
-│   ├── lib/cw-common.sh             # Shared shell utilities
-│   ├── cw-loop                       # Autonomous execution
-│   ├── cw-loop-interactive           # Human-in-the-loop
-│   ├── cw-status                     # Progress display
-│   └── cw-reset                      # Reset failed tasks
-├── agents/                           # Swarms-ready agent definitions
-│   ├── spec-writer.md
-│   ├── architect.md
-│   ├── implementer.md
-│   └── validator.md
-└── README.md
-```
