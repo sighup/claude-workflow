@@ -31,13 +31,7 @@ claude plugin install claude-workflow@claude-workflow --scope user
 
 ```
 /cw-spec  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
-  idea        task graph    parallel exec     verification
 ```
-
-1. **`/cw-spec`** - Define what to build (spec with demoable units + proof artifacts)
-2. **`/cw-plan`** - Break spec into a dependency-aware task graph on the native task board
-3. **`/cw-dispatch`** - Spawn parallel agents to execute independent tasks concurrently
-4. **`/cw-validate`** - Verify implementation against spec using 6 gates + coverage matrix
 
 Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops.
 
@@ -184,13 +178,6 @@ The `/cw-execute` skill follows this protocol for each task:
 | E | Implementation follows repository standards |
 | F | No real credentials in proof artifacts |
 
-## Parallel Dispatch
-
-`/cw-dispatch` identifies independent tasks (no mutual dependencies, no file conflicts) and spawns workers concurrently:
-
-- Max 3 parallel workers per batch
-- File conflict detection prevents parallel tasks from touching the same files
-
 ## Directory Structure
 
 ```
@@ -227,14 +214,3 @@ claude-workflow/
 │   └── validator.md
 └── README.md
 ```
-
-## Swarms Readiness
-
-The plugin is designed to map directly to Claude Code's upcoming Swarms feature. The `agents/` directory defines worker roles that a team lead agent can spawn. The native task board (TaskCreate/TaskUpdate/TaskList) serves as the shared coordination layer in both modes:
-
-| Today | Swarms |
-|-------|--------|
-| User invokes `/cw-dispatch` | Lead agent delegates autonomously |
-| Task tool spawns subagents | Workers spawned natively |
-| Dependencies via addBlockedBy | Same mechanism |
-| Shell scripts orchestrate loops | Lead handles iteration |
