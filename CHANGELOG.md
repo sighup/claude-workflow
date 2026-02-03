@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.6.1 (2026-02-03)
+
+### Bug Fixes
+
+- Use pyproject.toml for semantic-release config
+  ([`8c89b83`](https://github.com/sighup/claude-workflow/commit/8c89b83a06a033f7aadcc8e233c7f21512eec434))
+
+
 ## v1.6.0 (2026-02-03)
 
 ### Bug Fixes
