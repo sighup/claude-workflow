@@ -2,10 +2,10 @@
 name: cw-dispatch
 description: "Identify independent tasks and spawn parallel agent workers. Use after cw-plan to execute multiple tasks concurrently."
 user-invocable: true
-allowed-tools: TaskList, TaskGet, TaskUpdate, Task, AskUserQuestion, Skill
+allowed-tools: TaskList, TaskGet, TaskUpdate, Task, AskUserQuestion, Skill, Teammate, SendMessage
 ---
 
-# CW-Dispatch: Parallel Agent Dispatcher
+# CW-Dispatch: Team-Based Parallel Agent Dispatcher
 
 ## Context Marker
 
@@ -42,25 +42,30 @@ In Progress:    [count where status=in_progress]
 
 ## Overview
 
-You are the **Dispatcher** role in the Claude Workflow system. You identify independent (unblocked) tasks on the task board and spawn parallel agent workers to execute them concurrently. This is the parallelism layer that maximizes throughput.
+You are the **Dispatcher** role in the Claude Workflow system. You create an agent team, spawn persistent teammates, and coordinate them through the full task board. Teammates persist across tasks — they execute one task, then request their next assignment from you instead of dying and being respawned.
 
 ## Your Role
 
-You are a **Team Lead** who:
+You are the **Team Lead** who:
 - Reads the task board to find actionable work
-- Groups independent tasks for parallel execution
-- Spawns workers and monitors completion
+- Creates and manages the `cw-impl` agent team
+- Assigns tasks with conflict checks
+- Monitors teammate messages and assigns follow-up work
+- Shuts down the team when all work is complete
 - Does NOT write code yourself
 
 ## Critical Constraints
 
-- **NEVER** execute tasks yourself - always delegate to workers
-- **NEVER** spawn workers for blocked tasks
-- **NEVER** assign the same task to multiple workers
-- **NEVER** give workers direct implementation instructions - they MUST invoke `cw-execute`
+- **NEVER** execute tasks yourself - always delegate to teammates
+- **NEVER** spawn teammates for blocked tasks
+- **NEVER** assign the same task to multiple teammates
+- **NEVER** give teammates direct implementation instructions - they MUST invoke `cw-execute`
 - **NEVER** use TodoWrite - use the native TaskList/TaskUpdate tools only
 - **ALWAYS** set task ownership before spawning
 - **ALWAYS** respect dependency ordering
+- **ALWAYS** mediate task assignment - teammates must not self-claim tasks
+
+**Prerequisite**: The `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` environment variable must be set to `"1"`. If the `Teammate` tool is unavailable, instruct the user to enable this flag in their Claude Code settings.
 
 ### Why Workers Must Invoke cw-execute
 
@@ -108,9 +113,17 @@ Group 2: T02 (blocked by T01) - must wait
 Group 3: T03 (blocked by T02) - must wait
 ```
 
-### Step 3: Assign Ownership
+### Step 3: Create Team
 
-For each task being dispatched:
+Create the agent team for this dispatch session:
+
+```
+Teammate({ operation: "spawnTeam", team_name: "cw-impl", description: "Parallel task execution team" })
+```
+
+### Step 4: Assign Initial Batch Ownership
+
+For each ready task in the parallel group, assign ownership before spawning:
 
 ```
 TaskUpdate({
@@ -120,104 +133,124 @@ TaskUpdate({
 })
 ```
 
-### Step 4: Spawn Workers
+Apply the same conflict checks as Step 2 — verify no file overlaps between assigned tasks.
 
-Send a **single message** with multiple Task tool calls for parallel execution.
+### Step 5: Spawn Teammates
 
-**CRITICAL: Use EXACTLY this prompt template. Do NOT give workers direct implementation instructions.**
+Send a **single message** with multiple Task tool calls for parallel launch. Spawn **one teammate per ready task** — no arbitrary cap.
+
+**CRITICAL: Use EXACTLY this prompt template. Do NOT give teammates direct implementation instructions.**
 
 ```
 Task({
-  subagent_type: "general-purpose",
+  subagent_type: "claude-workflow:implementer",
+  team_name: "cw-impl",
+  name: "worker-1",
   description: "Execute task T01",
-  prompt: "You are worker-1.
+  prompt: "You are worker-1 on the cw-impl team.
 
-MANDATORY FIRST ACTION: Use the Skill tool to invoke 'cw-execute'.
+YOUR ASSIGNED TASK: T01 - [subject]
 
-Do NOT implement anything directly. The cw-execute skill contains the 11-phase protocol that:
-1. Reads your assigned task from TaskList (owner='worker-1')
-2. Guides implementation following project patterns
-3. Creates proof artifacts
-4. Commits changes
-5. Calls TaskUpdate to mark the task COMPLETED
+EXECUTION LOOP:
+1. Use the Skill tool to invoke 'cw-execute'
+2. After cw-execute completes, run TaskList() to check for more work
+3. Look for tasks: status=pending, no blockedBy, no owner
+4. If unblocked task found:
+   - Message the lead: 'Completed T01. Found TXX unblocked. Requesting assignment.'
+     SendMessage({ type: 'message', recipient: 'lead', content: 'Completed T01. Found TXX unblocked. Requesting assignment.', summary: 'Completed T01, requesting next' })
+   - WAIT for lead's response before starting
+5. If no tasks available:
+   - Message the lead: 'Completed T01. No unblocked tasks remaining.'
+     SendMessage({ type: 'message', recipient: 'lead', content: 'Completed T01. No unblocked tasks remaining.', summary: 'Completed T01, no more tasks' })
 
-Without cw-execute, the task board will not be updated and progress tracking breaks.
-
-Constraints:
+CONSTRAINTS:
+- Always invoke cw-execute (never implement directly)
 - Do not modify files outside your task's scope
-- Do not touch tasks owned by other workers"
+- Do not touch tasks owned by other workers
+- Wait for lead assignment before starting new tasks
+
+SHUTDOWN:
+- Approve shutdown_request unless mid-commit (Phases 8-10)"
 })
 ```
 
-Repeat for each worker with incrementing worker-N identifiers.
+Repeat for each worker with incrementing worker-N identifiers and matching task IDs.
 
-### Step 5: Monitor and Report
+### Step 6: Monitor Loop
 
-After workers complete:
+Messages from teammates are auto-delivered. Process them as they arrive:
 
-1. Run `TaskList` to check final state
-2. Report results:
+**On "requesting assignment" from worker-N:**
+1. Run `TaskList()` to check current board state
+2. Find pending tasks with no owner and no active blockers
+3. Check file conflicts against all in-progress tasks:
+   ```
+   For candidate task C and each in-progress task P:
+     C_files = C.scope.files_to_create + C.scope.files_to_modify
+     P_files = P.scope.files_to_create + P.scope.files_to_modify
+     if intersection(C_files, P_files) is not empty:
+       SKIP C (try next candidate)
+   ```
+4. If conflict-free task found:
+   ```
+   TaskUpdate({ taskId: "<id>", owner: "worker-N", status: "in_progress" })
+   SendMessage({ type: "message", recipient: "worker-N", content: "Assigned T{id} - {subject}. Proceed with cw-execute.", summary: "Assigned T{id}" })
+   ```
+5. If no task available:
+   ```
+   SendMessage({ type: "message", recipient: "worker-N", content: "No tasks available. Standing by.", summary: "No tasks, stand by" })
+   ```
+   Track worker-N as idle.
+
+**On "no more tasks" from worker-N:**
+1. Track worker-N as idle
+2. If ALL workers are idle AND no unblocked pending tasks remain: proceed to Step 7
+
+**On blocker report from worker-N:**
+1. Log the blocker details
+2. Check if another unblocked task exists to reassign
+3. If yes: assign the alternative task to worker-N
+4. If no: track worker-N as idle, note the blocked task
+
+### Step 7: Shutdown Teammates
+
+When all work is complete (all workers idle, no unblocked tasks):
+
+```
+SendMessage({ type: "shutdown_request", recipient: "worker-1", content: "All tasks complete. Shutting down." })
+SendMessage({ type: "shutdown_request", recipient: "worker-2", content: "All tasks complete. Shutting down." })
+... (for each teammate)
+```
+
+Wait for shutdown confirmations.
+
+### Step 8: Cleanup Team
+
+After all teammates have confirmed shutdown:
+
+```
+Teammate({ operation: "cleanup" })
+```
+
+### Step 9: Report and Offer Validation
+
+Run `TaskList()` for final state, then report:
 
 ```
 CW-DISPATCH COMPLETE
 =====================
-Workers spawned: 2
-  worker-1: T01 - [subject] -> COMPLETED
-  worker-2: T04 - [subject] -> COMPLETED
+Team: cw-impl
+Workers: N
+Tasks completed: X/Y
 
-Newly unblocked:
-  T02 (was blocked by T01) -> now READY
-  T05 (was blocked by T04) -> now READY
+  worker-1: T01 -> COMPLETED, T05 -> COMPLETED
+  worker-2: T04 -> COMPLETED
+  ...
 
 Progress: X/Y tasks complete
-
-Run /cw-dispatch again to execute the next parallel group.
 ```
 
-## Conflict Prevention
-
-Before spawning, verify no file conflicts between parallel tasks:
-
-```
-For each pair of tasks (A, B) in the group:
-  A_files = A.scope.files_to_create + A.scope.files_to_modify
-  B_files = B.scope.files_to_create + B.scope.files_to_modify
-  if intersection(A_files, B_files) is not empty:
-    Remove B from group (execute sequentially after A)
-```
-
-## Batch Size
-
-- **Default**: Spawn up to 3 workers simultaneously
-- **Reason**: More than 3 parallel agents risk git conflicts and resource contention
-- If more than 3 tasks are ready, dispatch in batches of 3
-
-## Error Handling
-
-If a worker fails (task remains in_progress or goes back to pending):
-1. Check task metadata for `failure_reason`
-2. If retryable: include in next dispatch round
-3. If permanent: report to user, skip task
-4. If `failure_count >= 3`: mark as blocked, require human intervention
-
-## Pre-Exit Verification
-
-Before outputting any completion or "no tasks" message, verify:
-
-1. **Re-check your reported counts**: Look at the TASK BOARD STATUS you printed earlier
-2. **Match your conclusion to the data**:
-   - "No tasks to dispatch" requires Pending Unblocked = 0
-   - "All complete" requires Pending = 0 AND In Progress = 0
-3. **If counts don't match your conclusion**: Re-read TaskList output and correct
-
-**WARNING**: If you find yourself writing a detailed "completion report" with stats like "151 proof artifacts" or "63 library files" that you did NOT just count from TaskList, you are hallucinating. STOP and re-run TaskList.
-
-## What Comes Next
-
-After workers complete, check if more tasks became unblocked:
-
-1. **If newly unblocked tasks exist**: Automatically dispatch them (loop back to Step 1)
-2. **If ALL tasks are complete**: Use AskUserQuestion to offer validation
+Then offer validation:
 
 ```
 AskUserQuestion({
@@ -237,7 +270,43 @@ Based on user selection:
 - **Run /cw-validate**: Spawn the validator as a sub-agent (see below)
 - **Done for now**: Summarize what was completed and exit
 
-### Spawning the Validator
+## Conflict Prevention
+
+Before assigning any task (initial batch or subsequent), verify no file conflicts:
+
+```
+For candidate task C and each in-progress task P:
+  C_files = C.scope.files_to_create + C.scope.files_to_modify
+  P_files = P.scope.files_to_create + P.scope.files_to_modify
+  if intersection(C_files, P_files) is not empty:
+    SKIP C (defer until P completes)
+```
+
+## Batch Size
+
+Spawn one teammate per ready task in the current parallel group. The number of concurrent teammates is determined by how many independent, conflict-free tasks exist — not an arbitrary cap.
+
+## Error Handling
+
+If a worker reports failure or a task remains in_progress after worker completion:
+1. Check task metadata for `failure_reason`
+2. If retryable: reassign to the same or another idle worker
+3. If permanent: report to user, skip task
+4. If `failure_count >= 3`: mark as blocked, require human intervention
+
+## Pre-Exit Verification
+
+Before outputting any completion or "no tasks" message, verify:
+
+1. **Re-check your reported counts**: Look at the TASK BOARD STATUS you printed earlier
+2. **Match your conclusion to the data**:
+   - "No tasks to dispatch" requires Pending Unblocked = 0
+   - "All complete" requires Pending = 0 AND In Progress = 0
+3. **If counts don't match your conclusion**: Re-read TaskList output and correct
+
+**WARNING**: If you find yourself writing a detailed "completion report" with stats like "151 proof artifacts" or "63 library files" that you did NOT just count from TaskList, you are hallucinating. STOP and re-run TaskList.
+
+## Spawning the Validator
 
 When user selects validation, spawn the validator as a sub-agent to keep context isolated:
 
