@@ -93,12 +93,18 @@ Find next unblocked task with `test_status == "pending"` or failed test needing 
 - Failed, max attempts → mark BLOCKED, continue
 
 #### Phase 4: SPAWN TEST EXECUTOR
+
+**REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT execute tests inline.
+
 ```
 Task({
   subagent_type: "claude-workflow:test-executor",
-  prompt: "Execute test step [id]. Read protocol at: skills/cw-testing/references/test-executor-protocol.md"
+  description: "Execute test [step_id]",
+  prompt: "Execute test step [step_id]. Task ID: [native-task-id]. Read protocol at: skills/cw-testing/references/test-executor-protocol.md"
 })
 ```
+
+Wait for the sub-agent to complete, then read the task status via TaskGet.
 
 #### Phase 5: VERIFY RESULT
 Check task metadata for pass/fail. If failed, continue to Phase 6.
@@ -107,13 +113,20 @@ Check task metadata for pass/fail. If failed, continue to Phase 6.
 If `fix_config.enabled` and `fix_attempt < max_attempts`, proceed to Phase 7.
 
 #### Phase 7: SPAWN BUG FIXER
-Create fix task with failure context, then:
+
+**REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT fix bugs inline.
+
+1. Create fix task with failure context (TaskCreate + TaskUpdate with metadata)
+2. Spawn bug fixer:
 ```
 Task({
   subagent_type: "claude-workflow:bug-fixer",
-  prompt: "Fix bug in [id]. Read protocol at: skills/cw-testing/references/bug-fixer-protocol.md"
+  description: "Fix bug causing [step_id] to fail",
+  prompt: "Fix bug causing test [step_id] to fail. Fix Task ID: [fix-task-id]. Test Task ID: [test-task-id]. Read protocol at: skills/cw-testing/references/bug-fixer-protocol.md"
 })
 ```
+
+Wait for the sub-agent to complete, then read fix_result via TaskGet.
 
 #### Phase 8: PROGRESS CHECK
 Check stopping conditions (all passed, max iterations, all blocked). If continuing, return to Phase 1.

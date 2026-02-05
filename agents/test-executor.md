@@ -6,7 +6,6 @@ capabilities:
   - Capture proof artifacts (screenshots, logs)
   - Update task status with pass/fail determination
 model: inherit
-tools: Bash, Read, Write, TaskGet, TaskUpdate
 ---
 
 # Agent: Test Executor
