@@ -33,20 +33,21 @@ You are the **Architect** role in the Claude Workflow system. Your job is to rea
 
 ## Process
 
-### Phase 0: Task List ID Setup (Mandatory)
+### Phase 0: Task List ID Check (Advisory)
 
-Before any planning, ensure `CLAUDE_CODE_TASK_LIST_ID` is configured. This env var is **required** for agent teams to share a single task list with the project — without it, teammates will use a separate team-scoped task list and tasks will diverge.
+Before planning, check whether `CLAUDE_CODE_TASK_LIST_ID` is configured. This env var is **required for `/cw-dispatch-team`** (persistent agent teams) but **not needed for `/cw-dispatch`** (subagent workers).
 
 1. **Check for existing config**: Read `.claude/settings.json` and `.claude/settings.local.json` — look for `env.CLAUDE_CODE_TASK_LIST_ID`
 2. **If set**: Report the value (`CLAUDE_CODE_TASK_LIST_ID={value}`) and proceed to Phase 1
-3. **If NOT set**: Prompt the user for a project name:
+3. **If NOT set**: Note the status and offer to configure:
 
 ```
 AskUserQuestion({
   questions: [{
-    question: "CLAUDE_CODE_TASK_LIST_ID is not set. This is required for agent teams to share the project task list. What project name should be used? (e.g., 'my-project')",
+    question: "CLAUDE_CODE_TASK_LIST_ID is not set. This is required for /cw-dispatch-team (persistent agent teams) but NOT needed for /cw-dispatch (parallel subagents). Would you like to configure it now?",
     header: "Task List ID",
     options: [
+      { label: "Skip for now", description: "Continue planning — you can use /cw-dispatch without it" },
       { label: "Use repo name", description: "Derive from the current git repository name" },
       { label: "Custom name", description: "Enter a custom project identifier" }
     ],
@@ -55,7 +56,7 @@ AskUserQuestion({
 })
 ```
 
-4. **Create/update settings**: Write the env var to `.claude/settings.json` (create the file if needed, merge with existing content):
+4. **If user chooses to configure**: Write the env var to `.claude/settings.json` (create the file if needed, merge with existing content):
 
 ```json
 {
@@ -65,7 +66,7 @@ AskUserQuestion({
 }
 ```
 
-5. **Instruct user to restart**: Environment variables are captured at session startup. Output:
+Then instruct user to restart:
 
 ```
 CLAUDE_CODE_TASK_LIST_ID has been set to "{project-name}" in .claude/settings.json.
@@ -77,6 +78,8 @@ After restarting, run /cw-plan again to continue.
 ```
 
 **STOP here** — do not proceed to Phase 1 until the user has restarted and re-invoked `/cw-plan`.
+
+5. **If user skips**: Proceed to Phase 1 immediately. Note that `/cw-dispatch-team` will not be available until the env var is configured.
 
 ### Phase 1: Analysis
 
@@ -266,7 +269,8 @@ AskUserQuestion({
     question: "The task graph is ready for execution. How would you like to proceed?",
     header: "Execution",
     options: [
-      { label: "Parallel (/cw-dispatch)", description: "Spawn parallel workers for independent tasks (recommended)" },
+      { label: "Parallel (/cw-dispatch)", description: "Spawn parallel subagent workers (no setup required)" },
+      { label: "Team (/cw-dispatch-team)", description: "Persistent agent team with lead coordination (requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and CLAUDE_CODE_TASK_LIST_ID)" },
       { label: "Single task (/cw-execute)", description: "Execute one task manually with full control" },
       { label: "Autonomous (cw-loop)", description: "Run cw-loop shell script for hands-off execution" },
       { label: "Done for now", description: "Save the task graph and execute later" }
@@ -278,6 +282,7 @@ AskUserQuestion({
 
 Based on user selection:
 - **Parallel**: `Skill({ skill: "cw-dispatch" })`
+- **Team**: `Skill({ skill: "cw-dispatch-team" })`
 - **Single task**: `Skill({ skill: "cw-execute" })`
 - **Autonomous**: Instruct user to run `./scripts/cw-loop` from their terminal
 - **Done for now**: Confirm task graph is saved and ready when they return
