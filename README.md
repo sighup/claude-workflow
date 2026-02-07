@@ -79,31 +79,27 @@ Keep the main session running as a **control center** to create, list, and clean
 | `/cw-spec` | Generate structured specification with demoable units and proof artifacts |
 | `/cw-plan` | Transform spec into native task graph with dependencies and metadata |
 | `/cw-execute` | Execute one task using the 11-phase protocol (orient → commit → clean exit) |
-| `/cw-dispatch` | Create an agent team and spawn persistent teammates for parallel task execution |
+| `/cw-dispatch` | Spawn parallel subagent workers for independent tasks (no setup required) |
+| `/cw-dispatch-team` | Persistent agent team with lead coordination for parallel task execution |
 | `/cw-validate` | Run 6 validation gates and produce a coverage matrix report |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
 | `/cw-manifest` | Export task board state to JSON for shell-script orchestration |
 
 ## Prerequisites
 
-`/cw-dispatch` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) for parallel execution. This feature is experimental and must be enabled:
+Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) which requires two env vars:
 
 ```json
 // ~/.claude/settings.json (user-level) or .claude/settings.json (project-level)
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_TASK_LIST_ID": "your-project-name"
   }
 }
 ```
 
-Or set it in your shell environment:
-
-```bash
-export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-```
-
-All other skills (`/cw-spec`, `/cw-plan`, `/cw-execute`, `/cw-validate`) work without this flag.
+`/cw-dispatch` (subagent workers) needs no setup and is the recommended default. `/cw-plan` will offer both options after task graph creation.
 
 ## Task Metadata
 
