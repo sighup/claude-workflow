@@ -33,6 +33,51 @@ You are the **Architect** role in the Claude Workflow system. Your job is to rea
 
 ## Process
 
+### Phase 0: Task List ID Setup (Mandatory)
+
+Before any planning, ensure `CLAUDE_CODE_TASK_LIST_ID` is configured. This env var is **required** for agent teams to share a single task list with the project — without it, teammates will use a separate team-scoped task list and tasks will diverge.
+
+1. **Check for existing config**: Read `.claude/settings.json` and `.claude/settings.local.json` — look for `env.CLAUDE_CODE_TASK_LIST_ID`
+2. **If set**: Report the value (`CLAUDE_CODE_TASK_LIST_ID={value}`) and proceed to Phase 1
+3. **If NOT set**: Prompt the user for a project name:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "CLAUDE_CODE_TASK_LIST_ID is not set. This is required for agent teams to share the project task list. What project name should be used? (e.g., 'my-project')",
+    header: "Task List ID",
+    options: [
+      { label: "Use repo name", description: "Derive from the current git repository name" },
+      { label: "Custom name", description: "Enter a custom project identifier" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+4. **Create/update settings**: Write the env var to `.claude/settings.json` (create the file if needed, merge with existing content):
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_TASK_LIST_ID": "{project-name}"
+  }
+}
+```
+
+5. **Instruct user to restart**: Environment variables are captured at session startup. Output:
+
+```
+CLAUDE_CODE_TASK_LIST_ID has been set to "{project-name}" in .claude/settings.json.
+
+⚠️  You must restart your Claude Code session for this to take effect.
+   Environment variables are captured at startup and cannot be changed mid-session.
+
+After restarting, run /cw-plan again to continue.
+```
+
+**STOP here** — do not proceed to Phase 1 until the user has restarted and re-invoked `/cw-plan`.
+
 ### Phase 1: Analysis
 
 1. **Locate Spec**: User provides path or find the most recent spec in `./docs/specs/` without an accompanying task graph

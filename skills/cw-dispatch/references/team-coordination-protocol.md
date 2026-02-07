@@ -8,7 +8,7 @@ Reference document for the `cw-dispatch` team-based parallel execution flow.
 CREATE  →  SPAWN  →  MONITOR  →  SHUTDOWN  →  CLEANUP
 ```
 
-1. **CREATE**: `Teammate({ operation: "spawnTeam", team_name: "cw-impl" })`
+1. **CREATE**: `Teammate({ operation: "spawnTeam", team_name: "{task-list-id}-team" })`
 2. **SPAWN**: One `Task()` call per ready task, all in a single message for parallel launch
 3. **MONITOR**: Lead receives auto-delivered messages, assigns new tasks, tracks idle workers
 4. **SHUTDOWN**: `SendMessage({ type: "shutdown_request" })` to each teammate
@@ -16,7 +16,15 @@ CREATE  →  SPAWN  →  MONITOR  →  SHUTDOWN  →  CLEANUP
 
 ## Task List Access
 
-Teammates inherit `CLAUDE_CODE_TASK_LIST_ID=claude-workflow` from settings. Their `TaskList`/`TaskUpdate` calls use the project's existing task list, **not** the team's built-in task list at `~/.claude/tasks/cw-impl/`. The team infrastructure is used only for messaging and coordination.
+When Claude Code creates an agent team, it auto-sets `CLAUDE_CODE_TEAM_NAME` on teammates. By default, this routes their `TaskList`/`TaskUpdate` calls to `~/.claude/tasks/{CLAUDE_CODE_TEAM_NAME}/` — the team's built-in task list.
+
+However, when `CLAUDE_CODE_TASK_LIST_ID` is also set (in `.claude/settings.json` or `.claude/settings.local.json`), it **overrides** `CLAUDE_CODE_TEAM_NAME` for task routing. All agents (lead + teammates) then use the same project task list.
+
+**Both must coexist:**
+- **`CLAUDE_CODE_TEAM_NAME`** (`{task-list-id}-team`): Used for messaging and coordination between agents
+- **`CLAUDE_CODE_TASK_LIST_ID`**: Overrides task routing so all agents share the project's task list
+
+The team name is always `{CLAUDE_CODE_TASK_LIST_ID}-team` to ensure it never collides with the task list ID. This way, `TeamDelete` only cleans the unused team task directory (`~/.claude/tasks/{task-list-id}-team/`), not the project's tasks.
 
 ## Message Protocol
 
@@ -83,7 +91,7 @@ For candidate task C and each in-progress task P:
 ## Teammate Spawn Prompt Template
 
 ```
-You are worker-{N} on the cw-impl team.
+You are worker-{N} on the {task-list-id}-team team.
 
 YOUR ASSIGNED TASK: T{id} - {subject}
 

@@ -11,6 +11,37 @@ allowed-tools: TaskList, TaskGet, TaskUpdate, Task, AskUserQuestion, Skill, Team
 
 Always begin your response with: **CW-DISPATCH**
 
+## Prerequisite: Task List ID
+
+Before dispatching, verify that `CLAUDE_CODE_TASK_LIST_ID` is configured. This env var is **required** so that all teammates share the project's task list instead of diverging to the team's built-in list.
+
+1. Read `.claude/settings.json` and `.claude/settings.local.json` — look for `env.CLAUDE_CODE_TASK_LIST_ID`
+2. **If NOT set**: Exit immediately with this error:
+
+```
+ERROR: CLAUDE_CODE_TASK_LIST_ID is not set.
+
+Agent teams require this env var to share the project task list.
+Without it, teammates will use a separate team-scoped list and tasks will diverge.
+
+Run /cw-plan to auto-configure it, or add it manually to .claude/settings.json:
+{
+  "env": {
+    "CLAUDE_CODE_TASK_LIST_ID": "your-project-name"
+  }
+}
+
+Then restart your Claude Code session (env vars are captured at startup).
+```
+
+3. **If set**: Report the value and the derived team name:
+```
+CLAUDE_CODE_TASK_LIST_ID = {value}
+Team name: {value}-team
+```
+
+**The team name is always `{CLAUDE_CODE_TASK_LIST_ID}-team`** — this ensures it never collides with the task list ID (preventing `TeamDelete` from wiping project tasks) and is project-specific.
+
 ## MANDATORY FIRST ACTION
 
 **Call TaskList() immediately before any other action.**
@@ -48,7 +79,7 @@ You are the **Dispatcher** role in the Claude Workflow system. You create an age
 
 You are the **Team Lead** who:
 - Reads the task board to find actionable work
-- Creates and manages the `cw-impl` agent team
+- Creates and manages the `{task-list-id}-team` agent team
 - Assigns tasks with conflict checks
 - Monitors teammate messages and assigns follow-up work
 - Shuts down the team when all work is complete
@@ -115,11 +146,13 @@ Group 3: T03 (blocked by T02) - must wait
 
 ### Step 3: Create Team
 
-Create the agent team for this dispatch session:
+Create the agent team for this dispatch session. The team name is derived from `CLAUDE_CODE_TASK_LIST_ID`:
 
 ```
-Teammate({ operation: "spawnTeam", team_name: "cw-impl", description: "Parallel task execution team" })
+Teammate({ operation: "spawnTeam", team_name: "{task-list-id}-team", description: "Parallel task execution team" })
 ```
+
+For example, if `CLAUDE_CODE_TASK_LIST_ID=cw-workers-2`, use `team_name: "cw-workers-2-team"`.
 
 ### Step 4: Assign Initial Batch Ownership
 
@@ -144,10 +177,10 @@ Send a **single message** with multiple Task tool calls for parallel launch. Spa
 ```
 Task({
   subagent_type: "claude-workflow:implementer",
-  team_name: "cw-impl",
+  team_name: "{task-list-id}-team",
   name: "worker-1",
   description: "Execute task T01",
-  prompt: "You are worker-1 on the cw-impl team.
+  prompt: "You are worker-1 on the {task-list-id}-team team.
 
 YOUR ASSIGNED TASK: T01 - [subject]
 
@@ -239,7 +272,7 @@ Run `TaskList()` for final state, then report:
 ```
 CW-DISPATCH COMPLETE
 =====================
-Team: cw-impl
+Team: {task-list-id}-team
 Workers: N
 Tasks completed: X/Y
 
