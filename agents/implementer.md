@@ -6,6 +6,7 @@ capabilities:
   - Follow 11-phase protocol (orient through clean exit)
   - Generate proof artifacts and capture evidence
   - Create atomic commits with sanitized content
+color: green
 model: inherit
 tools: Glob, Grep, Read, Edit, Write, Bash, TaskGet, TaskUpdate, TaskList, SendMessage
 skills:
