@@ -345,24 +345,9 @@ When user selects validation, spawn the validator as a sub-agent to keep context
 
 ```
 Task({
-  subagent_type: "general-purpose",
+  subagent_type: "claude-workflow:validator",
   description: "Validate implementation against spec",
-  prompt: "You are the validator.
-
-MANDATORY FIRST ACTION: Use the Skill tool to invoke 'cw-validate'.
-
-Do NOT validate anything directly. The cw-validate skill contains the 6-gate validation protocol that:
-1. Reads the task board for completed tasks
-2. Collects evidence from proofs and git history
-3. Applies all 6 validation gates
-4. Generates the validation report
-
-Without cw-validate, validation will be incomplete and inconsistent.
-
-Constraints:
-- Read-only access to implementation code
-- Never mark PASS if any gate fails
-- Always produce the full coverage matrix"
+  prompt: "Run the cw-validate skill against the current task board. Relay the full validation summary including gate results and coverage matrix."
 })
 ```
 
