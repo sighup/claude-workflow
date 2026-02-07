@@ -128,20 +128,9 @@ Send a **single message** with multiple Task tool calls for parallel execution.
 
 ```
 Task({
-  subagent_type: "general-purpose",
+  subagent_type: "claude-workflow:implementer",
   description: "Execute task T01",
-  prompt: "You are worker-1.
-
-MANDATORY FIRST ACTION: Use the Skill tool to invoke 'cw-execute'.
-
-Do NOT implement anything directly. The cw-execute skill contains the 11-phase protocol that:
-1. Reads your assigned task from TaskList (owner='worker-1')
-2. Guides implementation following project patterns
-3. Creates proof artifacts
-4. Commits changes
-5. Calls TaskUpdate to mark the task COMPLETED
-
-Without cw-execute, the task board will not be updated and progress tracking breaks.
+  prompt: "You are worker-1. Your assigned task is T01. Run cw-execute to implement it.
 
 Constraints:
 - Do not modify files outside your task's scope
