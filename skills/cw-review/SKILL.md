@@ -129,7 +129,7 @@ TaskCreate({
 })
 ```
 
-Set metadata on the fix task:
+Set metadata on the fix task (includes fields required by cw-execute):
 
 ```
 TaskUpdate({
@@ -138,8 +138,17 @@ TaskUpdate({
     task_type: "review-fix",
     category: "A|B|C",
     severity: "blocking",
+    role: "implementer",
     file_path: "<path>",
-    line_numbers: "<range>"
+    line_numbers: "<range>",
+    scope: {
+      files_to_modify: ["<path>"],
+      patterns_to_follow: []
+    },
+    requirements: ["Fix: <description of what to fix>"],
+    proof_artifacts: [{ type: "test", command: "npm test", expected: "pass" }],
+    verification: { pre: "git diff", post: "npm test" },
+    commit: { template: "fix: <description>" }
   }
 })
 ```

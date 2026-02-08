@@ -182,8 +182,8 @@ PATH                          BRANCH              STATE           STATUS
 - Spec documents in `docs/specs/`
 - Proof artifacts in `docs/specs/*-proofs/`
 
-**What does NOT persist:**
-- Task board (session-scoped)
+**What does NOT persist (unless configured):**
+- Task board — session-scoped by default, but persists via `~/.claude/tasks/{task-list-id}/` when `CLAUDE_CODE_TASK_LIST_ID` is set (see `/cw-plan` Phase 0)
 - In-progress state markers
 - Worker assignments
 
@@ -229,7 +229,7 @@ Multiple worktrees can exist in different states simultaneously:
 - Working directory
 - Branch
 - Claude Code session
-- Task board (session-scoped)
+- Task board (session-scoped by default; persistent when `CLAUDE_CODE_TASK_LIST_ID` is configured)
 
 **Shared across worktrees:**
 - Git history (via refs)
