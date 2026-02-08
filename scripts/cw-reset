@@ -2,8 +2,8 @@
 #
 # cw-reset - Reset failed or stuck tasks
 #
-# Invokes Claude to reset task statuses on the native task board.
-# Use when tasks are stuck in failed/in_progress state and need retry.
+# Resets task statuses directly in ~/.claude/tasks files.
+# No Claude invocation needed — operates on task JSON files directly.
 #
 # Usage:
 #   ./cw-reset [OPTIONS] [TASK_IDS...]
@@ -31,6 +31,7 @@ source "$SCRIPT_DIR/lib/cw-common.sh"
 RESET_ALL_FAILED=false
 RESET_STUCK=false
 TASK_IDS=()
+PROJECT_PATH=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -40,6 +41,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: cw-reset [OPTIONS] [TASK_IDS...]"
             echo ""
             echo "Reset failed or stuck tasks to pending status."
+            echo "Operates directly on task files — no Claude invocation needed."
             echo ""
             echo "Options:"
             echo "  -a, --all-failed    Reset all failed tasks"
@@ -52,8 +54,8 @@ while [[ $# -gt 0 ]]; do
             echo "  cw-reset --stuck"
             exit 0
             ;;
-        T*) TASK_IDS+=("$1"); shift ;;
-        *) log_error "Unknown option: $1"; exit 1 ;;
+        -*) log_error "Unknown option: $1"; exit 1 ;;
+        *) TASK_IDS+=("$1"); shift ;;
     esac
 done
 
@@ -61,7 +63,7 @@ done
 # Validation
 # =============================================================================
 
-check_claude || exit 1
+check_jq || exit 1
 
 if [ "$RESET_ALL_FAILED" = false ] && [ "$RESET_STUCK" = false ] && [ ${#TASK_IDS[@]} -eq 0 ]; then
     log_error "Specify task IDs, --all-failed, or --stuck"
@@ -69,49 +71,94 @@ if [ "$RESET_ALL_FAILED" = false ] && [ "$RESET_STUCK" = false ] && [ ${#TASK_ID
     exit 1
 fi
 
+if ! discover_session; then
+    log_error "No session with tasks found."
+    log_info "Run '/cw-plan' first to create tasks."
+    exit 1
+fi
+
 # =============================================================================
-# Build Reset Prompt
+# Reset Logic
 # =============================================================================
 
-PROMPT="Reset the following tasks on the native task board to 'pending' status using TaskUpdate.
+RESET_COUNT=0
 
-Also clear any failure metadata (set last_failure to null, failure_count to 0).
+reset_task_file() {
+    local task_file="$1"
+    [ -f "$task_file" ] || return
 
-"
+    # Reset status to pending, clear failure metadata
+    jq '.status = "pending" |
+        .metadata.failure_count = 0 |
+        .metadata.last_failure = null |
+        del(.owner)' "$task_file" > "${task_file}.tmp" && mv "${task_file}.tmp" "$task_file"
+
+    RESET_COUNT=$((RESET_COUNT + 1))
+}
 
 if [ "$RESET_ALL_FAILED" = true ]; then
-    PROMPT+="Find ALL tasks with status 'completed' that have failure metadata, or any tasks that are not 'completed' or 'pending'. Reset failed tasks to pending.
-
-Use TaskList to find them, then TaskUpdate each one to status='pending'."
     log_info "Resetting all failed tasks..."
+
+    for task_file in "$CW_TASKS_DIR"/*.json; do
+        [ -f "$task_file" ] || continue
+
+        failure_count=$(jq '.metadata.failure_count // 0' "$task_file" 2>/dev/null)
+        status=$(jq -r '.status' "$task_file" 2>/dev/null)
+
+        if [ "$failure_count" -gt 0 ] || { [ "$status" != "completed" ] && [ "$status" != "pending" ]; }; then
+            task_id=$(jq -r '.metadata.task_id // .id' "$task_file" 2>/dev/null)
+            log_info "  Resetting: $task_id ($status, failures: $failure_count)"
+            reset_task_file "$task_file"
+        fi
+    done
 fi
 
 if [ "$RESET_STUCK" = true ]; then
-    PROMPT+="Find ALL tasks with status 'in_progress' (these are likely abandoned from a crashed session). Reset them to 'pending'.
-
-Use TaskList to find them, then TaskUpdate each one to status='pending' and clear owner."
     log_info "Resetting stuck in_progress tasks..."
+
+    for task_file in "$CW_TASKS_DIR"/*.json; do
+        [ -f "$task_file" ] || continue
+
+        status=$(jq -r '.status' "$task_file" 2>/dev/null)
+        if [ "$status" = "in_progress" ]; then
+            task_id=$(jq -r '.metadata.task_id // .id' "$task_file" 2>/dev/null)
+            log_info "  Resetting: $task_id (in_progress → pending)"
+            reset_task_file "$task_file"
+        fi
+    done
 fi
 
 if [ ${#TASK_IDS[@]} -gt 0 ]; then
-    PROMPT+="Reset these specific tasks to pending status: ${TASK_IDS[*]}
+    log_info "Resetting specific tasks: ${TASK_IDS[*]}"
 
-Use TaskList to find their native IDs, then TaskUpdate each to status='pending' and clear owner."
-    log_info "Resetting tasks: ${TASK_IDS[*]}"
+    for target_id in "${TASK_IDS[@]}"; do
+        FOUND=false
+
+        for task_file in "$CW_TASKS_DIR"/*.json; do
+            [ -f "$task_file" ] || continue
+
+            task_id=$(jq -r '.metadata.task_id // .id' "$task_file" 2>/dev/null)
+            if [ "$task_id" = "$target_id" ]; then
+                log_info "  Resetting: $task_id"
+                reset_task_file "$task_file"
+                FOUND=true
+                break
+            fi
+        done
+
+        if [ "$FOUND" = false ]; then
+            log_warning "  Task not found: $target_id"
+        fi
+    done
 fi
 
 # =============================================================================
-# Execute Reset
+# Summary
 # =============================================================================
 
-if invoke_claude "$PROMPT" "haiku"; then
-    log_success "Tasks reset successfully"
-
-    # Re-export manifest
-    log_info "Re-exporting manifest..."
-    export_manifest
-    print_manifest_status
+if [ "$RESET_COUNT" -gt 0 ]; then
+    log_success "Reset $RESET_COUNT task(s) to pending"
+    print_task_status
 else
-    log_error "Reset failed"
-    exit 1
+    log_warning "No tasks were reset"
 fi

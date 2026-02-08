@@ -128,20 +128,9 @@ Send a **single message** with multiple Task tool calls for parallel execution.
 
 ```
 Task({
-  subagent_type: "general-purpose",
+  subagent_type: "claude-workflow:implementer",
   description: "Execute task T01",
-  prompt: "You are worker-1.
-
-MANDATORY FIRST ACTION: Use the Skill tool to invoke 'cw-execute'.
-
-Do NOT implement anything directly. The cw-execute skill contains the 11-phase protocol that:
-1. Reads your assigned task from TaskList (owner='worker-1')
-2. Guides implementation following project patterns
-3. Creates proof artifacts
-4. Commits changes
-5. Calls TaskUpdate to mark the task COMPLETED
-
-Without cw-execute, the task board will not be updated and progress tracking breaks.
+  prompt: "You are worker-1. Your assigned task is T01. Run cw-execute to implement it.
 
 Constraints:
 - Do not modify files outside your task's scope
@@ -243,24 +232,9 @@ When user selects validation, spawn the validator as a sub-agent to keep context
 
 ```
 Task({
-  subagent_type: "general-purpose",
+  subagent_type: "claude-workflow:validator",
   description: "Validate implementation against spec",
-  prompt: "You are the validator.
-
-MANDATORY FIRST ACTION: Use the Skill tool to invoke 'cw-validate'.
-
-Do NOT validate anything directly. The cw-validate skill contains the 6-gate validation protocol that:
-1. Reads the task board for completed tasks
-2. Collects evidence from proofs and git history
-3. Applies all 6 validation gates
-4. Generates the validation report
-
-Without cw-validate, validation will be incomplete and inconsistent.
-
-Constraints:
-- Read-only access to implementation code
-- Never mark PASS if any gate fails
-- Always produce the full coverage matrix"
+  prompt: "Run the cw-validate skill against the current task board. Relay the full validation summary including gate results and coverage matrix."
 })
 ```
 

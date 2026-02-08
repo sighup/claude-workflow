@@ -294,6 +294,19 @@ get_completed_count() {
     jq -s '[.[] | select(.status == "completed")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
 }
 
+# Count pending FIX-* tasks
+get_pending_fix_count() {
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        echo "0"
+        return
+    fi
+
+    jq -s '[.[] | select(
+        (.subject | test("^FIX"; "i")) or
+        (.metadata.task_id // "" | test("^FIX"; "i"))
+    ) | select(.status == "pending")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
+}
+
 # Get task counts by status
 get_task_counts() {
     if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
@@ -392,4 +405,245 @@ get_task_subject() {
     fi
 
     jq -rs --arg id "$task_id" '.[] | select(.id == $id) | .subject' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
+}
+
+# =============================================================================
+# Worktree Management
+# =============================================================================
+
+# Create a git worktree for a feature
+# Usage: create_worktree FEATURE_NAME
+# Sets: CW_WORKTREE_PATH
+create_worktree() {
+    local feature_name="$1"
+
+    if [ -z "$feature_name" ]; then
+        log_error "Feature name is required"
+        return 1
+    fi
+
+    # Validate feature name
+    if [[ ! "$feature_name" =~ ^[a-z0-9-]+$ ]]; then
+        log_error "Feature name must be lowercase alphanumeric with hyphens: $feature_name"
+        return 1
+    fi
+
+    local worktree_dir=".worktrees/feature-${feature_name}"
+    local branch_name="feature/${feature_name}"
+
+    # Ensure .worktrees is gitignored
+    if ! git check-ignore -q .worktrees 2>/dev/null; then
+        echo ".worktrees/" >> .gitignore
+        git add .gitignore
+        git commit -m "chore: add .worktrees to gitignore"
+    fi
+
+    # Check for existing worktree
+    if [ -d "$worktree_dir" ]; then
+        log_error "Worktree already exists: $worktree_dir"
+        return 1
+    fi
+
+    # Create worktree (use existing branch if it exists)
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+        log_warning "Branch $branch_name already exists, using it"
+        git worktree add "$worktree_dir" "$branch_name"
+    else
+        git worktree add "$worktree_dir" -b "$branch_name"
+    fi
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to create worktree"
+        return 1
+    fi
+
+    # Configure isolated task list
+    mkdir -p "${worktree_dir}/.claude"
+    cat > "${worktree_dir}/.claude/settings.local.json" << EOF
+{
+  "env": {
+    "CLAUDE_CODE_TASK_LIST_ID": "feature-${feature_name}"
+  }
+}
+EOF
+
+    CW_WORKTREE_PATH="$(cd "$worktree_dir" && pwd)"
+
+    log_success "Worktree created: $worktree_dir (branch: $branch_name)"
+    return 0
+}
+
+# =============================================================================
+# Spec Input Resolution
+# =============================================================================
+
+# Resolve spec input from various sources
+# Usage: resolve_spec_input MODE VALUE
+#   MODE: "prompt" | "spec" | "auto"
+#   VALUE: prompt text, spec path, or empty for auto
+# Sets: CW_SPEC_MODE, CW_SPEC_VALUE
+CW_SPEC_MODE=""
+CW_SPEC_VALUE=""
+
+resolve_spec_input() {
+    local mode="${1:-auto}"
+    local value="$2"
+
+    case "$mode" in
+        prompt)
+            if [ -z "$value" ]; then
+                log_error "Prompt text is required with --prompt"
+                return 1
+            fi
+            CW_SPEC_MODE="prompt"
+            CW_SPEC_VALUE="$value"
+            ;;
+        spec)
+            if [ -z "$value" ]; then
+                log_error "Spec path is required with --spec"
+                return 1
+            fi
+            if [ ! -f "$value" ]; then
+                log_error "Spec file not found: $value"
+                return 1
+            fi
+            CW_SPEC_MODE="spec"
+            CW_SPEC_VALUE="$value"
+            ;;
+        auto)
+            # Auto-discover most recent spec in docs/specs/
+            local specs_dir="docs/specs"
+            if [ ! -d "$specs_dir" ]; then
+                log_error "No specs directory found at $specs_dir"
+                return 1
+            fi
+
+            # Find the most recently modified spec file
+            local latest_spec=""
+            latest_spec=$(find "$specs_dir" -name "*.md" -not -name "*questions*" -type f 2>/dev/null \
+                | xargs ls -t 2>/dev/null \
+                | head -1)
+
+            if [ -z "$latest_spec" ]; then
+                log_error "No spec files found in $specs_dir"
+                return 1
+            fi
+
+            CW_SPEC_MODE="spec"
+            CW_SPEC_VALUE="$latest_spec"
+            log_info "Auto-discovered spec: $CW_SPEC_VALUE"
+            ;;
+        *)
+            log_error "Unknown spec mode: $mode"
+            return 1
+            ;;
+    esac
+
+    return 0
+}
+
+# =============================================================================
+# PID Management (Bash 3.2 compatible — indexed arrays)
+# =============================================================================
+
+# Indexed arrays for tracking background processes
+PID_LIST=()
+PID_LABELS=()
+PID_STATUSES=()
+PID_EXIT_CODES=()
+
+# Register a background process for tracking
+# Usage: register_pid PID LABEL
+register_pid() {
+    local pid="$1"
+    local label="$2"
+
+    PID_LIST+=("$pid")
+    PID_LABELS+=("$label")
+    PID_STATUSES+=("running")
+    PID_EXIT_CODES+=("")
+
+    log_info "Registered PID $pid for: $label"
+}
+
+# Monitor all registered PIDs until completion
+# Usage: monitor_pids [INTERVAL]
+# INTERVAL: polling interval in seconds (default: 30)
+monitor_pids() {
+    local interval="${1:-30}"
+    local all_done=false
+
+    while [ "$all_done" = false ]; do
+        all_done=true
+
+        for i in "${!PID_LIST[@]}"; do
+            local pid="${PID_LIST[$i]}"
+            local label="${PID_LABELS[$i]}"
+            local status="${PID_STATUSES[$i]}"
+
+            # Skip already completed
+            if [ "$status" != "running" ]; then
+                continue
+            fi
+
+            # Check if still running
+            if kill -0 "$pid" 2>/dev/null; then
+                all_done=false
+            else
+                # Process completed — capture exit code
+                wait "$pid" 2>/dev/null
+                local exit_code=$?
+                PID_EXIT_CODES[$i]="$exit_code"
+
+                if [ "$exit_code" -eq 0 ]; then
+                    PID_STATUSES[$i]="completed"
+                    log_success "$label: completed"
+                else
+                    PID_STATUSES[$i]="failed"
+                    log_error "$label: failed (exit code $exit_code)"
+                fi
+            fi
+        done
+
+        if [ "$all_done" = false ]; then
+            # Report running processes
+            local running_count=0
+            for status in "${PID_STATUSES[@]}"; do
+                [ "$status" = "running" ] && running_count=$((running_count + 1))
+            done
+            log_info "$running_count process(es) still running. Checking again in ${interval}s..."
+            sleep "$interval"
+        fi
+    done
+}
+
+# Get results summary after monitoring
+# Returns: 0 if all succeeded, 1 if any failed
+get_pipeline_results() {
+    local total=${#PID_LIST[@]}
+    local passed=0
+    local failed=0
+
+    echo ""
+    log_header "Pipeline Results"
+
+    for i in "${!PID_LIST[@]}"; do
+        local label="${PID_LABELS[$i]}"
+        local status="${PID_STATUSES[$i]}"
+        local exit_code="${PID_EXIT_CODES[$i]}"
+
+        if [ "$status" = "completed" ]; then
+            echo -e "  ${GREEN}[PASS]${NC} $label"
+            passed=$((passed + 1))
+        else
+            echo -e "  ${RED}[FAIL]${NC} $label (exit code: $exit_code)"
+            failed=$((failed + 1))
+        fi
+    done
+
+    echo ""
+    echo -e "  Total: $total  |  ${GREEN}Passed: $passed${NC}  |  ${RED}Failed: $failed${NC}"
+    echo ""
+
+    [ "$failed" -eq 0 ]
 }

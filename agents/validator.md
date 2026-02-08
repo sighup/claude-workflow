@@ -5,6 +5,7 @@ capabilities:
   - Apply 6 mandatory validation gates
   - Re-execute proof artifacts for verification
   - Generate coverage matrices and validation reports
+color: yellow
 model: inherit
 tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate
 skills:
