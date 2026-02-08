@@ -295,6 +295,7 @@ get_completed_count() {
 }
 
 # Count pending FIX-* tasks
+# Matches by subject/task_id prefix or metadata.fix_task_id (cw-testing convention)
 get_pending_fix_count() {
     if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
         echo "0"
@@ -303,7 +304,8 @@ get_pending_fix_count() {
 
     jq -s '[.[] | select(
         (.subject | test("^FIX"; "i")) or
-        (.metadata.task_id // "" | test("^FIX"; "i"))
+        (.metadata.task_id // "" | test("^FIX"; "i")) or
+        (.metadata.fix_task_id != null)
     ) | select(.status == "pending")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
 }
 
