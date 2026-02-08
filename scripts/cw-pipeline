@@ -114,10 +114,11 @@ show_help() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --prompt) SINGLE_PROMPT="$2"; shift 2 ;;
-        --spec) SINGLE_SPEC="$2"; shift 2 ;;
-        --name) SINGLE_NAME="$2"; shift 2 ;;
+        --prompt) require_arg "--prompt" "${2:-}"; SINGLE_PROMPT="$2"; shift 2 ;;
+        --spec) require_arg "--spec" "${2:-}"; SINGLE_SPEC="$2"; shift 2 ;;
+        --name) require_arg "--name" "${2:-}"; SINGLE_NAME="$2"; shift 2 ;;
         --feature)
+            require_arg "--feature" "${2:-}"
             # Parse format: name:mode:value
             local_spec="$2"
             local_name="${local_spec%%:*}"
@@ -135,7 +136,7 @@ while [[ $# -gt 0 ]]; do
         --no-pr) NO_PR=true; shift ;;
         --no-review) NO_REVIEW=true; shift ;;
         --auto-pr) AUTO_PR=true; shift ;;
-        -m|--model) CW_MODEL="$2"; shift 2 ;;
+        -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
         -v|--verbose) CW_VERBOSE=true; shift ;;
         -h|--help) show_help; exit 0 ;;
         -*) log_error "Unknown option: $1"; show_help; exit 4 ;;
