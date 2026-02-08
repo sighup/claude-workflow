@@ -128,7 +128,6 @@ invoke_claude() {
         ATTEMPT=$((ATTEMPT + 1))
 
         local EXIT_CODE=0
-        local OUTPUT
         local TMPFILE
         TMPFILE=$(mktemp)
 
@@ -221,12 +220,27 @@ discover_session() {
 # Task Helpers (Direct File Access)
 # =============================================================================
 
+# Check if task dir has JSON files (call after directory guard)
+_has_task_files() {
+    local files=("$CW_TASKS_DIR"/*.json)
+    [ -f "${files[0]}" ]
+}
+
+# Validate that a flag requiring a value actually received one
+require_arg() {
+    if [ -z "${2:-}" ]; then
+        log_error "$1 requires a value"
+        exit 4
+    fi
+}
+
 # Read all tasks and output as JSON array
 get_all_tasks() {
     if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
         echo "[]"
         return 1
     fi
+    _has_task_files || { echo "[]"; return 1; }
 
     # Use jq to properly merge all task files into a single array
     jq -s '.' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "[]"
@@ -239,6 +253,7 @@ get_pending_count() {
         echo "0"
         return
     fi
+    _has_task_files || { echo "0"; return; }
 
     # Single jq call: compute completed IDs, then count pending unblocked
     jq -s '
@@ -257,6 +272,7 @@ get_next_task_id() {
         echo ""
         return
     fi
+    _has_task_files || { echo ""; return; }
 
     # Single jq call: compute completed IDs, then find first pending unblocked
     jq -rs '
@@ -274,6 +290,7 @@ is_complete() {
     if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
         return 1
     fi
+    _has_task_files || return 1
 
     local result
     result=$(jq -s '
@@ -290,6 +307,7 @@ get_completed_count() {
         echo "0"
         return
     fi
+    _has_task_files || { echo "0"; return; }
 
     jq -s '[.[] | select(.status == "completed")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
 }
@@ -301,6 +319,7 @@ get_pending_fix_count() {
         echo "0"
         return
     fi
+    _has_task_files || { echo "0"; return; }
 
     jq -s '[.[] | select(
         (.subject | test("^FIX"; "i")) or
@@ -315,6 +334,7 @@ get_task_counts() {
         echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'
         return
     fi
+    _has_task_files || { echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'; return; }
 
     jq -s '{
         total: length,
@@ -380,6 +400,7 @@ show_task_list() {
         log_warning "No tasks directory found."
         return 1
     fi
+    _has_task_files || { log_warning "No tasks found."; return 1; }
 
     local count
     count=$(ls "$CW_TASKS_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
@@ -405,6 +426,7 @@ get_task_subject() {
         echo ""
         return
     fi
+    _has_task_files || { echo ""; return; }
 
     jq -rs --arg id "$task_id" '.[] | select(.id == $id) | .subject' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
 }
@@ -433,11 +455,19 @@ create_worktree() {
     local worktree_dir=".worktrees/feature-${feature_name}"
     local branch_name="feature/${feature_name}"
 
-    # Ensure .worktrees is gitignored
+    # Ensure .worktrees is gitignored (with lock to prevent races)
+    local lockfile=".git/cw-gitignore.lock"
     if ! git check-ignore -q .worktrees 2>/dev/null; then
-        echo ".worktrees/" >> .gitignore
-        git add .gitignore
-        git commit -m "chore: add .worktrees to gitignore"
+        # Simple lock: try to create atomically
+        if (set -o noclobber; echo $$ > "$lockfile") 2>/dev/null; then
+            echo ".worktrees/" >> .gitignore
+            git add .gitignore
+            git commit -m "chore: add .worktrees to gitignore" -- .gitignore 2>/dev/null || true
+            rm -f "$lockfile"
+        else
+            # Another process is handling it — wait briefly
+            sleep 2
+        fi
     fi
 
     # Check for existing worktree
