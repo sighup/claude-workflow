@@ -49,7 +49,7 @@ This document defines the metadata structure for E2E test tasks created by `/cw-
 
 ### Test Step Task
 
-Uses Ralph-style natural language prompts for action and verification:
+Uses natural language prompts for action and verification:
 
 ```json
 {
@@ -141,7 +141,7 @@ Uses Ralph-style natural language prompts for action and verification:
 | `fix_history` | array | No | History of fix attempts |
 | `blocked_reason` | string | No | Why test is blocked (if status is blocked) |
 
-## Action Types (Ralph-Style)
+## Action Types
 
 Actions use natural language prompts that the test executor interprets.
 
