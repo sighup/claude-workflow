@@ -1,0 +1,320 @@
+#!/bin/bash
+#
+# cw-test-loop - Autonomous Test Execution Loop
+#
+# Runs test tasks with auto-fix cycles. Uses a dual-loop pattern:
+# - Outer loop (max-cycles): test → fix → retest
+# - Inner loop (max-iter): execute individual test tasks
+#
+# Usage:
+#   ./cw-test-loop [OPTIONS] [PROJECT_PATH]
+#
+# Options:
+#   -c, --max-cycles N    Max fix cycles (default: 3)
+#   -n, --max-iter N      Max iterations per cycle (default: 50)
+#   -m, --model MODEL     Claude model to use (default: sonnet)
+#   -s, --sleep N         Seconds between iterations (default: 5)
+#   -v, --verbose         Stream JSON output for real-time visibility
+#   -h, --help            Show this help message
+#
+# Arguments:
+#   PROJECT_PATH          Project directory (default: current directory)
+#
+# Exit Codes:
+#   0  All tests passed
+#   1  Max iterations exhausted in a cycle
+#   2  Max consecutive failures reached
+#   3  No available tasks (all blocked)
+#   4  Missing dependencies or no session found
+#   5  Max fix cycles exhausted (tests still failing)
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+CW_MAX_CYCLES="${CW_MAX_CYCLES:-3}"
+PROJECT_PATH=""
+
+show_help() {
+    echo "Usage: cw-test-loop [OPTIONS] [PROJECT_PATH]"
+    echo ""
+    echo "Autonomous test execution with auto-fix cycles."
+    echo ""
+    echo "Options:"
+    echo "  -c, --max-cycles N    Max fix cycles (default: $CW_MAX_CYCLES)"
+    echo "  -n, --max-iter N      Max iterations per cycle (default: $CW_MAX_ITERATIONS)"
+    echo "  -m, --model MODEL     Claude model (default: $CW_MODEL)"
+    echo "  -s, --sleep N         Seconds between iterations (default: $CW_SLEEP)"
+    echo "  -v, --verbose         Stream JSON output for real-time visibility"
+    echo "  -h, --help            Show this help"
+    echo ""
+    echo "Arguments:"
+    echo "  PROJECT_PATH          Project directory (default: current directory)"
+    echo ""
+    echo "Exit Codes:"
+    echo "  0  All tests passed"
+    echo "  1  Max iterations exhausted in a cycle"
+    echo "  2  Max consecutive failures reached"
+    echo "  3  No available tasks (all blocked)"
+    echo "  4  Missing dependencies or no session found"
+    echo "  5  Max fix cycles exhausted (tests still failing)"
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -c|--max-cycles) CW_MAX_CYCLES="$2"; shift 2 ;;
+        -n|--max-iter) CW_MAX_ITERATIONS="$2"; shift 2 ;;
+        -m|--model) CW_MODEL="$2"; shift 2 ;;
+        -s|--sleep) CW_SLEEP="$2"; shift 2 ;;
+        -v|--verbose) CW_VERBOSE=true; shift ;;
+        -h|--help) show_help; exit 0 ;;
+        -*) log_error "Unknown option: $1"; show_help; exit 4 ;;
+        *) PROJECT_PATH="$1"; shift ;;
+    esac
+done
+
+PROJECT_PATH="${PROJECT_PATH:-$(pwd)}"
+
+# =============================================================================
+# Preflight Checks
+# =============================================================================
+
+check_jq || exit 4
+check_claude || exit 4
+
+print_banner "Claude Workflow - Test Loop"
+
+log_info "Project: $PROJECT_PATH"
+log_info "Model: $CW_MODEL"
+log_info "Max cycles: $CW_MAX_CYCLES"
+log_info "Max iterations per cycle: $CW_MAX_ITERATIONS"
+
+# =============================================================================
+# Session Discovery
+# =============================================================================
+
+log_header "Discovering session"
+
+if ! discover_session "$PROJECT_PATH"; then
+    log_error "No session with tasks found."
+    log_info "Run 'cw-test-init' first to create test tasks."
+    exit 4
+fi
+
+# =============================================================================
+# Test Task Helpers
+# =============================================================================
+
+# Count test tasks by status
+# Test tasks have subjects starting with "TEST" or metadata task_id starting with "TEST"
+get_test_task_counts() {
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        echo '{"total":0,"passed":0,"failed":0,"pending":0}'
+        return
+    fi
+
+    jq -s '
+        [.[] | select(
+            (.subject | test("^TEST"; "i")) or
+            (.metadata.task_id // "" | test("^TEST"; "i"))
+        )] | {
+            total: length,
+            passed: [.[] | select(.status == "completed")] | length,
+            failed: [.[] | select(.status != "completed" and .status != "pending")] | length,
+            pending: [.[] | select(.status == "pending")] | length
+        }
+    ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo '{"total":0,"passed":0,"failed":0,"pending":0}'
+}
+
+# Get count of pending test tasks
+get_pending_test_count() {
+    local counts
+    counts=$(get_test_task_counts)
+    echo "$counts" | jq '.pending'
+}
+
+# Check if all test tasks passed
+all_tests_passed() {
+    local counts
+    counts=$(get_test_task_counts)
+    local total passed
+    total=$(echo "$counts" | jq '.total')
+    passed=$(echo "$counts" | jq '.passed')
+    [ "$total" -gt 0 ] && [ "$total" -eq "$passed" ]
+}
+
+# Reset failed test tasks to pending for re-run
+reset_failed_tests() {
+    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
+        return
+    fi
+
+    local reset_count=0
+    for task_file in "$CW_TASKS_DIR"/*.json; do
+        [ -f "$task_file" ] || continue
+
+        local is_test status
+        is_test=$(jq '(.subject | test("^TEST"; "i")) or ((.metadata.task_id // "") | test("^TEST"; "i"))' "$task_file" 2>/dev/null)
+        status=$(jq -r '.status' "$task_file" 2>/dev/null)
+
+        if [ "$is_test" = "true" ] && [ "$status" != "completed" ] && [ "$status" != "pending" ]; then
+            # Reset to pending
+            jq '.status = "pending"' "$task_file" > "${task_file}.tmp" && mv "${task_file}.tmp" "$task_file"
+            reset_count=$((reset_count + 1))
+        fi
+    done
+
+    if [ "$reset_count" -gt 0 ]; then
+        log_info "Reset $reset_count failed test task(s) to pending"
+    fi
+}
+
+# =============================================================================
+# Main: Outer Loop (Fix Cycles)
+# =============================================================================
+
+START_TIME=$(date +%s)
+CYCLE=0
+
+while [ "$CYCLE" -lt "$CW_MAX_CYCLES" ]; do
+    CYCLE=$((CYCLE + 1))
+
+    log_header "Test Cycle $CYCLE / $CW_MAX_CYCLES"
+
+    # =========================================================================
+    # Inner Loop: Execute Test Tasks
+    # =========================================================================
+
+    ITERATION=0
+    FAILURES=0
+
+    while [ "$ITERATION" -lt "$CW_MAX_ITERATIONS" ]; do
+        ITERATION=$((ITERATION + 1))
+
+        # Check if all tests passed
+        if all_tests_passed; then
+            ELAPSED=$(($(date +%s) - START_TIME))
+            log_success "All tests passed! (Cycle $CYCLE, Runtime: $(format_elapsed $ELAPSED))"
+            print_task_status
+            exit 0
+        fi
+
+        # Check for pending test tasks
+        PENDING_TESTS=$(get_pending_test_count)
+        if [ "$PENDING_TESTS" -eq 0 ]; then
+            log_info "No more pending test tasks in this cycle"
+            break
+        fi
+
+        ELAPSED=$(($(date +%s) - START_TIME))
+        log_info "Cycle $CYCLE, Iteration $ITERATION / $CW_MAX_ITERATIONS [Runtime: $(format_elapsed $ELAPSED)]"
+        log_info "Pending test tasks: $PENDING_TESTS"
+
+        # Execute next test task
+        TEST_PROMPT="Use the Skill tool to invoke 'cw-testing' with args 'run'.
+
+Execute the next pending test task from the task board. Run the test and update its status based on the result. If a test fails, create a FIX-* task describing what needs to be fixed.
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+        if invoke_claude "$TEST_PROMPT" "$CW_MODEL"; then
+            log_success "Test execution completed"
+            FAILURES=0
+        else
+            FAILURES=$((FAILURES + 1))
+            log_error "Test execution failed (failure $FAILURES/$CW_MAX_FAILURES)"
+
+            if [ "$FAILURES" -ge "$CW_MAX_FAILURES" ]; then
+                ELAPSED=$(($(date +%s) - START_TIME))
+                log_error "Max consecutive failures reached. (Runtime: $(format_elapsed $ELAPSED))"
+                exit 2
+            fi
+        fi
+
+        # Sleep between iterations
+        if [ "$ITERATION" -lt "$CW_MAX_ITERATIONS" ]; then
+            sleep "$CW_SLEEP"
+        fi
+    done
+
+    # =========================================================================
+    # Post-Cycle: Check Results and Fix
+    # =========================================================================
+
+    log_header "Cycle $CYCLE Results"
+    COUNTS=$(get_test_task_counts)
+    TOTAL=$(echo "$COUNTS" | jq '.total')
+    PASSED=$(echo "$COUNTS" | jq '.passed')
+    FAILED=$(echo "$COUNTS" | jq '.failed')
+    PENDING=$(echo "$COUNTS" | jq '.pending')
+
+    echo -e "  Tests:   ${GREEN}$PASSED passed${NC} / ${RED}$FAILED failed${NC} / ${YELLOW}$PENDING pending${NC} (total: $TOTAL)"
+    echo ""
+
+    # All tests passed?
+    if all_tests_passed; then
+        ELAPSED=$(($(date +%s) - START_TIME))
+        log_success "All tests passed! (Runtime: $(format_elapsed $ELAPSED))"
+        exit 0
+    fi
+
+    # Check for FIX tasks
+    FIX_COUNT=$(get_pending_fix_count)
+    if [ "$FIX_COUNT" -gt 0 ]; then
+        log_info "Found $FIX_COUNT pending FIX task(s). Executing fixes..."
+
+        # Execute fix tasks using cw-execute
+        FIX_ITER=0
+        while [ "$FIX_ITER" -lt "$CW_MAX_ITERATIONS" ]; do
+            FIX_ITER=$((FIX_ITER + 1))
+
+            FIX_COUNT=$(get_pending_fix_count)
+            if [ "$FIX_COUNT" -eq 0 ]; then
+                log_success "All fix tasks completed"
+                break
+            fi
+
+            FIX_PROMPT="Use the Skill tool to invoke 'cw-execute'.
+
+Execute the next pending FIX-* task from the task board. These are fix tasks generated from failed tests.
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+            if ! invoke_claude "$FIX_PROMPT" "$CW_MODEL"; then
+                log_warning "Fix task execution failed, continuing..."
+            fi
+
+            sleep "$CW_SLEEP"
+        done
+    fi
+
+    # Reset failed tests for next cycle
+    if [ "$CYCLE" -lt "$CW_MAX_CYCLES" ]; then
+        log_info "Resetting failed test tasks for next cycle..."
+        reset_failed_tests
+    fi
+done
+
+# =============================================================================
+# Max Cycles Exhausted
+# =============================================================================
+
+ELAPSED=$(($(date +%s) - START_TIME))
+log_error "Max fix cycles ($CW_MAX_CYCLES) exhausted. Tests still failing. (Runtime: $(format_elapsed $ELAPSED))"
+
+COUNTS=$(get_test_task_counts)
+TOTAL=$(echo "$COUNTS" | jq '.total')
+PASSED=$(echo "$COUNTS" | jq '.passed')
+FAILED=$(echo "$COUNTS" | jq '.failed')
+
+echo ""
+echo -e "  Final: ${GREEN}$PASSED passed${NC} / ${RED}$FAILED failed${NC} (total: $TOTAL)"
+echo ""
+
+exit 5

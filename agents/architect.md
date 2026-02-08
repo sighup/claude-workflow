@@ -4,6 +4,7 @@ capabilities:
   - Transform specifications into task graphs
   - Create dependency chains with DAG validation
   - Generate full task metadata for autonomous execution
+color: purple
 model: inherit
 tools: Glob, Grep, Read, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion
 skills:

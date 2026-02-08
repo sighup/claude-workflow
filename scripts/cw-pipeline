@@ -1,0 +1,481 @@
+#!/bin/bash
+#
+# cw-pipeline - Full End-to-End Feature Development Orchestrator
+#
+# Single command: prompt → worktree → spec → plan → execute → validate →
+#                 review → test → fix → re-validate → PR
+#
+# Usage:
+#   ./cw-pipeline [OPTIONS]
+#
+# Single Feature:
+#   cw-pipeline --prompt "Build JWT auth" --name auth
+#   cw-pipeline --spec docs/specs/01-spec-auth.md --name auth
+#
+# Multiple Features (parallel):
+#   cw-pipeline \
+#     --feature "auth:prompt:Build JWT authentication" \
+#     --feature "billing:spec:docs/specs/02-spec-billing.md"
+#
+# Options:
+#   --prompt TEXT          Feature description (single feature mode)
+#   --spec PATH           Existing spec file (single feature mode)
+#   --name NAME           Feature name for worktree/branch (single feature mode)
+#   --feature SPEC        Multi-feature spec (format: name:prompt:text or name:spec:path)
+#   --no-worktree         Run in current directory (skip worktree creation)
+#   --no-test             Skip test phase
+#   --no-pr               Skip PR creation
+#   --no-review           Skip code review stage
+#   --auto-pr             Create PR without pausing for confirmation
+#   -m, --model MODEL     Claude model to use (default: sonnet)
+#   -v, --verbose         Stream JSON output for real-time visibility
+#   -h, --help            Show this help message
+#
+# Exit Codes:
+#   0  All features completed successfully
+#   1  One or more features failed
+#   4  Missing dependencies or invalid arguments
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+# Single feature mode
+SINGLE_PROMPT=""
+SINGLE_SPEC=""
+SINGLE_NAME=""
+
+# Multi-feature mode (indexed arrays for Bash 3.2)
+FEATURE_NAMES=()
+FEATURE_MODES=()
+FEATURE_VALUES=()
+
+# Pipeline flags
+NO_WORKTREE=false
+NO_TEST=false
+NO_PR=false
+NO_REVIEW=false
+AUTO_PR=false
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+show_help() {
+    echo "Usage: cw-pipeline [OPTIONS]"
+    echo ""
+    echo "Full end-to-end feature development orchestrator."
+    echo ""
+    echo "Single Feature:"
+    echo "  cw-pipeline --prompt 'Build JWT auth' --name auth"
+    echo "  cw-pipeline --spec docs/specs/01-spec-auth.md --name auth"
+    echo ""
+    echo "Multiple Features (parallel):"
+    echo "  cw-pipeline \\"
+    echo "    --feature 'auth:prompt:Build JWT authentication' \\"
+    echo "    --feature 'billing:spec:docs/specs/02-spec-billing.md'"
+    echo ""
+    echo "Options:"
+    echo "  --prompt TEXT        Feature description (single feature mode)"
+    echo "  --spec PATH         Existing spec file (single feature mode)"
+    echo "  --name NAME         Feature name for worktree/branch"
+    echo "  --feature SPEC      Multi-feature (format: name:prompt:text or name:spec:path)"
+    echo "  --no-worktree       Run in current directory"
+    echo "  --no-test           Skip test phase"
+    echo "  --no-pr             Skip PR creation"
+    echo "  --no-review         Skip code review stage"
+    echo "  --auto-pr           Create PR without confirmation"
+    echo "  -m, --model MODEL   Claude model (default: $CW_MODEL)"
+    echo "  -v, --verbose       Stream JSON output for real-time visibility"
+    echo "  -h, --help          Show this help"
+    echo ""
+    echo "Pipeline Stages:"
+    echo "  1. Create worktree (unless --no-worktree)"
+    echo "  2. Init (spec + plan via cw-init)"
+    echo "  3. Execute tasks (cw-loop -d)"
+    echo "  4. Validate (/cw-validate)"
+    echo "  5. Code review (unless --no-review)"
+    echo "  6. Test init (unless --no-test)"
+    echo "  7. Test loop (unless --no-test)"
+    echo "  8. Re-validate (/cw-validate)"
+    echo "  9. PR creation (unless --no-pr)"
+    echo ""
+    echo "Exit Codes:"
+    echo "  0  All features completed successfully"
+    echo "  1  One or more features failed"
+    echo "  4  Missing dependencies or invalid arguments"
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --prompt) SINGLE_PROMPT="$2"; shift 2 ;;
+        --spec) SINGLE_SPEC="$2"; shift 2 ;;
+        --name) SINGLE_NAME="$2"; shift 2 ;;
+        --feature)
+            # Parse format: name:mode:value
+            local_spec="$2"
+            local_name="${local_spec%%:*}"
+            local_rest="${local_spec#*:}"
+            local_mode="${local_rest%%:*}"
+            local_value="${local_rest#*:}"
+
+            FEATURE_NAMES+=("$local_name")
+            FEATURE_MODES+=("$local_mode")
+            FEATURE_VALUES+=("$local_value")
+            shift 2
+            ;;
+        --no-worktree) NO_WORKTREE=true; shift ;;
+        --no-test) NO_TEST=true; shift ;;
+        --no-pr) NO_PR=true; shift ;;
+        --no-review) NO_REVIEW=true; shift ;;
+        --auto-pr) AUTO_PR=true; shift ;;
+        -m|--model) CW_MODEL="$2"; shift 2 ;;
+        -v|--verbose) CW_VERBOSE=true; shift ;;
+        -h|--help) show_help; exit 0 ;;
+        -*) log_error "Unknown option: $1"; show_help; exit 4 ;;
+        *) log_error "Unexpected argument: $1"; show_help; exit 4 ;;
+    esac
+done
+
+# =============================================================================
+# Preflight Checks
+# =============================================================================
+
+check_jq || exit 4
+check_claude || exit 4
+
+# Validate arguments
+if [ ${#FEATURE_NAMES[@]} -eq 0 ]; then
+    # Single feature mode
+    if [ -z "$SINGLE_NAME" ]; then
+        log_error "--name is required (provides the feature name for worktree/branch)"
+        show_help
+        exit 4
+    fi
+
+    if [ -z "$SINGLE_PROMPT" ] && [ -z "$SINGLE_SPEC" ]; then
+        log_error "Either --prompt or --spec is required"
+        show_help
+        exit 4
+    fi
+
+    # Convert to multi-feature format (array of 1)
+    FEATURE_NAMES+=("$SINGLE_NAME")
+    if [ -n "$SINGLE_PROMPT" ]; then
+        FEATURE_MODES+=("prompt")
+        FEATURE_VALUES+=("$SINGLE_PROMPT")
+    else
+        FEATURE_MODES+=("spec")
+        FEATURE_VALUES+=("$SINGLE_SPEC")
+    fi
+fi
+
+print_banner "Claude Workflow - Pipeline"
+
+log_info "Features: ${#FEATURE_NAMES[@]}"
+for i in "${!FEATURE_NAMES[@]}"; do
+    log_info "  ${FEATURE_NAMES[$i]} (${FEATURE_MODES[$i]})"
+done
+log_info "Model: $CW_MODEL"
+log_info "Worktree: $([ "$NO_WORKTREE" = true ] && echo "disabled" || echo "enabled")"
+log_info "Tests: $([ "$NO_TEST" = true ] && echo "disabled" || echo "enabled")"
+log_info "Review: $([ "$NO_REVIEW" = true ] && echo "disabled" || echo "enabled")"
+log_info "PR: $([ "$NO_PR" = true ] && echo "disabled" || echo "auto-pr=$AUTO_PR")"
+
+# =============================================================================
+# Feature Pipeline Function
+# =============================================================================
+
+# Run the full pipeline for a single feature
+# Arguments: FEATURE_NAME MODE VALUE
+# MODE: "prompt" or "spec"
+# VALUE: prompt text or spec path
+run_feature_pipeline() {
+    local feature_name="$1"
+    local mode="$2"
+    local value="$3"
+    local original_dir
+    original_dir="$(pwd)"
+    local work_dir="$original_dir"
+
+    log_header "Pipeline: $feature_name"
+
+    # ─── Stage 1: Create Worktree ─────────────────────────────────────────
+    if [ "$NO_WORKTREE" = false ]; then
+        log_info "[$feature_name] Stage 1: Creating worktree..."
+
+        if ! create_worktree "$feature_name"; then
+            log_error "[$feature_name] Failed to create worktree"
+            return 1
+        fi
+
+        work_dir="$CW_WORKTREE_PATH"
+        cd "$work_dir"
+        log_success "[$feature_name] Worktree: $work_dir"
+    else
+        log_info "[$feature_name] Stage 1: Skipped (--no-worktree)"
+    fi
+
+    # ─── Stage 2: Init (Spec + Plan) ─────────────────────────────────────
+    log_info "[$feature_name] Stage 2: Init (spec + plan)..."
+
+    local init_args=(-m "$CW_MODEL")
+    if [ "$CW_VERBOSE" = "true" ]; then
+        init_args+=(-v)
+    fi
+
+    if [ "$mode" = "prompt" ]; then
+        init_args+=(--prompt "$value")
+    else
+        init_args+=(--spec "$value")
+    fi
+
+    if ! "$SCRIPT_DIR/cw-init" "${init_args[@]}"; then
+        log_error "[$feature_name] Init failed"
+        cd "$original_dir"
+        return 1
+    fi
+
+    log_success "[$feature_name] Init completed"
+
+    # ─── Stage 3: Execute Tasks ───────────────────────────────────────────
+    log_info "[$feature_name] Stage 3: Executing tasks..."
+
+    local loop_args=(-d -m "$CW_MODEL")
+    if [ "$CW_VERBOSE" = "true" ]; then
+        loop_args+=(-v)
+    fi
+
+    # Run non-interactively
+    CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" "${loop_args[@]}" "$work_dir" || {
+        local loop_exit=$?
+        # Exit code 0 = all done. Anything else might be partial progress.
+        if [ "$loop_exit" -ne 0 ]; then
+            log_warning "[$feature_name] Task execution exited with code $loop_exit"
+            # Continue pipeline — validation will catch issues
+        fi
+    }
+
+    log_success "[$feature_name] Task execution completed"
+
+    # ─── Stage 4: Validate ────────────────────────────────────────────────
+    log_info "[$feature_name] Stage 4: Validation (first pass)..."
+
+    # Discover session for validate invocation
+    discover_session "$work_dir" 2>/dev/null || true
+
+    local validate_prompt="Use the Skill tool to invoke 'cw-validate'.
+
+Run the 6-gate validation against the spec. This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$validate_prompt" "$CW_MODEL"; then
+        log_success "[$feature_name] Validation passed"
+    else
+        log_warning "[$feature_name] Validation had issues (continuing pipeline)"
+    fi
+
+    # ─── Stage 5: Code Review ────────────────────────────────────────────
+    if [ "$NO_REVIEW" = false ]; then
+        log_info "[$feature_name] Stage 5: Code review..."
+
+        local review_prompt="Review all code changes on this branch for bugs, logic errors, security vulnerabilities, and code quality issues.
+
+Run: git diff main...HEAD
+
+If you find issues that should be fixed:
+1. Create FIX-* tasks on the task board describing each fix needed
+2. Include the file path, line numbers, and a clear description of the issue and fix
+
+If no issues found, report that the code review passed.
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+        if invoke_claude "$review_prompt" "$CW_MODEL"; then
+            log_success "[$feature_name] Code review completed"
+
+            # Execute any FIX tasks generated by review
+            local fix_count
+            fix_count=$(get_pending_fix_count 2>/dev/null || echo "0")
+            if [ "$fix_count" -gt 0 ]; then
+                log_info "[$feature_name] Executing $fix_count review fix task(s)..."
+                CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" -m "$CW_MODEL" "$work_dir" || true
+            fi
+        else
+            log_warning "[$feature_name] Code review had issues (continuing)"
+        fi
+    else
+        log_info "[$feature_name] Stage 5: Skipped (--no-review)"
+    fi
+
+    # ─── Stage 6 & 7: Test Init + Test Loop ──────────────────────────────
+    if [ "$NO_TEST" = false ]; then
+        log_info "[$feature_name] Stage 6: Test init..."
+
+        local test_init_args=(-m "$CW_MODEL")
+        if [ "$CW_VERBOSE" = "true" ]; then
+            test_init_args+=(-v)
+        fi
+
+        # Use spec if available, otherwise describe the feature
+        if [ "$mode" = "spec" ]; then
+            test_init_args+=(--spec "$value")
+        else
+            test_init_args+=(--prompt "$value")
+        fi
+
+        if "$SCRIPT_DIR/cw-test-init" "${test_init_args[@]}"; then
+            log_success "[$feature_name] Test init completed"
+
+            log_info "[$feature_name] Stage 7: Test loop..."
+            local test_loop_args=(-m "$CW_MODEL")
+            if [ "$CW_VERBOSE" = "true" ]; then
+                test_loop_args+=(-v)
+            fi
+
+            "$SCRIPT_DIR/cw-test-loop" "${test_loop_args[@]}" "$work_dir" || {
+                local test_exit=$?
+                log_warning "[$feature_name] Test loop exited with code $test_exit"
+            }
+        else
+            log_warning "[$feature_name] Test init failed (continuing)"
+        fi
+    else
+        log_info "[$feature_name] Stage 6-7: Skipped (--no-test)"
+    fi
+
+    # ─── Stage 8: Re-Validate ────────────────────────────────────────────
+    log_info "[$feature_name] Stage 8: Final validation..."
+
+    # Re-discover session (may have changed)
+    discover_session "$work_dir" 2>/dev/null || true
+
+    local revalidate_prompt="Use the Skill tool to invoke 'cw-validate'.
+
+Run the final 6-gate validation against the spec. This is the last check before PR creation. This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$revalidate_prompt" "$CW_MODEL"; then
+        log_success "[$feature_name] Final validation passed"
+    else
+        log_warning "[$feature_name] Final validation had issues"
+    fi
+
+    # ─── Stage 9: PR Creation ────────────────────────────────────────────
+    if [ "$NO_PR" = false ]; then
+        log_info "[$feature_name] Stage 9: PR creation..."
+
+        if [ "$AUTO_PR" = true ] || [ "${CW_NON_INTERACTIVE}" = "true" ]; then
+            local pr_prompt="Create a pull request for this feature branch using 'gh pr create'.
+
+Summarize all changes, reference the spec, and include a test plan. Use a descriptive title and body.
+
+This is running non-interactively — create the PR without asking for confirmation."
+
+            if invoke_claude "$pr_prompt" "$CW_MODEL"; then
+                log_success "[$feature_name] PR created"
+            else
+                log_warning "[$feature_name] PR creation failed"
+            fi
+        else
+            # Interactive PR — pause for user
+            echo ""
+            echo -e "${YELLOW}[$feature_name] Ready to create PR.${NC}"
+            echo "Press Enter to create PR, or 's' to skip..."
+            read -r pr_action
+
+            if [ "$pr_action" != "s" ] && [ "$pr_action" != "S" ]; then
+                local pr_prompt="Create a pull request for this feature branch using 'gh pr create'.
+
+Summarize all changes, reference the spec, and include a test plan. Use a descriptive title and body."
+
+                if invoke_claude "$pr_prompt" "$CW_MODEL"; then
+                    log_success "[$feature_name] PR created"
+                else
+                    log_warning "[$feature_name] PR creation failed"
+                fi
+            else
+                log_info "[$feature_name] PR creation skipped"
+            fi
+        fi
+    else
+        log_info "[$feature_name] Stage 9: Skipped (--no-pr)"
+    fi
+
+    # Return to original directory
+    cd "$original_dir"
+    log_success "[$feature_name] Pipeline completed"
+    return 0
+}
+
+# =============================================================================
+# Execution
+# =============================================================================
+
+START_TIME=$(date +%s)
+
+if [ ${#FEATURE_NAMES[@]} -eq 1 ]; then
+    # ── Single Feature ────────────────────────────────────────────────────
+    run_feature_pipeline "${FEATURE_NAMES[0]}" "${FEATURE_MODES[0]}" "${FEATURE_VALUES[0]}"
+    EXIT_CODE=$?
+
+    ELAPSED=$(($(date +%s) - START_TIME))
+    echo ""
+    if [ "$EXIT_CODE" -eq 0 ]; then
+        log_success "Pipeline completed successfully (Runtime: $(format_elapsed $ELAPSED))"
+    else
+        log_error "Pipeline failed (Runtime: $(format_elapsed $ELAPSED))"
+    fi
+
+    exit $EXIT_CODE
+else
+    # ── Multiple Features (Parallel) ─────────────────────────────────────
+    log_header "Launching ${#FEATURE_NAMES[@]} features in parallel"
+
+    for i in "${!FEATURE_NAMES[@]}"; do
+        local_name="${FEATURE_NAMES[$i]}"
+        local_mode="${FEATURE_MODES[$i]}"
+        local_value="${FEATURE_VALUES[$i]}"
+
+        log_info "Starting: $local_name ($local_mode)"
+
+        # Each feature runs in a subshell as a background process
+        # Redirect output to a log file per feature
+        local log_file="/tmp/cw-pipeline-${local_name}.log"
+        (
+            run_feature_pipeline "$local_name" "$local_mode" "$local_value"
+        ) > "$log_file" 2>&1 &
+
+        register_pid $! "$local_name"
+    done
+
+    # Monitor until all complete
+    log_info "Monitoring ${#PID_LIST[@]} background pipeline(s)..."
+    monitor_pids 30
+
+    # Show results
+    get_pipeline_results
+    PIPELINE_RESULT=$?
+
+    ELAPSED=$(($(date +%s) - START_TIME))
+    echo ""
+
+    # Show log file locations
+    log_info "Feature logs:"
+    for i in "${!FEATURE_NAMES[@]}"; do
+        echo "  ${FEATURE_NAMES[$i]}: /tmp/cw-pipeline-${FEATURE_NAMES[$i]}.log"
+    done
+    echo ""
+
+    if [ "$PIPELINE_RESULT" -eq 0 ]; then
+        log_success "All features completed successfully (Runtime: $(format_elapsed $ELAPSED))"
+        exit 0
+    else
+        log_error "Some features failed (Runtime: $(format_elapsed $ELAPSED))"
+        exit 1
+    fi
+fi

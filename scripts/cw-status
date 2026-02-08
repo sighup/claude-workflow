@@ -1,20 +1,22 @@
 #!/bin/bash
 #
-# cw-status - Display task progress from manifest
+# cw-status - Display task progress
 #
-# Reads cw-manifest.json and displays current task state.
-# Does NOT invoke Claude - purely reads the last exported state.
+# Reads task state directly from ~/.claude/tasks and displays progress.
+# Does NOT invoke Claude - purely reads task files.
 #
 # Usage:
-#   ./cw-status [OPTIONS]
+#   ./cw-status [OPTIONS] [PROJECT_PATH]
 #
 # Options:
 #   -l, --list            Show full task list
 #   -f, --failed          Show only failed tasks
 #   -p, --pending         Show only pending unblocked tasks
 #   -j, --json            Output raw JSON summary
-#   -r, --refresh         Re-export manifest before displaying
 #   -h, --help            Show this help
+#
+# Arguments:
+#   PROJECT_PATH          Project directory (default: current directory)
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,7 +30,7 @@ SHOW_LIST=false
 SHOW_FAILED=false
 SHOW_PENDING=false
 OUTPUT_JSON=false
-REFRESH=false
+PROJECT_PATH=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -36,73 +38,91 @@ while [[ $# -gt 0 ]]; do
         -f|--failed) SHOW_FAILED=true; shift ;;
         -p|--pending) SHOW_PENDING=true; shift ;;
         -j|--json) OUTPUT_JSON=true; shift ;;
-        -r|--refresh) REFRESH=true; shift ;;
         -h|--help)
-            echo "Usage: cw-status [OPTIONS]"
+            echo "Usage: cw-status [OPTIONS] [PROJECT_PATH]"
+            echo ""
+            echo "Display task progress from ~/.claude/tasks."
             echo ""
             echo "Options:"
             echo "  -l, --list      Show full task list"
             echo "  -f, --failed    Show only failed tasks"
             echo "  -p, --pending   Show only pending unblocked tasks"
             echo "  -j, --json      Output raw JSON summary"
-            echo "  -r, --refresh   Re-export manifest first (requires Claude)"
             echo "  -h, --help      Show this help"
+            echo ""
+            echo "Arguments:"
+            echo "  PROJECT_PATH    Project directory (default: current directory)"
             exit 0
             ;;
-        *) log_error "Unknown option: $1"; exit 1 ;;
+        -*) log_error "Unknown option: $1"; exit 1 ;;
+        *) PROJECT_PATH="$1"; shift ;;
     esac
 done
+
+PROJECT_PATH="${PROJECT_PATH:-$(pwd)}"
 
 # =============================================================================
 # Main
 # =============================================================================
 
-if [ "$REFRESH" = true ]; then
-    check_claude || exit 1
-    export_manifest
-fi
+check_jq || exit 1
 
-if [ ! -f "$CW_MANIFEST" ]; then
-    log_error "No manifest found at $CW_MANIFEST"
-    log_info "Run '/cw-manifest' or 'cw-status --refresh' to export task state."
+if ! discover_session "$PROJECT_PATH"; then
+    log_error "No session with tasks found for: $PROJECT_PATH"
+    log_info "Run '/cw-plan' first to create tasks from a spec."
     exit 1
 fi
 
-# Check staleness
-EXPORTED_AT=$(jq -r '.exported_at // "unknown"' "$CW_MANIFEST")
-
 if [ "$OUTPUT_JSON" = true ]; then
-    jq '.summary' "$CW_MANIFEST"
+    get_task_counts
     exit 0
 fi
 
 print_banner "Claude Workflow Status"
-log_info "Manifest exported: $EXPORTED_AT"
+log_info "Session: $CW_SESSION_ID"
 
 if [ "$SHOW_FAILED" = true ]; then
     echo ""
     echo -e "${RED}Failed Tasks:${NC}"
-    jq -r '.tasks[] | select(.status=="failed") | "  [\(.task_id)] \(.subject)"' "$CW_MANIFEST"
-    FAILED_COUNT=$(jq '[.tasks[] | select(.status=="failed")] | length' "$CW_MANIFEST")
-    if [ "$FAILED_COUNT" -eq 0 ]; then
+    if [ -d "$CW_TASKS_DIR" ]; then
+        FAILED_OUTPUT=$(jq -rs '[.[] | select(.metadata.failure_count > 0)] |
+            if length == 0 then "  (none)"
+            else .[] | "  [\(.metadata.task_id // .id)] \(.subject)"
+            end' "$CW_TASKS_DIR"/*.json 2>/dev/null)
+        echo "$FAILED_OUTPUT"
+    else
         echo "  (none)"
     fi
 elif [ "$SHOW_PENDING" = true ]; then
     echo ""
     echo -e "${YELLOW}Pending Unblocked Tasks:${NC}"
-    jq -r '.tasks[] | select(.status=="pending" and (.blocked_by|length)==0) | "  [\(.task_id)] \(.subject) (complexity: \(.complexity))"' "$CW_MANIFEST"
-    PENDING_COUNT=$(get_pending_count)
-    if [ "$PENDING_COUNT" -eq 0 ]; then
-        echo "  (none - all pending tasks are blocked)"
+    if [ -d "$CW_TASKS_DIR" ]; then
+        jq -rs '
+            . as $all |
+            [$all[] | select(.status == "completed") | .id] as $completed |
+            [$all[] | select(
+                .status == "pending" and
+                ((.blockedBy // []) - $completed | length == 0)
+            )] |
+            if length == 0 then "  (none - all pending tasks are blocked)"
+            else .[] | "  [\(.metadata.task_id // .id)] \(.subject) (complexity: \(.metadata.complexity // "unknown"))"
+            end
+        ' "$CW_TASKS_DIR"/*.json 2>/dev/null
+    else
+        echo "  (none)"
     fi
 elif [ "$SHOW_LIST" = true ]; then
     echo ""
     show_task_list
 else
-    print_manifest_status
+    print_task_status
 fi
 
-# Show spec path
-SPEC_PATH=$(jq -r '.spec_path // "unknown"' "$CW_MANIFEST")
-echo -e "  Spec: ${CYAN}$SPEC_PATH${NC}"
-echo ""
+# Show spec path if available
+if [ -d "$CW_TASKS_DIR" ]; then
+    SPEC_PATH=$(jq -rs '[.[].metadata.spec_path // empty] | first // empty' "$CW_TASKS_DIR"/*.json 2>/dev/null)
+    if [ -n "$SPEC_PATH" ]; then
+        echo -e "  Spec: ${CYAN}$SPEC_PATH${NC}"
+        echo ""
+    fi
+fi

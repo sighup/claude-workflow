@@ -5,6 +5,7 @@ capabilities:
   - Generate clarifying questions for ambiguous requirements
   - Define demoable units with proof artifacts
   - Assess scope and flag concerns
+color: blue
 model: inherit
 tools: Glob, Grep, Read, Write, AskUserQuestion, WebFetch, WebSearch
 skills:
