@@ -147,7 +147,11 @@ log_success "Test scenario generation completed"
 
 if discover_session 2>/dev/null; then
     log_header "Test Init Complete"
-    log_info "Session: $CW_SESSION_ID"
+    if [ -n "$CW_TASK_LIST_ID" ]; then
+        log_info "Task list: $CW_TASK_LIST_ID"
+    else
+        log_info "Session: $CW_SESSION_ID"
+    fi
     print_task_status
     show_task_list
 

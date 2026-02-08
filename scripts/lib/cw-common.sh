@@ -70,6 +70,7 @@ CLAUDE_PROJECTS_DIR="$CLAUDE_DIR/projects"
 
 # Session state (populated by discover_session)
 CW_SESSION_ID=""
+CW_TASK_LIST_ID=""
 CW_TASKS_DIR=""
 
 # =============================================================================
@@ -177,11 +178,65 @@ encode_project_path() {
     echo "$path" | sed 's|^/|-|; s|/|-|g'
 }
 
+# Resolve CLAUDE_CODE_TASK_LIST_ID from env or project settings
+# Usage: _resolve_task_list_id project_path
+# Prints the task list ID if found, empty string otherwise
+_resolve_task_list_id() {
+    local project_path="$1"
+
+    # 1. Environment variable (highest priority)
+    if [ -n "${CLAUDE_CODE_TASK_LIST_ID:-}" ]; then
+        echo "$CLAUDE_CODE_TASK_LIST_ID"
+        return 0
+    fi
+
+    # 2. settings.local.json
+    local local_settings="$project_path/.claude/settings.local.json"
+    if [ -f "$local_settings" ]; then
+        local val
+        val=$(jq -r '.env.CLAUDE_CODE_TASK_LIST_ID // empty' "$local_settings" 2>/dev/null)
+        if [ -n "$val" ]; then
+            echo "$val"
+            return 0
+        fi
+    fi
+
+    # 3. settings.json
+    local settings="$project_path/.claude/settings.json"
+    if [ -f "$settings" ]; then
+        local val
+        val=$(jq -r '.env.CLAUDE_CODE_TASK_LIST_ID // empty' "$settings" 2>/dev/null)
+        if [ -n "$val" ]; then
+            echo "$val"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 # Find the session ID for a project that has tasks
 # Usage: discover_session [project_path]
-# Sets: CW_SESSION_ID, CW_TASKS_DIR
+# Sets: CW_SESSION_ID, CW_TASK_LIST_ID, CW_TASKS_DIR
 discover_session() {
     local project_path="${1:-$(pwd)}"
+
+    # Fast path: check for CLAUDE_CODE_TASK_LIST_ID
+    local task_list_id
+    task_list_id=$(_resolve_task_list_id "$project_path") || true
+    if [ -n "$task_list_id" ]; then
+        local tl_dir="$CLAUDE_TASKS_DIR/$task_list_id"
+        if [ -d "$tl_dir" ] && [ -n "$(ls -A "$tl_dir" 2>/dev/null)" ]; then
+            CW_TASK_LIST_ID="$task_list_id"
+            CW_TASKS_DIR="$tl_dir"
+            log_info "Task list: $CW_TASK_LIST_ID"
+            log_info "Tasks dir: $CW_TASKS_DIR"
+            return 0
+        fi
+        # Dir empty or missing — fall through to session-based lookup
+    fi
+
+    # Session-based lookup (original path)
     local encoded_path
     encoded_path=$(encode_project_path "$project_path")
 

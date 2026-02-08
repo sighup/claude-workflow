@@ -171,7 +171,11 @@ log_success "Plan generation completed"
 if discover_session; then
     log_header "Init Complete"
     log_info "Spec: $SPEC_PATH"
-    log_info "Session: $CW_SESSION_ID"
+    if [ -n "$CW_TASK_LIST_ID" ]; then
+        log_info "Task list: $CW_TASK_LIST_ID"
+    else
+        log_info "Session: $CW_SESSION_ID"
+    fi
     print_task_status
     show_task_list
 
