@@ -6,7 +6,7 @@ capabilities:
   - Generate full task metadata for autonomous execution
 color: purple
 model: inherit
-tools: Glob, Grep, Read, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion
+tools: Glob, Grep, Read, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, Skill
 skills:
   - cw-plan
 ---
