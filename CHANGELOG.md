@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-02-08)
+
+### Features
+
+- Dual-mode dispatch — subagent and team skills
+  ([#9](https://github.com/sighup/claude-workflow/pull/9),
+  [`ceb5cfc`](https://github.com/sighup/claude-workflow/commit/ceb5cfc00140f40feb3972422b4aa3aa4aa9e54d))
+
+
 ## v1.6.1 (2026-02-03)
 
 ### Bug Fixes
