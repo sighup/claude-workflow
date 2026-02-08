@@ -112,7 +112,8 @@ fi
 # =============================================================================
 
 # Count test tasks by status
-# Test tasks have subjects starting with "TEST" or metadata task_id starting with "TEST"
+# Test tasks are identified by metadata.test_status (set by cw-testing skill)
+# or by subject/task_id starting with "TEST" (legacy convention)
 get_test_task_counts() {
     if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
         echo '{"total":0,"passed":0,"failed":0,"pending":0}'
@@ -121,13 +122,15 @@ get_test_task_counts() {
 
     jq -s '
         [.[] | select(
+            (.metadata.test_status != null) or
+            (.metadata.test_type == "e2e") or
             (.subject | test("^TEST"; "i")) or
             (.metadata.task_id // "" | test("^TEST"; "i"))
-        )] | {
+        ) | select(.metadata.test_suite != true)] | {
             total: length,
-            passed: [.[] | select(.status == "completed")] | length,
-            failed: [.[] | select(.status != "completed" and .status != "pending")] | length,
-            pending: [.[] | select(.status == "pending")] | length
+            passed: [.[] | select(.metadata.test_status == "passed" or .status == "completed")] | length,
+            failed: [.[] | select(.metadata.test_status == "failed" or .metadata.test_status == "blocked")] | length,
+            pending: [.[] | select(.metadata.test_status == "pending" or (.metadata.test_status == null and .status == "pending"))] | length
         }
     ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo '{"total":0,"passed":0,"failed":0,"pending":0}'
 }
@@ -143,10 +146,11 @@ get_pending_test_count() {
 all_tests_passed() {
     local counts
     counts=$(get_test_task_counts)
-    local total passed
+    local total passed failed
     total=$(echo "$counts" | jq '.total')
     passed=$(echo "$counts" | jq '.passed')
-    [ "$total" -gt 0 ] && [ "$total" -eq "$passed" ]
+    failed=$(echo "$counts" | jq '.failed')
+    [ "$total" -gt 0 ] && [ "$failed" -eq 0 ] && [ "$total" -eq "$passed" ]
 }
 
 # Reset failed test tasks to pending for re-run
@@ -159,13 +163,14 @@ reset_failed_tests() {
     for task_file in "$CW_TASKS_DIR"/*.json; do
         [ -f "$task_file" ] || continue
 
-        local is_test status
-        is_test=$(jq '(.subject | test("^TEST"; "i")) or ((.metadata.task_id // "") | test("^TEST"; "i"))' "$task_file" 2>/dev/null)
-        status=$(jq -r '.status' "$task_file" 2>/dev/null)
+        # Match test tasks by metadata.test_status or subject/task_id prefix
+        local is_test test_status
+        is_test=$(jq '(.metadata.test_status != null) or (.metadata.test_type == "e2e" and .metadata.test_suite != true) or (.subject | test("^TEST"; "i")) or ((.metadata.task_id // "") | test("^TEST"; "i"))' "$task_file" 2>/dev/null)
+        test_status=$(jq -r '.metadata.test_status // .status' "$task_file" 2>/dev/null)
 
-        if [ "$is_test" = "true" ] && [ "$status" != "completed" ] && [ "$status" != "pending" ]; then
-            # Reset to pending
-            jq '.status = "pending"' "$task_file" > "${task_file}.tmp" && mv "${task_file}.tmp" "$task_file"
+        if [ "$is_test" = "true" ] && [ "$test_status" != "passed" ] && [ "$test_status" != "pending" ]; then
+            # Reset status and test_status to pending
+            jq '.status = "pending" | .metadata.test_status = "pending" | .metadata.fix_attempt = 0' "$task_file" > "${task_file}.tmp" && mv "${task_file}.tmp" "$task_file"
             reset_count=$((reset_count + 1))
         fi
     done
@@ -219,7 +224,7 @@ while [ "$CYCLE" -lt "$CW_MAX_CYCLES" ]; do
         # Execute next test task
         TEST_PROMPT="Use the Skill tool to invoke 'cw-testing' with args 'run'.
 
-Execute the next pending test task from the task board. Run the test and update its status based on the result. If a test fails, create a FIX-* task describing what needs to be fixed.
+Execute the test loop. Run pending test steps, spawn test-executor sub-agents, and if tests fail spawn bug-fixer sub-agents per the cw-testing protocol.
 
 This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
