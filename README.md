@@ -125,8 +125,6 @@ For autonomous (unattended) execution without an interactive Claude session:
 | `cw-test-init` | Generate E2E test scenarios as `TEST-*` tasks |
 | `cw-test-loop` | Execute tests with auto-fix cycles |
 | `cw-status` | Check task progress (no Claude needed) |
-| `cw-reset` | Reset failed or stuck tasks (no Claude needed) |
-
 See [examples/shell-scripts.md](examples/shell-scripts.md) for detailed usage and flag combinations.
 
 ### Environment Variables

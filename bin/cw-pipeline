@@ -12,6 +12,10 @@
 #   cw-pipeline --prompt "Build JWT auth" --name auth
 #   cw-pipeline --spec docs/specs/01-spec-auth.md --name auth
 #
+# Resume:
+#   cw-pipeline --resume --name auth
+#   cw-pipeline --resume --from 4 --name auth
+#
 # Multiple Features (parallel):
 #   cw-pipeline \
 #     --feature "auth:prompt:Build JWT authentication" \
@@ -22,6 +26,8 @@
 #   --spec PATH           Existing spec file (single feature mode)
 #   --name NAME           Feature name for worktree/branch (single feature mode)
 #   --feature SPEC        Multi-feature spec (format: name:prompt:text or name:spec:path)
+#   --resume              Resume from last checkpoint
+#   --from N              Force resume from stage N (1-9, requires --resume)
 #   --no-worktree         Run in current directory (skip worktree creation)
 #   --no-test             Skip test phase
 #   --no-pr               Skip PR creation
@@ -63,6 +69,19 @@ NO_PR=false
 NO_REVIEW=false
 AUTO_PR=false
 
+# Resume flags
+CW_RESUME=false
+CW_FROM_STAGE=""
+
+# Track which flags were explicitly set on CLI (for resume precedence)
+NO_TEST_SET=false
+NO_REVIEW_SET=false
+NO_PR_SET=false
+NO_WORKTREE_SET=false
+AUTO_PR_SET=false
+MODEL_SET=false
+VERBOSE_SET=false
+
 # =============================================================================
 # Argument Parsing
 # =============================================================================
@@ -76,6 +95,10 @@ show_help() {
     echo "  cw-pipeline --prompt 'Build JWT auth' --name auth"
     echo "  cw-pipeline --spec docs/specs/01-spec-auth.md --name auth"
     echo ""
+    echo "Resume:"
+    echo "  cw-pipeline --resume --name auth"
+    echo "  cw-pipeline --resume --from 4 --name auth"
+    echo ""
     echo "Multiple Features (parallel):"
     echo "  cw-pipeline \\"
     echo "    --feature 'auth:prompt:Build JWT authentication' \\"
@@ -86,6 +109,8 @@ show_help() {
     echo "  --spec PATH         Existing spec file (single feature mode)"
     echo "  --name NAME         Feature name for worktree/branch"
     echo "  --feature SPEC      Multi-feature (format: name:prompt:text or name:spec:path)"
+    echo "  --resume            Resume from last checkpoint"
+    echo "  --from N            Force resume from stage N (1-9, requires --resume)"
     echo "  --no-worktree       Run in current directory"
     echo "  --no-test           Skip test phase"
     echo "  --no-pr             Skip PR creation"
@@ -131,13 +156,15 @@ while [[ $# -gt 0 ]]; do
             FEATURE_VALUES+=("$local_value")
             shift 2
             ;;
-        --no-worktree) NO_WORKTREE=true; shift ;;
-        --no-test) NO_TEST=true; shift ;;
-        --no-pr) NO_PR=true; shift ;;
-        --no-review) NO_REVIEW=true; shift ;;
-        --auto-pr) AUTO_PR=true; shift ;;
-        -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
-        -v|--verbose) CW_VERBOSE=true; shift ;;
+        --resume) CW_RESUME=true; shift ;;
+        --from) require_arg "--from" "${2:-}"; CW_FROM_STAGE="$2"; shift 2 ;;
+        --no-worktree) NO_WORKTREE=true; NO_WORKTREE_SET=true; shift ;;
+        --no-test) NO_TEST=true; NO_TEST_SET=true; shift ;;
+        --no-pr) NO_PR=true; NO_PR_SET=true; shift ;;
+        --no-review) NO_REVIEW=true; NO_REVIEW_SET=true; shift ;;
+        --auto-pr) AUTO_PR=true; AUTO_PR_SET=true; shift ;;
+        -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; MODEL_SET=true; shift 2 ;;
+        -v|--verbose) CW_VERBOSE=true; VERBOSE_SET=true; shift ;;
         -h|--help) show_help; exit 0 ;;
         -*) log_error "Unknown option: $1"; show_help; exit 4 ;;
         *) log_error "Unexpected argument: $1"; show_help; exit 4 ;;
@@ -151,6 +178,20 @@ done
 check_jq || exit 4
 check_claude || exit 4
 
+# Validate --from requires --resume
+if [ -n "$CW_FROM_STAGE" ] && [ "$CW_RESUME" != "true" ]; then
+    log_error "--from requires --resume"
+    exit 4
+fi
+
+# Validate --from is a valid stage number
+if [ -n "$CW_FROM_STAGE" ]; then
+    if ! [[ "$CW_FROM_STAGE" =~ ^[1-9]$ ]]; then
+        log_error "--from must be a stage number between 1 and 9"
+        exit 4
+    fi
+fi
+
 # Validate arguments
 if [ ${#FEATURE_NAMES[@]} -eq 0 ]; then
     # Single feature mode
@@ -160,20 +201,25 @@ if [ ${#FEATURE_NAMES[@]} -eq 0 ]; then
         exit 4
     fi
 
-    if [ -z "$SINGLE_PROMPT" ] && [ -z "$SINGLE_SPEC" ]; then
+    if [ "$CW_RESUME" = "true" ]; then
+        # Resume mode: prompt/spec not required, will be read from state file
+        FEATURE_NAMES+=("$SINGLE_NAME")
+        FEATURE_MODES+=("resume")
+        FEATURE_VALUES+=("")
+    elif [ -z "$SINGLE_PROMPT" ] && [ -z "$SINGLE_SPEC" ]; then
         log_error "Either --prompt or --spec is required"
         show_help
         exit 4
-    fi
-
-    # Convert to multi-feature format (array of 1)
-    FEATURE_NAMES+=("$SINGLE_NAME")
-    if [ -n "$SINGLE_PROMPT" ]; then
-        FEATURE_MODES+=("prompt")
-        FEATURE_VALUES+=("$SINGLE_PROMPT")
     else
-        FEATURE_MODES+=("spec")
-        FEATURE_VALUES+=("$SINGLE_SPEC")
+        # Convert to multi-feature format (array of 1)
+        FEATURE_NAMES+=("$SINGLE_NAME")
+        if [ -n "$SINGLE_PROMPT" ]; then
+            FEATURE_MODES+=("prompt")
+            FEATURE_VALUES+=("$SINGLE_PROMPT")
+        else
+            FEATURE_MODES+=("spec")
+            FEATURE_VALUES+=("$SINGLE_SPEC")
+        fi
     fi
 fi
 
@@ -184,6 +230,7 @@ for i in "${!FEATURE_NAMES[@]}"; do
     log_info "  ${FEATURE_NAMES[$i]} (${FEATURE_MODES[$i]})"
 done
 log_info "Model: $CW_MODEL"
+log_info "Resume: $([ "$CW_RESUME" = true ] && echo "yes$([ -n "$CW_FROM_STAGE" ] && echo " (from stage $CW_FROM_STAGE)")" || echo "no")"
 log_info "Worktree: $([ "$NO_WORKTREE" = true ] && echo "disabled" || echo "enabled")"
 log_info "Tests: $([ "$NO_TEST" = true ] && echo "disabled" || echo "enabled")"
 log_info "Review: $([ "$NO_REVIEW" = true ] && echo "disabled" || echo "enabled")"
@@ -204,201 +251,391 @@ run_feature_pipeline() {
     local original_dir
     original_dir="$(pwd)"
     local work_dir="$original_dir"
+    local start_stage=1
 
     log_header "Pipeline: $feature_name"
 
-    # ─── Stage 1: Create Worktree ─────────────────────────────────────────
-    if [ "$NO_WORKTREE" = false ]; then
-        log_info "[$feature_name] Stage 1: Creating worktree..."
+    # ─── Resume Logic ─────────────────────────────────────────────────────
+    if [ "$CW_RESUME" = "true" ]; then
+        # Locate worktree
+        if [ "$NO_WORKTREE" = false ]; then
+            local worktree_dir=".worktrees/feature-${feature_name}"
+            if [ ! -d "$worktree_dir" ]; then
+                log_error "No worktree found for feature '$feature_name' at $worktree_dir"
+                log_info "Cannot resume — no previous run found"
+                return 1
+            fi
+            work_dir="$(cd "$worktree_dir" && pwd)"
+        fi
 
-        if ! create_worktree "$feature_name"; then
-            log_error "[$feature_name] Failed to create worktree"
+        # Read state file
+        if ! pipeline_state_exists "$work_dir"; then
+            log_error "No pipeline state file found in $work_dir"
+            log_info "Cannot resume — run the pipeline without --resume first"
             return 1
         fi
 
-        work_dir="$CW_WORKTREE_PATH"
-        cd "$work_dir"
-        log_success "[$feature_name] Worktree: $work_dir"
+        # Restore flags from state file (CLI overrides take precedence)
+        pipeline_read_flags "$work_dir"
+        mode="$RESUME_MODE"
+        value="$RESUME_VALUE"
+
+        # Determine resume point
+        if [ -n "$CW_FROM_STAGE" ]; then
+            start_stage="$CW_FROM_STAGE"
+            log_info "[$feature_name] Forced resume from stage $start_stage"
+        else
+            start_stage=$(pipeline_get_resume_stage "$work_dir")
+            if [ "$start_stage" = "done" ]; then
+                log_success "[$feature_name] Pipeline already completed — nothing to resume"
+                return 0
+            fi
+            log_info "[$feature_name] Resuming from stage $start_stage ($(_pipeline_stage_name "$start_stage"))"
+        fi
+
+        # cd into worktree for resumed runs
+        if [ "$NO_WORKTREE" = false ]; then
+            cd "$work_dir"
+        fi
     else
-        log_info "[$feature_name] Stage 1: Skipped (--no-worktree)"
+        # Fresh run — check for existing state file after worktree is resolved
+        # (state file check happens after stage 1 creates/locates the worktree)
+        :
+    fi
+
+    # ─── Stage 1: Create Worktree ─────────────────────────────────────────
+    if [ "$start_stage" -le 1 ]; then
+        if [ "$NO_WORKTREE" = false ]; then
+            pipeline_checkpoint "$work_dir" "1" "in_progress" 2>/dev/null || true
+            log_info "[$feature_name] Stage 1: Creating worktree..."
+
+            if ! create_worktree "$feature_name"; then
+                log_error "[$feature_name] Failed to create worktree"
+                pipeline_checkpoint "$work_dir" "1" "failed" 2>/dev/null || true
+                return 1
+            fi
+
+            work_dir="$CW_WORKTREE_PATH"
+            cd "$work_dir"
+            log_success "[$feature_name] Worktree: $work_dir"
+        else
+            log_info "[$feature_name] Stage 1: Skipped (--no-worktree)"
+        fi
+
+        # Initialize state file for fresh runs (now that work_dir is resolved)
+        if [ "$CW_RESUME" != "true" ]; then
+            if pipeline_state_exists "$work_dir"; then
+                log_error "Pipeline state file already exists in $work_dir"
+                log_info "Use --resume to continue, or delete $work_dir/$PIPELINE_STATE_FILE to restart"
+                cd "$original_dir"
+                return 1
+            fi
+            pipeline_state_init "$work_dir" "$feature_name" "$mode" "$value"
+        fi
+
+        if [ "$NO_WORKTREE" = false ]; then
+            pipeline_checkpoint "$work_dir" "1" "completed"
+        else
+            pipeline_checkpoint "$work_dir" "1" "skipped"
+        fi
+    else
+        log_info "[$feature_name] Stage 1: Already completed"
     fi
 
     # ─── Stage 2: Init (Spec + Plan) ─────────────────────────────────────
-    log_info "[$feature_name] Stage 2: Init (spec + plan)..."
+    if [ "$start_stage" -le 2 ]; then
+        pipeline_checkpoint "$work_dir" "2" "in_progress"
+        log_info "[$feature_name] Stage 2: Init (spec + plan)..."
 
-    local init_args=(-m "$CW_MODEL")
-    if [ "$CW_VERBOSE" = "true" ]; then
-        init_args+=(-v)
-    fi
+        # Idempotency: check if spec + tasks already exist
+        local skip_init=false
+        if [ "$CW_RESUME" = "true" ]; then
+            local has_spec=false
+            local has_tasks=false
+            if ls docs/specs/*.md 2>/dev/null | head -1 | grep -q .; then
+                has_spec=true
+            fi
+            if discover_session "$work_dir" 2>/dev/null; then
+                if _has_task_files 2>/dev/null; then
+                    has_tasks=true
+                fi
+            fi
+            if [ "$has_spec" = true ] && [ "$has_tasks" = true ]; then
+                log_info "[$feature_name] Spec and tasks already exist, skipping init"
+                skip_init=true
+            fi
+        fi
 
-    if [ "$mode" = "prompt" ]; then
-        init_args+=(--prompt "$value")
+        if [ "$skip_init" = false ]; then
+            local init_args=(-m "$CW_MODEL")
+            if [ "$CW_VERBOSE" = "true" ]; then
+                init_args+=(-v)
+            fi
+
+            if [ "$mode" = "prompt" ]; then
+                init_args+=(--prompt "$value")
+            else
+                init_args+=(--spec "$value")
+            fi
+
+            if ! "$SCRIPT_DIR/cw-init" "${init_args[@]}"; then
+                log_error "[$feature_name] Init failed"
+                pipeline_checkpoint "$work_dir" "2" "failed"
+                cd "$original_dir"
+                return 1
+            fi
+        fi
+
+        log_success "[$feature_name] Init completed"
+        pipeline_checkpoint "$work_dir" "2" "completed"
     else
-        init_args+=(--spec "$value")
+        log_info "[$feature_name] Stage 2: Already completed"
     fi
-
-    if ! "$SCRIPT_DIR/cw-init" "${init_args[@]}"; then
-        log_error "[$feature_name] Init failed"
-        cd "$original_dir"
-        return 1
-    fi
-
-    log_success "[$feature_name] Init completed"
 
     # ─── Stage 3: Execute Tasks ───────────────────────────────────────────
-    log_info "[$feature_name] Stage 3: Executing tasks..."
+    if [ "$start_stage" -le 3 ]; then
+        pipeline_checkpoint "$work_dir" "3" "in_progress"
+        log_info "[$feature_name] Stage 3: Executing tasks..."
 
-    local loop_args=(-d -m "$CW_MODEL")
-    if [ "$CW_VERBOSE" = "true" ]; then
-        loop_args+=(-v)
+        local loop_args=(-d -m "$CW_MODEL")
+        if [ "$CW_VERBOSE" = "true" ]; then
+            loop_args+=(-v)
+        fi
+
+        # cw-loop is already idempotent (checks is_complete on entry)
+        local stage3_ok=true
+        CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" "${loop_args[@]}" "$work_dir" || {
+            local loop_exit=$?
+            if [ "$loop_exit" -ne 0 ]; then
+                log_warning "[$feature_name] Task execution exited with code $loop_exit"
+                stage3_ok=false
+            fi
+        }
+
+        if [ "$stage3_ok" = true ]; then
+            log_success "[$feature_name] Task execution completed"
+            pipeline_checkpoint "$work_dir" "3" "completed"
+        else
+            log_warning "[$feature_name] Task execution had failures (continuing pipeline)"
+            pipeline_checkpoint "$work_dir" "3" "failed"
+        fi
+    else
+        log_info "[$feature_name] Stage 3: Already completed"
     fi
 
-    # Run non-interactively
-    CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" "${loop_args[@]}" "$work_dir" || {
-        local loop_exit=$?
-        # Exit code 0 = all done. Anything else might be partial progress.
-        if [ "$loop_exit" -ne 0 ]; then
-            log_warning "[$feature_name] Task execution exited with code $loop_exit"
-            # Continue pipeline — validation will catch issues
-        fi
-    }
-
-    log_success "[$feature_name] Task execution completed"
-
     # ─── Stage 4: Validate ────────────────────────────────────────────────
-    log_info "[$feature_name] Stage 4: Validation (first pass)..."
+    if [ "$start_stage" -le 4 ]; then
+        pipeline_checkpoint "$work_dir" "4" "in_progress"
+        log_info "[$feature_name] Stage 4: Validation (first pass)..."
 
-    # Discover session for validate invocation
-    discover_session "$work_dir" 2>/dev/null || true
+        discover_session "$work_dir" 2>/dev/null || true
 
-    local validate_prompt="Use the Skill tool to invoke 'cw-validate'.
+        local validate_prompt="Use the Skill tool to invoke 'cw-validate'.
 
 Run the 6-gate validation against the spec. This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
-    if invoke_claude "$validate_prompt" "$CW_MODEL"; then
-        log_success "[$feature_name] Validation passed"
+        if invoke_claude "$validate_prompt" "$CW_MODEL"; then
+            log_success "[$feature_name] Validation passed"
+            pipeline_checkpoint "$work_dir" "4" "completed"
+        else
+            log_warning "[$feature_name] Validation had issues (continuing pipeline)"
+            pipeline_checkpoint "$work_dir" "4" "failed"
+        fi
     else
-        log_warning "[$feature_name] Validation had issues (continuing pipeline)"
+        log_info "[$feature_name] Stage 4: Already completed"
     fi
 
     # ─── Stage 5: Code Review ────────────────────────────────────────────
-    if [ "$NO_REVIEW" = false ]; then
-        log_info "[$feature_name] Stage 5: Code review..."
+    if [ "$start_stage" -le 5 ]; then
+        if [ "$NO_REVIEW" = false ]; then
+            pipeline_checkpoint "$work_dir" "5" "in_progress"
+            log_info "[$feature_name] Stage 5: Code review..."
 
-        local review_prompt="Use the Skill tool to invoke 'cw-review'.
+            local review_prompt="Use the Skill tool to invoke 'cw-review'.
 
 Review all code changes on this branch against the spec and repository standards. Create FIX-REVIEW tasks for any blocking issues found.
 
 This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
-        if invoke_claude "$review_prompt" "$CW_MODEL"; then
-            log_success "[$feature_name] Code review completed"
+            if invoke_claude "$review_prompt" "$CW_MODEL"; then
+                log_success "[$feature_name] Code review completed"
 
-            # Execute any FIX tasks generated by review
-            local fix_count
-            fix_count=$(get_pending_fix_count 2>/dev/null || echo "0")
-            if [ "$fix_count" -gt 0 ]; then
-                log_info "[$feature_name] Executing $fix_count review fix task(s)..."
-                CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" -m "$CW_MODEL" "$work_dir" || true
+                local fix_count
+                fix_count=$(get_pending_fix_count 2>/dev/null || echo "0")
+                if [ "$fix_count" -gt 0 ]; then
+                    log_info "[$feature_name] Executing $fix_count review fix task(s)..."
+                    CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" -m "$CW_MODEL" "$work_dir" || true
+                fi
+                pipeline_checkpoint "$work_dir" "5" "completed"
+            else
+                log_warning "[$feature_name] Code review had issues (continuing)"
+                pipeline_checkpoint "$work_dir" "5" "failed"
             fi
         else
-            log_warning "[$feature_name] Code review had issues (continuing)"
+            log_info "[$feature_name] Stage 5: Skipped (--no-review)"
+            pipeline_checkpoint "$work_dir" "5" "skipped"
         fi
     else
-        log_info "[$feature_name] Stage 5: Skipped (--no-review)"
+        log_info "[$feature_name] Stage 5: Already completed"
     fi
 
-    # ─── Stage 6 & 7: Test Init + Test Loop ──────────────────────────────
-    if [ "$NO_TEST" = false ]; then
-        log_info "[$feature_name] Stage 6: Test init..."
+    # ─── Stage 6: Test Init ──────────────────────────────────────────────
+    if [ "$start_stage" -le 6 ]; then
+        if [ "$NO_TEST" = false ]; then
+            pipeline_checkpoint "$work_dir" "6" "in_progress"
+            log_info "[$feature_name] Stage 6: Test init..."
 
-        local test_init_args=(-m "$CW_MODEL")
-        if [ "$CW_VERBOSE" = "true" ]; then
-            test_init_args+=(-v)
-        fi
+            # Idempotency: check for existing TEST-* tasks
+            local skip_test_init=false
+            if discover_session "$work_dir" 2>/dev/null && _has_task_files 2>/dev/null; then
+                local test_task_count
+                test_task_count=$(_slurp_tasks '[.[] | select(.metadata.task_id // "" | test("^TEST"; "i"))] | length' 2>/dev/null || echo "0")
+                if [ "$test_task_count" -gt 0 ]; then
+                    log_info "[$feature_name] TEST tasks already exist ($test_task_count found), skipping test init"
+                    skip_test_init=true
+                fi
+            fi
 
-        # Use spec if available, otherwise describe the feature
-        if [ "$mode" = "spec" ]; then
-            test_init_args+=(--spec "$value")
+            if [ "$skip_test_init" = false ]; then
+                local test_init_args=(-m "$CW_MODEL")
+                if [ "$CW_VERBOSE" = "true" ]; then
+                    test_init_args+=(-v)
+                fi
+
+                if [ "$mode" = "spec" ]; then
+                    test_init_args+=(--spec "$value")
+                else
+                    test_init_args+=(--prompt "$value")
+                fi
+
+                if "$SCRIPT_DIR/cw-test-init" "${test_init_args[@]}"; then
+                    log_success "[$feature_name] Test init completed"
+                    pipeline_checkpoint "$work_dir" "6" "completed"
+                else
+                    log_warning "[$feature_name] Test init failed (continuing)"
+                    pipeline_checkpoint "$work_dir" "6" "failed"
+                fi
+            else
+                pipeline_checkpoint "$work_dir" "6" "completed"
+            fi
         else
-            test_init_args+=(--prompt "$value")
+            log_info "[$feature_name] Stage 6: Skipped (--no-test)"
+            pipeline_checkpoint "$work_dir" "6" "skipped"
         fi
+    else
+        log_info "[$feature_name] Stage 6: Already completed"
+    fi
 
-        if "$SCRIPT_DIR/cw-test-init" "${test_init_args[@]}"; then
-            log_success "[$feature_name] Test init completed"
-
+    # ─── Stage 7: Test Loop ──────────────────────────────────────────────
+    if [ "$start_stage" -le 7 ]; then
+        if [ "$NO_TEST" = false ]; then
+            pipeline_checkpoint "$work_dir" "7" "in_progress"
             log_info "[$feature_name] Stage 7: Test loop..."
+
             local test_loop_args=(-m "$CW_MODEL")
             if [ "$CW_VERBOSE" = "true" ]; then
                 test_loop_args+=(-v)
             fi
 
+            # cw-test-loop is already idempotent
+            local stage7_ok=true
             "$SCRIPT_DIR/cw-test-loop" "${test_loop_args[@]}" "$work_dir" || {
                 local test_exit=$?
                 log_warning "[$feature_name] Test loop exited with code $test_exit"
+                stage7_ok=false
             }
+            if [ "$stage7_ok" = true ]; then
+                pipeline_checkpoint "$work_dir" "7" "completed"
+            else
+                pipeline_checkpoint "$work_dir" "7" "failed"
+            fi
         else
-            log_warning "[$feature_name] Test init failed (continuing)"
+            log_info "[$feature_name] Stage 7: Skipped (--no-test)"
+            pipeline_checkpoint "$work_dir" "7" "skipped"
         fi
     else
-        log_info "[$feature_name] Stage 6-7: Skipped (--no-test)"
+        log_info "[$feature_name] Stage 7: Already completed"
     fi
 
     # ─── Stage 8: Re-Validate ────────────────────────────────────────────
-    log_info "[$feature_name] Stage 8: Final validation..."
+    if [ "$start_stage" -le 8 ]; then
+        pipeline_checkpoint "$work_dir" "8" "in_progress"
+        log_info "[$feature_name] Stage 8: Final validation..."
 
-    # Re-discover session (may have changed)
-    discover_session "$work_dir" 2>/dev/null || true
+        discover_session "$work_dir" 2>/dev/null || true
 
-    local revalidate_prompt="Use the Skill tool to invoke 'cw-validate'.
+        local revalidate_prompt="Use the Skill tool to invoke 'cw-validate'.
 
 Run the final 6-gate validation against the spec. This is the last check before PR creation. This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
-    if invoke_claude "$revalidate_prompt" "$CW_MODEL"; then
-        log_success "[$feature_name] Final validation passed"
+        if invoke_claude "$revalidate_prompt" "$CW_MODEL"; then
+            log_success "[$feature_name] Final validation passed"
+            pipeline_checkpoint "$work_dir" "8" "completed"
+        else
+            log_warning "[$feature_name] Final validation had issues"
+            pipeline_checkpoint "$work_dir" "8" "failed"
+        fi
     else
-        log_warning "[$feature_name] Final validation had issues"
+        log_info "[$feature_name] Stage 8: Already completed"
     fi
 
     # ─── Stage 9: PR Creation ────────────────────────────────────────────
-    if [ "$NO_PR" = false ]; then
-        log_info "[$feature_name] Stage 9: PR creation..."
+    if [ "$start_stage" -le 9 ]; then
+        if [ "$NO_PR" = false ]; then
+            pipeline_checkpoint "$work_dir" "9" "in_progress"
+            log_info "[$feature_name] Stage 9: PR creation..."
 
-        if [ "$AUTO_PR" = true ] || [ "${CW_NON_INTERACTIVE}" = "true" ]; then
-            local pr_prompt="Create a pull request for this feature branch using 'gh pr create'.
+            # Idempotency: check if PR already exists
+            local stage9_ok=true
+            local existing_pr
+            existing_pr=$(gh pr list --head "feature/${feature_name}" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+            if [ -n "$existing_pr" ]; then
+                log_info "[$feature_name] PR #$existing_pr already exists, skipping creation"
+            elif [ "$AUTO_PR" = true ] || [ "${CW_NON_INTERACTIVE}" = "true" ]; then
+                local pr_prompt="Create a pull request for this feature branch using 'gh pr create'.
 
 Summarize all changes, reference the spec, and include a test plan. Use a descriptive title and body.
 
 This is running non-interactively — create the PR without asking for confirmation."
 
-            if invoke_claude "$pr_prompt" "$CW_MODEL"; then
-                log_success "[$feature_name] PR created"
-            else
-                log_warning "[$feature_name] PR creation failed"
-            fi
-        else
-            # Interactive PR — pause for user
-            echo ""
-            echo -e "${YELLOW}[$feature_name] Ready to create PR.${NC}"
-            echo "Press Enter to create PR, or 's' to skip..."
-            read -r pr_action
-
-            if [ "$pr_action" != "s" ] && [ "$pr_action" != "S" ]; then
-                local pr_prompt="Create a pull request for this feature branch using 'gh pr create'.
-
-Summarize all changes, reference the spec, and include a test plan. Use a descriptive title and body."
-
                 if invoke_claude "$pr_prompt" "$CW_MODEL"; then
                     log_success "[$feature_name] PR created"
                 else
                     log_warning "[$feature_name] PR creation failed"
+                    stage9_ok=false
                 fi
             else
-                log_info "[$feature_name] PR creation skipped"
+                echo ""
+                echo -e "${YELLOW}[$feature_name] Ready to create PR.${NC}"
+                echo "Press Enter to create PR, or 's' to skip..."
+                read -r pr_action
+
+                if [ "$pr_action" != "s" ] && [ "$pr_action" != "S" ]; then
+                    local pr_prompt="Create a pull request for this feature branch using 'gh pr create'.
+
+Summarize all changes, reference the spec, and include a test plan. Use a descriptive title and body."
+
+                    if invoke_claude "$pr_prompt" "$CW_MODEL"; then
+                        log_success "[$feature_name] PR created"
+                    else
+                        log_warning "[$feature_name] PR creation failed"
+                        stage9_ok=false
+                    fi
+                else
+                    log_info "[$feature_name] PR creation skipped"
+                fi
             fi
+            if [ "$stage9_ok" = true ]; then
+                pipeline_checkpoint "$work_dir" "9" "completed"
+            else
+                pipeline_checkpoint "$work_dir" "9" "failed"
+            fi
+        else
+            log_info "[$feature_name] Stage 9: Skipped (--no-pr)"
+            pipeline_checkpoint "$work_dir" "9" "skipped"
         fi
     else
-        log_info "[$feature_name] Stage 9: Skipped (--no-pr)"
+        log_info "[$feature_name] Stage 9: Already completed"
     fi
 
     # Return to original directory

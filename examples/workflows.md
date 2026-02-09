@@ -39,8 +39,7 @@ End-to-end examples combining skills and shell scripts.
 # Check what failed
 ./bin/cw-status --failed
 
-# Reset and retry
-./bin/cw-reset --all-failed
+# Re-run — Claude will pick up failed tasks and retry
 ./bin/cw-loop --verbose
 ```
 

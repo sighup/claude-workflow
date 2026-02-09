@@ -124,7 +124,7 @@ fi
 
 # Show spec path if available
 if [ -d "$CW_TASKS_DIR" ]; then
-    SPEC_PATH=$(jq -rs '[.[].metadata.spec_path // empty] | first // empty' "$CW_TASKS_DIR"/*.json 2>/dev/null)
+    SPEC_PATH=$(_slurp_tasks '[.[].metadata.spec_path // empty] | first // empty' 2>/dev/null)
     if [ -n "$SPEC_PATH" ]; then
         echo -e "  Spec: ${CYAN}$SPEC_PATH${NC}"
         echo ""

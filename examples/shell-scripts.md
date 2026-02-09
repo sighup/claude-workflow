@@ -160,17 +160,3 @@ Check task progress. Reads task files directly — no Claude invocation needed.
 ./bin/cw-status /path/to/project
 ```
 
-## cw-reset
-
-Reset failed or stuck tasks. Operates directly on task files — no Claude invocation needed.
-
-```bash
-# Reset specific tasks by ID
-./bin/cw-reset T01 T03
-
-# Reset all failed tasks
-./bin/cw-reset --all-failed
-
-# Reset stuck in_progress tasks (likely abandoned)
-./bin/cw-reset --stuck
-```
