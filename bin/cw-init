@@ -65,9 +65,9 @@ show_help() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --prompt) INPUT_MODE="prompt"; INPUT_VALUE="$2"; shift 2 ;;
-        --spec) INPUT_MODE="spec"; INPUT_VALUE="$2"; shift 2 ;;
-        -m|--model) CW_MODEL="$2"; shift 2 ;;
+        --prompt) require_arg "--prompt" "${2:-}"; INPUT_MODE="prompt"; INPUT_VALUE="$2"; shift 2 ;;
+        --spec) require_arg "--spec" "${2:-}"; INPUT_MODE="spec"; INPUT_VALUE="$2"; shift 2 ;;
+        -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
         -v|--verbose) CW_VERBOSE=true; shift ;;
         -h|--help) show_help; exit 0 ;;
         -*) log_error "Unknown option: $1"; show_help; exit 4 ;;
@@ -171,16 +171,20 @@ log_success "Plan generation completed"
 if discover_session; then
     log_header "Init Complete"
     log_info "Spec: $SPEC_PATH"
-    log_info "Session: $CW_SESSION_ID"
+    if [ -n "$CW_TASK_LIST_ID" ]; then
+        log_info "Task list: $CW_TASK_LIST_ID"
+    else
+        log_info "Session: $CW_SESSION_ID"
+    fi
     print_task_status
     show_task_list
 
     echo ""
     echo -e "${GREEN}Ready for execution.${NC}"
-    echo "  Autonomous:   ./scripts/cw-loop"
-    echo "  Parallel:     ./scripts/cw-loop -d"
-    echo "  Interactive:  ./scripts/cw-loop-interactive"
-    echo "  Full pipeline: ./scripts/cw-pipeline"
+    echo "  Autonomous:   ./bin/cw-loop"
+    echo "  Parallel:     ./bin/cw-loop -d"
+    echo "  Interactive:  ./bin/cw-loop-interactive"
+    echo "  Full pipeline: ./bin/cw-pipeline"
 else
     log_warning "Could not discover session. Tasks may still have been created."
     log_info "Run 'cw-status' to check."

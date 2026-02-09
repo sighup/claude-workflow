@@ -71,9 +71,9 @@ show_help() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -m|--model) CW_MODEL="$2"; shift 2 ;;
-        -n|--max-iter) CW_MAX_ITERATIONS="$2"; shift 2 ;;
-        -s|--sleep) CW_SLEEP="$2"; shift 2 ;;
+        -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
+        -n|--max-iter) require_arg "--max-iter" "${2:-}"; CW_MAX_ITERATIONS="$2"; shift 2 ;;
+        -s|--sleep) require_arg "--sleep" "${2:-}"; CW_SLEEP="$2"; shift 2 ;;
         -d|--dispatch) USE_DISPATCH=true; shift ;;
         -v|--verbose) CW_VERBOSE=true; shift ;;
         -h|--help) show_help; exit 0 ;;

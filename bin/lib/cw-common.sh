@@ -70,6 +70,7 @@ CLAUDE_PROJECTS_DIR="$CLAUDE_DIR/projects"
 
 # Session state (populated by discover_session)
 CW_SESSION_ID=""
+CW_TASK_LIST_ID=""
 CW_TASKS_DIR=""
 
 # =============================================================================
@@ -128,7 +129,6 @@ invoke_claude() {
         ATTEMPT=$((ATTEMPT + 1))
 
         local EXIT_CODE=0
-        local OUTPUT
         local TMPFILE
         TMPFILE=$(mktemp)
 
@@ -178,11 +178,65 @@ encode_project_path() {
     echo "$path" | sed 's|^/|-|; s|/|-|g'
 }
 
+# Resolve CLAUDE_CODE_TASK_LIST_ID from env or project settings
+# Usage: _resolve_task_list_id project_path
+# Prints the task list ID if found, empty string otherwise
+_resolve_task_list_id() {
+    local project_path="$1"
+
+    # 1. Environment variable (highest priority)
+    if [ -n "${CLAUDE_CODE_TASK_LIST_ID:-}" ]; then
+        echo "$CLAUDE_CODE_TASK_LIST_ID"
+        return 0
+    fi
+
+    # 2. settings.local.json
+    local local_settings="$project_path/.claude/settings.local.json"
+    if [ -f "$local_settings" ]; then
+        local val
+        val=$(jq -r '.env.CLAUDE_CODE_TASK_LIST_ID // empty' "$local_settings" 2>/dev/null)
+        if [ -n "$val" ]; then
+            echo "$val"
+            return 0
+        fi
+    fi
+
+    # 3. settings.json
+    local settings="$project_path/.claude/settings.json"
+    if [ -f "$settings" ]; then
+        local val
+        val=$(jq -r '.env.CLAUDE_CODE_TASK_LIST_ID // empty' "$settings" 2>/dev/null)
+        if [ -n "$val" ]; then
+            echo "$val"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 # Find the session ID for a project that has tasks
 # Usage: discover_session [project_path]
-# Sets: CW_SESSION_ID, CW_TASKS_DIR
+# Sets: CW_SESSION_ID, CW_TASK_LIST_ID, CW_TASKS_DIR
 discover_session() {
     local project_path="${1:-$(pwd)}"
+
+    # Fast path: check for CLAUDE_CODE_TASK_LIST_ID
+    local task_list_id
+    task_list_id=$(_resolve_task_list_id "$project_path") || true
+    if [ -n "$task_list_id" ]; then
+        local tl_dir="$CLAUDE_TASKS_DIR/$task_list_id"
+        if [ -d "$tl_dir" ] && [ -n "$(ls -A "$tl_dir" 2>/dev/null)" ]; then
+            CW_TASK_LIST_ID="$task_list_id"
+            CW_TASKS_DIR="$tl_dir"
+            log_info "Task list: $CW_TASK_LIST_ID"
+            log_info "Tasks dir: $CW_TASKS_DIR"
+            return 0
+        fi
+        # Dir empty or missing — fall through to session-based lookup
+    fi
+
+    # Session-based lookup (original path)
     local encoded_path
     encoded_path=$(encode_project_path "$project_path")
 
@@ -221,12 +275,27 @@ discover_session() {
 # Task Helpers (Direct File Access)
 # =============================================================================
 
+# Check if task dir has JSON files (call after directory guard)
+_has_task_files() {
+    local files=("$CW_TASKS_DIR"/*.json)
+    [ -f "${files[0]}" ]
+}
+
+# Validate that a flag requiring a value actually received one
+require_arg() {
+    if [ -z "${2:-}" ]; then
+        log_error "$1 requires a value"
+        exit 4
+    fi
+}
+
 # Read all tasks and output as JSON array
 get_all_tasks() {
     if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
         echo "[]"
         return 1
     fi
+    _has_task_files || { echo "[]"; return 1; }
 
     # Use jq to properly merge all task files into a single array
     jq -s '.' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "[]"
@@ -239,6 +308,7 @@ get_pending_count() {
         echo "0"
         return
     fi
+    _has_task_files || { echo "0"; return; }
 
     # Single jq call: compute completed IDs, then count pending unblocked
     jq -s '
@@ -257,6 +327,7 @@ get_next_task_id() {
         echo ""
         return
     fi
+    _has_task_files || { echo ""; return; }
 
     # Single jq call: compute completed IDs, then find first pending unblocked
     jq -rs '
@@ -274,6 +345,7 @@ is_complete() {
     if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
         return 1
     fi
+    _has_task_files || return 1
 
     local result
     result=$(jq -s '
@@ -290,6 +362,7 @@ get_completed_count() {
         echo "0"
         return
     fi
+    _has_task_files || { echo "0"; return; }
 
     jq -s '[.[] | select(.status == "completed")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
 }
@@ -301,6 +374,7 @@ get_pending_fix_count() {
         echo "0"
         return
     fi
+    _has_task_files || { echo "0"; return; }
 
     jq -s '[.[] | select(
         (.subject | test("^FIX"; "i")) or
@@ -315,6 +389,7 @@ get_task_counts() {
         echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'
         return
     fi
+    _has_task_files || { echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'; return; }
 
     jq -s '{
         total: length,
@@ -380,6 +455,7 @@ show_task_list() {
         log_warning "No tasks directory found."
         return 1
     fi
+    _has_task_files || { log_warning "No tasks found."; return 1; }
 
     local count
     count=$(ls "$CW_TASKS_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
@@ -405,6 +481,7 @@ get_task_subject() {
         echo ""
         return
     fi
+    _has_task_files || { echo ""; return; }
 
     jq -rs --arg id "$task_id" '.[] | select(.id == $id) | .subject' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
 }
@@ -433,11 +510,19 @@ create_worktree() {
     local worktree_dir=".worktrees/feature-${feature_name}"
     local branch_name="feature/${feature_name}"
 
-    # Ensure .worktrees is gitignored
+    # Ensure .worktrees is gitignored (with lock to prevent races)
+    local lockfile=".git/cw-gitignore.lock"
     if ! git check-ignore -q .worktrees 2>/dev/null; then
-        echo ".worktrees/" >> .gitignore
-        git add .gitignore
-        git commit -m "chore: add .worktrees to gitignore"
+        # Simple lock: try to create atomically
+        if (set -o noclobber; echo $$ > "$lockfile") 2>/dev/null; then
+            echo ".worktrees/" >> .gitignore
+            git add .gitignore
+            git commit -m "chore: add .worktrees to gitignore" -- .gitignore 2>/dev/null || true
+            rm -f "$lockfile"
+        else
+            # Another process is handling it — wait briefly
+            sleep 2
+        fi
     fi
 
     # Check for existing worktree
