@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.0.0 (2026-02-09)
+
+### Refactoring
+
+- Move CLI tools to bin/, harden cw-integration, add review/testing skills
+  ([#11](https://github.com/sighup/claude-workflow/pull/11),
+  [`5b8e56b`](https://github.com/sighup/claude-workflow/commit/5b8e56b6be531a436573d0004e3c90c76140370d))
+
+
 ## v1.8.0 (2026-02-09)
 
 ### Documentation
