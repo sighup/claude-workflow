@@ -181,10 +181,10 @@ if discover_session; then
 
     echo ""
     echo -e "${GREEN}Ready for execution.${NC}"
-    echo "  Autonomous:   ./scripts/cw-loop"
-    echo "  Parallel:     ./scripts/cw-loop -d"
-    echo "  Interactive:  ./scripts/cw-loop-interactive"
-    echo "  Full pipeline: ./scripts/cw-pipeline"
+    echo "  Autonomous:   ./bin/cw-loop"
+    echo "  Parallel:     ./bin/cw-loop -d"
+    echo "  Interactive:  ./bin/cw-loop-interactive"
+    echo "  Full pipeline: ./bin/cw-pipeline"
 else
     log_warning "Could not discover session. Tasks may still have been created."
     log_info "Run 'cw-status' to check."

@@ -38,7 +38,7 @@ Each step can also be run independently. `/cw-execute` handles single-task execu
 ### Full Pipeline (one command, unattended)
 
 ```bash
-./scripts/cw-pipeline --prompt "Build JWT authentication" --name auth
+./bin/cw-pipeline --prompt "Build JWT authentication" --name auth
 ```
 
 Orchestrates the full lifecycle in a git worktree:

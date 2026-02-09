@@ -157,7 +157,7 @@ if discover_session 2>/dev/null; then
 
     echo ""
     echo -e "${GREEN}Test tasks created.${NC}"
-    echo "  Run tests: ./scripts/cw-test-loop"
+    echo "  Run tests: ./bin/cw-test-loop"
 else
     log_warning "Could not discover session. Check task board manually."
 fi

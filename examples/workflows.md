@@ -16,38 +16,38 @@ End-to-end examples combining skills and shell scripts.
 
 ```bash
 # From terminal — single command does everything
-./scripts/cw-pipeline --prompt "Build JWT authentication" --name auth
+./bin/cw-pipeline --prompt "Build JWT authentication" --name auth
 ```
 
 ## Plan first, execute later
 
 ```bash
 # Generate spec + plan, review before executing
-./scripts/cw-init --prompt "Build JWT authentication"
-./scripts/cw-status --list              # Review the task plan
+./bin/cw-init --prompt "Build JWT authentication"
+./bin/cw-status --list              # Review the task plan
 
 # Execute when ready
-./scripts/cw-loop --dispatch --verbose
+./bin/cw-loop --dispatch --verbose
 
 # Validate
-./scripts/cw-loop-interactive           # Or use cw-loop for unattended
+./bin/cw-loop-interactive           # Or use cw-loop for unattended
 ```
 
 ## Recover from failures
 
 ```bash
 # Check what failed
-./scripts/cw-status --failed
+./bin/cw-status --failed
 
 # Reset and retry
-./scripts/cw-reset --all-failed
-./scripts/cw-loop --verbose
+./bin/cw-reset --all-failed
+./bin/cw-loop --verbose
 ```
 
 ## Parallel features (unattended)
 
 ```bash
-./scripts/cw-pipeline \
+./bin/cw-pipeline \
   --feature "auth:prompt:Build JWT authentication" \
   --feature "billing:prompt:Add Stripe billing integration" \
   --feature "search:prompt:Full-text search with Elasticsearch"
