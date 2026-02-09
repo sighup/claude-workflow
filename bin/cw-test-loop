@@ -153,31 +153,18 @@ all_tests_passed() {
     [ "$total" -gt 0 ] && [ "$failed" -eq 0 ] && [ "$total" -eq "$passed" ]
 }
 
-# Reset failed test tasks to pending for re-run
-reset_failed_tests() {
-    if [ -z "$CW_TASKS_DIR" ] || [ ! -d "$CW_TASKS_DIR" ]; then
-        return
-    fi
+# Reset failed test tasks to pending via Claude (TaskUpdate)
+reset_failed_tests_via_claude() {
+    log_info "Asking Claude to reset failed test tasks via TaskUpdate..."
 
-    local reset_count=0
-    for task_file in "$CW_TASKS_DIR"/*.json; do
-        [ -f "$task_file" ] || continue
+    local reset_prompt="Reset all failed test tasks back to pending so they can be re-executed in the next cycle.
 
-        # Match test tasks by metadata.test_status or subject/task_id prefix
-        local is_test test_status
-        is_test=$(jq '(.metadata.test_status != null) or (.metadata.test_type == "e2e" and .metadata.test_suite != true) or (.subject | test("^TEST"; "i")) or ((.metadata.task_id // "") | test("^TEST"; "i"))' "$task_file" 2>/dev/null)
-        test_status=$(jq -r '.metadata.test_status // .status' "$task_file" 2>/dev/null)
+Use TaskList to find test tasks (subjects starting with TEST or metadata.test_type == \"e2e\") that are NOT in pending or completed status.
+For each one, call TaskUpdate to set status back to \"pending\" and set metadata.test_status to \"pending\" and metadata.fix_attempt to 0.
 
-        if [ "$is_test" = "true" ] && [ "$test_status" != "passed" ] && [ "$test_status" != "pending" ]; then
-            # Reset status and test_status to pending
-            jq '.status = "pending" | .metadata.test_status = "pending" | .metadata.fix_attempt = 0' "$task_file" > "${task_file}.tmp" && mv "${task_file}.tmp" "$task_file"
-            reset_count=$((reset_count + 1))
-        fi
-    done
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
-    if [ "$reset_count" -gt 0 ]; then
-        log_info "Reset $reset_count failed test task(s) to pending"
-    fi
+    invoke_claude "$reset_prompt" "$CW_MODEL" || log_warning "Failed to reset test tasks via Claude"
 }
 
 # =============================================================================
@@ -301,8 +288,7 @@ This is running non-interactively — proceed autonomously without using AskUser
 
     # Reset failed tests for next cycle
     if [ "$CYCLE" -lt "$CW_MAX_CYCLES" ]; then
-        log_info "Resetting failed test tasks for next cycle..."
-        reset_failed_tests
+        reset_failed_tests_via_claude
     fi
 done
 
