@@ -284,15 +284,9 @@ Run the 6-gate validation against the spec. This is running non-interactively â€
     if [ "$NO_REVIEW" = false ]; then
         log_info "[$feature_name] Stage 5: Code review..."
 
-        local review_prompt="Review all code changes on this branch for bugs, logic errors, security vulnerabilities, and code quality issues.
+        local review_prompt="Use the Skill tool to invoke 'cw-review'.
 
-Run: git diff main...HEAD
-
-If you find issues that should be fixed:
-1. Create FIX-* tasks on the task board describing each fix needed
-2. Include the file path, line numbers, and a clear description of the issue and fix
-
-If no issues found, report that the code review passed.
+Review all code changes on this branch against the spec and repository standards. Create FIX-REVIEW tasks for any blocking issues found.
 
 This is running non-interactively â€” proceed autonomously without using AskUserQuestion."
 
