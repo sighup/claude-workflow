@@ -215,6 +215,19 @@ _resolve_task_list_id() {
     return 1
 }
 
+# Warn once about any corrupt JSON task files in CW_TASKS_DIR
+_warn_corrupt_tasks() {
+    [ -n "$CW_TASKS_DIR" ] && [ -d "$CW_TASKS_DIR" ] || return 0
+    local bad_files=()
+    for f in "$CW_TASKS_DIR"/*.json; do
+        [ -f "$f" ] || continue
+        jq empty "$f" 2>/dev/null || bad_files+=("$(basename "$f")")
+    done
+    if [ ${#bad_files[@]} -gt 0 ]; then
+        log_warning "${#bad_files[@]} corrupt task file(s) will be skipped: ${bad_files[*]}"
+    fi
+}
+
 # Find the session ID for a project that has tasks
 # Usage: discover_session [project_path]
 # Sets: CW_SESSION_ID, CW_TASK_LIST_ID, CW_TASKS_DIR
@@ -226,14 +239,17 @@ discover_session() {
     task_list_id=$(_resolve_task_list_id "$project_path") || true
     if [ -n "$task_list_id" ]; then
         local tl_dir="$CLAUDE_TASKS_DIR/$task_list_id"
-        if [ -d "$tl_dir" ] && [ -n "$(ls -A "$tl_dir" 2>/dev/null)" ]; then
+        # Check for actual .json task files, not just any files (e.g. .DS_Store)
+        local tl_json=("$tl_dir"/*.json)
+        if [ -d "$tl_dir" ] && [ -f "${tl_json[0]}" ]; then
             CW_TASK_LIST_ID="$task_list_id"
             CW_TASKS_DIR="$tl_dir"
             log_info "Task list: $CW_TASK_LIST_ID"
             log_info "Tasks dir: $CW_TASKS_DIR"
+            _warn_corrupt_tasks
             return 0
         fi
-        # Dir empty or missing — fall through to session-based lookup
+        # No .json task files — fall through to session-based lookup
     fi
 
     # Session-based lookup (original path)
@@ -268,6 +284,7 @@ discover_session() {
 
     log_info "Session: $CW_SESSION_ID"
     log_info "Tasks dir: $CW_TASKS_DIR"
+    _warn_corrupt_tasks
     return 0
 }
 
@@ -279,6 +296,16 @@ discover_session() {
 _has_task_files() {
     local files=("$CW_TASKS_DIR"/*.json)
     [ -f "${files[0]}" ]
+}
+
+# Slurp valid task JSON files into an array, skipping corrupt files.
+# One malformed file must not break all task operations.
+# Usage: _slurp_tasks '.[] | .status'  (pass jq filter directly)
+_slurp_tasks() {
+    local filter="${1:-.}"
+    for f in "$CW_TASKS_DIR"/*.json; do
+        jq -c '.' "$f" 2>/dev/null
+    done | jq -s "$filter" 2>/dev/null
 }
 
 # Validate that a flag requiring a value actually received one
@@ -297,8 +324,7 @@ get_all_tasks() {
     fi
     _has_task_files || { echo "[]"; return 1; }
 
-    # Use jq to properly merge all task files into a single array
-    jq -s '.' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "[]"
+    _slurp_tasks '.' || echo "[]"
 }
 
 # Get count of pending unblocked tasks
@@ -310,15 +336,14 @@ get_pending_count() {
     fi
     _has_task_files || { echo "0"; return; }
 
-    # Single jq call: compute completed IDs, then count pending unblocked
-    jq -s '
+    _slurp_tasks '
         . as $all |
         [$all[] | select(.status == "completed") | .id] as $completed |
         [$all[] | select(
             .status == "pending" and
             ((.blockedBy // []) - $completed | length == 0)
         )] | length
-    ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
+    ' || echo "0"
 }
 
 # Get next task ID (first pending unblocked task)
@@ -329,15 +354,14 @@ get_next_task_id() {
     fi
     _has_task_files || { echo ""; return; }
 
-    # Single jq call: compute completed IDs, then find first pending unblocked
-    jq -rs '
+    _slurp_tasks '
         . as $all |
         [$all[] | select(.status == "completed") | .id] as $completed |
         [$all[] | select(
             .status == "pending" and
             ((.blockedBy // []) - $completed | length == 0)
         )] | sort_by(.id | tonumber? // .id) | .[0].id // empty
-    ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
+    ' || echo ""
 }
 
 # Check if all tasks are complete
@@ -348,10 +372,10 @@ is_complete() {
     _has_task_files || return 1
 
     local result
-    result=$(jq -s '
+    result=$(_slurp_tasks '
         ([.[] | select(.status == "pending")] | length == 0) and
         ([.[] | select(.status == "in_progress")] | length == 0)
-    ' "$CW_TASKS_DIR"/*.json 2>/dev/null)
+    ')
 
     [ "$result" = "true" ]
 }
@@ -364,7 +388,7 @@ get_completed_count() {
     fi
     _has_task_files || { echo "0"; return; }
 
-    jq -s '[.[] | select(.status == "completed")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
+    _slurp_tasks '[.[] | select(.status == "completed")] | length' || echo "0"
 }
 
 # Count pending FIX-* tasks
@@ -376,11 +400,11 @@ get_pending_fix_count() {
     fi
     _has_task_files || { echo "0"; return; }
 
-    jq -s '[.[] | select(
+    _slurp_tasks '[.[] | select(
         (.subject | test("^FIX"; "i")) or
         (.metadata.task_id // "" | test("^FIX"; "i")) or
         (.metadata.fix_task_id != null)
-    ) | select(.status == "pending")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
+    ) | select(.status == "pending")] | length' || echo "0"
 }
 
 # Get task counts by status
@@ -391,13 +415,13 @@ get_task_counts() {
     fi
     _has_task_files || { echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'; return; }
 
-    jq -s '{
+    _slurp_tasks '{
         total: length,
         completed: [.[] | select(.status=="completed")] | length,
         pending: [.[] | select(.status=="pending")] | length,
         in_progress: [.[] | select(.status=="in_progress")] | length,
         failed: [.[] | select(.metadata.failure_count > 0)] | length
-    }' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'
+    }' || echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'
 }
 
 # =============================================================================
@@ -457,21 +481,13 @@ show_task_list() {
     fi
     _has_task_files || { log_warning "No tasks found."; return 1; }
 
-    local count
-    count=$(ls "$CW_TASKS_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
-
-    if [ "$count" -eq 0 ]; then
-        log_warning "No tasks found."
-        return 1
-    fi
-
-    jq -rs '.[] |
+    _slurp_tasks '.[] |
         if .status == "completed" then "  \u001b[32m[✓]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         elif .metadata.failure_count > 0 then "  \u001b[31m[✗]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         elif .status == "in_progress" then "  \u001b[33m[~]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         else "  [ ] \(.metadata.task_id // .id): \(.subject)"
         end
-    ' "$CW_TASKS_DIR"/*.json 2>/dev/null | sort
+    ' 2>/dev/null | sort
 }
 
 # Get task subject by ID
@@ -483,7 +499,7 @@ get_task_subject() {
     fi
     _has_task_files || { echo ""; return; }
 
-    jq -rs --arg id "$task_id" '.[] | select(.id == $id) | .subject' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
+    jq -r '.subject' "$CW_TASKS_DIR/$task_id.json" 2>/dev/null || echo ""
 }
 
 # =============================================================================
@@ -527,8 +543,15 @@ create_worktree() {
 
     # Check for existing worktree
     if [ -d "$worktree_dir" ]; then
-        log_error "Worktree already exists: $worktree_dir"
-        return 1
+        if [ "${CW_RESUME:-false}" = "true" ]; then
+            log_info "Reusing existing worktree: $worktree_dir"
+            CW_WORKTREE_PATH="$(cd "$worktree_dir" && pwd)"
+            return 0
+        else
+            log_error "Worktree already exists: $worktree_dir"
+            log_info "Use --resume to continue from where you left off"
+            return 1
+        fi
     fi
 
     # Create worktree (use existing branch if it exists)
@@ -733,4 +756,188 @@ get_pipeline_results() {
     echo ""
 
     [ "$failed" -eq 0 ]
+}
+
+# =============================================================================
+# Pipeline State Management (Resumable Pipeline)
+# =============================================================================
+
+PIPELINE_STATE_FILE=".claude/pipeline-state.json"
+
+# Stage name lookup
+_pipeline_stage_name() {
+    case "$1" in
+        1) echo "worktree" ;;
+        2) echo "init" ;;
+        3) echo "execute" ;;
+        4) echo "validate" ;;
+        5) echo "review" ;;
+        6) echo "test-init" ;;
+        7) echo "test-loop" ;;
+        8) echo "revalidate" ;;
+        9) echo "pr" ;;
+        *) echo "unknown" ;;
+    esac
+}
+
+# Initialize pipeline state file
+# Usage: pipeline_state_init WORK_DIR FEATURE_NAME MODE VALUE
+pipeline_state_init() {
+    local work_dir="$1"
+    local feature_name="$2"
+    local mode="$3"
+    local value="$4"
+    local state_file="$work_dir/$PIPELINE_STATE_FILE"
+
+    mkdir -p "$(dirname "$state_file")"
+
+    local stages='{}'
+    for i in $(seq 1 9); do
+        stages=$(echo "$stages" | jq --arg n "$i" --arg name "$(_pipeline_stage_name "$i")" \
+            '.[$n] = {"name": $name, "status": "pending", "started_at": null, "completed_at": null}')
+    done
+
+    jq -n \
+        --arg fn "$feature_name" \
+        --arg m "$mode" \
+        --arg v "$value" \
+        --argjson stages "$stages" \
+        --argjson no_test "${NO_TEST:-false}" \
+        --argjson no_review "${NO_REVIEW:-false}" \
+        --argjson no_pr "${NO_PR:-false}" \
+        --argjson no_worktree "${NO_WORKTREE:-false}" \
+        --argjson auto_pr "${AUTO_PR:-false}" \
+        --arg model "${CW_MODEL:-sonnet}" \
+        --argjson verbose "${CW_VERBOSE:-false}" \
+        '{
+            version: 1,
+            feature_name: $fn,
+            mode: $m,
+            value: $v,
+            current_stage: 0,
+            stages: $stages,
+            flags: {
+                no_test: $no_test,
+                no_review: $no_review,
+                no_pr: $no_pr,
+                no_worktree: $no_worktree,
+                auto_pr: $auto_pr,
+                model: $model,
+                verbose: $verbose
+            },
+            created_at: (now | todate),
+            updated_at: (now | todate)
+        }' > "$state_file"
+
+    log_info "Pipeline state initialized: $state_file"
+}
+
+# Update a stage's status with timestamp
+# Usage: pipeline_checkpoint WORK_DIR STAGE_NUM STATUS
+pipeline_checkpoint() {
+    local work_dir="$1"
+    local stage_num="$2"
+    local new_status="$3"
+    local state_file="$work_dir/$PIPELINE_STATE_FILE"
+
+    if [ ! -f "$state_file" ]; then
+        log_warning "No pipeline state file found at $state_file"
+        return 1
+    fi
+
+    local ts_field
+    case "$new_status" in
+        in_progress) ts_field="started_at" ;;
+        completed|skipped) ts_field="completed_at" ;;
+        *) ts_field="" ;;
+    esac
+
+    local tmp_file
+    tmp_file=$(mktemp)
+
+    if [ -n "$ts_field" ]; then
+        jq --arg n "$stage_num" --arg s "$new_status" --arg tf "$ts_field" \
+            '.stages[$n].status = $s | .stages[$n][$tf] = (now | todate) | .current_stage = ($n | tonumber) | .updated_at = (now | todate)' \
+            "$state_file" > "$tmp_file" && mv "$tmp_file" "$state_file"
+    else
+        jq --arg n "$stage_num" --arg s "$new_status" \
+            '.stages[$n].status = $s | .current_stage = ($n | tonumber) | .updated_at = (now | todate)' \
+            "$state_file" > "$tmp_file" && mv "$tmp_file" "$state_file"
+    fi
+}
+
+# Get the first stage that needs to run (not completed/skipped)
+# Usage: pipeline_get_resume_stage WORK_DIR
+# Prints stage number or "done"
+pipeline_get_resume_stage() {
+    local work_dir="$1"
+    local state_file="$work_dir/$PIPELINE_STATE_FILE"
+
+    if [ ! -f "$state_file" ]; then
+        echo "1"
+        return
+    fi
+
+    local result
+    result=$(jq -r '
+        [.stages | to_entries[] | select(.value.status != "completed" and .value.status != "skipped") | .key | tonumber] |
+        sort | first // "done"
+    ' "$state_file")
+
+    echo "$result"
+}
+
+# Check if pipeline state file exists
+# Usage: pipeline_state_exists WORK_DIR
+pipeline_state_exists() {
+    local work_dir="$1"
+    [ -f "$work_dir/$PIPELINE_STATE_FILE" ]
+}
+
+# Read stored flags from state file and export as shell variables
+# Usage: pipeline_read_flags WORK_DIR
+pipeline_read_flags() {
+    local work_dir="$1"
+    local state_file="$work_dir/$PIPELINE_STATE_FILE"
+
+    if [ ! -f "$state_file" ]; then
+        log_error "No pipeline state file: $state_file"
+        return 1
+    fi
+
+    # Read flags — CLI overrides take precedence (only set if not already set by CLI)
+    local flags
+    flags=$(jq '.flags' "$state_file")
+
+    if [ "${NO_TEST_SET:-false}" != "true" ]; then
+        NO_TEST=$(echo "$flags" | jq -r '.no_test')
+    fi
+    if [ "${NO_REVIEW_SET:-false}" != "true" ]; then
+        NO_REVIEW=$(echo "$flags" | jq -r '.no_review')
+    fi
+    if [ "${NO_PR_SET:-false}" != "true" ]; then
+        NO_PR=$(echo "$flags" | jq -r '.no_pr')
+    fi
+    if [ "${NO_WORKTREE_SET:-false}" != "true" ]; then
+        NO_WORKTREE=$(echo "$flags" | jq -r '.no_worktree')
+    fi
+    if [ "${AUTO_PR_SET:-false}" != "true" ]; then
+        AUTO_PR=$(echo "$flags" | jq -r '.auto_pr')
+    fi
+    if [ "${MODEL_SET:-false}" != "true" ]; then
+        CW_MODEL=$(echo "$flags" | jq -r '.model')
+    fi
+    if [ "${VERBOSE_SET:-false}" != "true" ]; then
+        CW_VERBOSE=$(echo "$flags" | jq -r '.verbose')
+    fi
+
+    # Read feature metadata
+    local mode value
+    mode=$(jq -r '.mode' "$state_file")
+    value=$(jq -r '.value' "$state_file")
+
+    RESUME_MODE="$mode"
+    RESUME_VALUE="$value"
+
+    log_info "Restored flags from pipeline state"
 }
