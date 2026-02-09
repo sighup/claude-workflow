@@ -27,50 +27,31 @@ claude plugin install claude-workflow@claude-workflow --scope user
 
 ## Workflow
 
-### Single Feature
+### Interactive (inside Claude)
 
 ```
 /cw-spec  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
 ```
 
-Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. Each step provides guidance to the next step.
+Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. `/cw-review` adds a code review gate and `/cw-testing` generates and runs E2E tests.
 
-### Multiple Features (Parallel Development)
-
-Use git worktrees to develop multiple specs simultaneously. Each worktree is self-contained: one worktree = one spec + one implementation = one PR to main.
-
-```
-main ──────────────────────●── merge auth PR ──●── merge billing PR
-                          /                   /
-feature/auth ──●── spec ──●── impl ──────────┘
-                                            /
-feature/billing ──●── spec ──●── impl ─────┘
-```
+### Full Pipeline (one command, unattended)
 
 ```bash
-# MAIN SESSION (control center - keep running)
-/cw-worktree create auth
-/cw-worktree create billing
-/cw-worktree list              # Check status anytime
-
-# TERMINAL 1: auth feature
-cd .worktrees/feature-auth && claude
-/cw-spec auth         # Spec committed to feature branch
-/cw-plan → /cw-dispatch → /cw-validate
-gh pr create          # PR contains spec + implementation
-exit
-
-# TERMINAL 2 (concurrent): billing feature
-cd .worktrees/feature-billing && claude
-/cw-spec billing → /cw-plan → /cw-dispatch → /cw-validate
-gh pr create
-exit
-
-# MAIN SESSION: cleanup after PRs merged
-/cw-worktree cleanup
+./bin/cw-pipeline --prompt "Build JWT authentication" --name auth
 ```
 
-Keep the main session running as a **control center** to create, list, and cleanup worktrees. Open new terminals for each feature's development. Each worktree gets its own feature branch and **isolated task list** (via `.claude/settings.local.json` created automatically). Tasks persist in `~/.claude/tasks/{worktree-name}/`, enabling seamless resume across sessions.
+Orchestrates the full lifecycle in a git worktree:
+
+```
+prompt → worktree → spec → plan → execute → validate → review → test → fix → re-validate → PR
+```
+
+Each stage runs non-interactively via `claude --print`. Skip stages with `--no-test`, `--no-review`, or `--no-pr`. See [examples/shell-scripts.md](examples/shell-scripts.md) for more options.
+
+### Worktrees (manual parallel development)
+
+Use `/cw-worktree` to develop multiple features simultaneously. Each worktree gets its own feature branch and **isolated task list** (via `.claude/settings.local.json`). Tasks persist in `~/.claude/tasks/{worktree-name}/`, enabling seamless resume across sessions. See [examples/workflows.md](examples/workflows.md) for the full multi-terminal walkthrough.
 
 ## Skills
 
@@ -82,10 +63,13 @@ Keep the main session running as a **control center** to create, list, and clean
 | `/cw-dispatch` | Spawn parallel subagent workers for independent tasks (no setup required) |
 | `/cw-dispatch-team` | Persistent agent team with lead coordination for parallel task execution |
 | `/cw-validate` | Run 6 validation gates and produce a coverage matrix report |
+| `/cw-review` | Review implementation for bugs, security issues, and quality; creates fix tasks |
+| `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
-| `/cw-manifest` | Export task board state to JSON for shell-script orchestration |
 
 ## Prerequisites
+
+Shell scripts require `jq`. The `gh` CLI is needed for PR creation in `cw-pipeline`.
 
 Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) which requires two env vars:
 
@@ -132,25 +116,18 @@ Every task on the board carries self-contained metadata enabling autonomous exec
 
 For autonomous (unattended) execution without an interactive Claude session:
 
-```bash
-# Autonomous loop - executes tasks until complete or failure
-./scripts/cw-loop                     # Quiet mode (default)
-./scripts/cw-loop --verbose           # Stream output for visibility
-./scripts/cw-loop --dispatch          # Use parallel task execution
-./scripts/cw-loop -m opus -n 100      # Custom model and iterations
+| Script | Purpose |
+|--------|---------|
+| `cw-pipeline` | Full end-to-end: prompt → worktree → spec → plan → execute → validate → review → test → PR |
+| `cw-init` | Generate spec + plan without executing |
+| `cw-loop` | Autonomous task execution loop (sequential or parallel with `--dispatch`) |
+| `cw-loop-interactive` | Human-in-the-loop execution with pause after each task |
+| `cw-test-init` | Generate E2E test scenarios as `TEST-*` tasks |
+| `cw-test-loop` | Execute tests with auto-fix cycles |
+| `cw-status` | Check task progress (no Claude needed) |
+| `cw-reset` | Reset failed or stuck tasks (no Claude needed) |
 
-# Human-in-the-loop - pauses after each task for review
-./scripts/cw-loop-interactive
-
-# Check progress (reads manifest, no Claude needed)
-./scripts/cw-status
-./scripts/cw-status --list
-./scripts/cw-status --pending
-
-# Reset failed/stuck tasks
-./scripts/cw-reset --all-failed
-./scripts/cw-reset T01 T03
-```
+See [examples/shell-scripts.md](examples/shell-scripts.md) for detailed usage and flag combinations.
 
 ### Environment Variables
 
@@ -161,5 +138,7 @@ For autonomous (unattended) execution without an interactive Claude session:
 | `CW_SLEEP` | `5` | Seconds between iterations |
 | `CW_MAX_FAILURES` | `3` | Consecutive failures before abort |
 | `CW_TIMEOUT` | `0` | Claude invocation timeout (0=none) |
+| `CW_INVOKE_RETRIES` | `3` | Retries per Claude invocation |
+| `CW_RETRY_DELAY` | `10` | Seconds between retries |
 | `CW_NON_INTERACTIVE` | `false` | Skip confirmation prompts |
 | `CW_VERBOSE` | `false` | Stream JSON output for real-time visibility |

@@ -79,7 +79,11 @@ if [ "$OUTPUT_JSON" = true ]; then
 fi
 
 print_banner "Claude Workflow Status"
-log_info "Session: $CW_SESSION_ID"
+if [ -n "$CW_TASK_LIST_ID" ]; then
+    log_info "Task list: $CW_TASK_LIST_ID"
+else
+    log_info "Session: $CW_SESSION_ID"
+fi
 
 if [ "$SHOW_FAILED" = true ]; then
     echo ""

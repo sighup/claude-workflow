@@ -51,14 +51,14 @@ fi
 
 # Commit happened - check if TaskUpdate was called with status='completed'
 TASK_UPDATED=false
-if grep -q '"status":\s*"completed"' "$TRANSCRIPT" 2>/dev/null && \
+if grep -q '"status":[ ]*"completed"' "$TRANSCRIPT" 2>/dev/null && \
    grep -q '"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null; then
   TASK_UPDATED=true
 fi
 
 # Also check for the tool_name format
-if grep -q '"tool_name":\s*"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null && \
-   grep -q '"status":\s*"completed"' "$TRANSCRIPT" 2>/dev/null; then
+if grep -q '"tool_name":[ ]*"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null && \
+   grep -q '"status":[ ]*"completed"' "$TRANSCRIPT" 2>/dev/null; then
   TASK_UPDATED=true
 fi
 

@@ -51,7 +51,7 @@ show_help() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -m|--model) CW_MODEL="$2"; shift 2 ;;
+        -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
         -h|--help) show_help; exit 0 ;;
         -*) log_error "Unknown option: $1"; show_help; exit 1 ;;
         *) PROJECT_PATH="$1"; shift ;;
@@ -85,6 +85,28 @@ show_task_list
 # Interactive Loop
 # =============================================================================
 
+SKIPPED=()
+
+# Get next pending unblocked task, excluding skipped IDs
+get_next_unskipped_task_id() {
+    if [ ${#SKIPPED[@]} -eq 0 ]; then
+        get_next_task_id
+        return
+    fi
+    local skip_filter
+    skip_filter=$(printf '"%s",' "${SKIPPED[@]}")
+    skip_filter="[${skip_filter%,}]"
+    jq -rs --argjson skip "$skip_filter" '
+        . as $all |
+        [$all[] | select(.status == "completed") | .id] as $completed |
+        [$all[] | select(
+            .status == "pending" and
+            ((.blockedBy // []) - $completed | length == 0) and
+            (.id as $id | $skip | index($id) | not)
+        )] | sort_by(.id | tonumber? // .id) | .[0].id // empty
+    ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
+}
+
 while true; do
     echo ""
     log_header "Task Selection"
@@ -104,7 +126,12 @@ while true; do
         exit 0
     fi
 
-    NEXT=$(get_next_task_id)
+    NEXT=$(get_next_unskipped_task_id)
+    if [ -z "$NEXT" ]; then
+        log_warning "All remaining unblocked tasks have been skipped."
+        show_task_list
+        exit 0
+    fi
     SUBJECT=$(get_task_subject "$NEXT")
 
     echo ""
@@ -121,6 +148,7 @@ while true; do
             ;;
         s|S)
             log_info "Skipping $NEXT"
+            SKIPPED+=("$NEXT")
             continue
             ;;
         d|D)

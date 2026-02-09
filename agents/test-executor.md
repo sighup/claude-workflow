@@ -7,7 +7,7 @@ capabilities:
   - Update task status with pass/fail determination
 color: cyan
 model: inherit
-tools: Bash, Read, Glob, Grep, TaskGet, TaskUpdate, AskUserQuestion
+tools: Bash, Read, Write, Glob, Grep, TaskGet, TaskUpdate, AskUserQuestion
 skills:
   - cw-testing
 ---

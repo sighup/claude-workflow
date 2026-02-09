@@ -145,13 +145,16 @@ See `references/proof-artifact-types.md` for type-specific guidance.
      taskId: "<native-id>",
      status: "completed",
      metadata: {
+       proof_dir: "docs/specs/[spec-dir]/[NN]-proofs",
        proof_results: [...],
+       proof_summary: "X/Y proofs passed",
+       commit_sha: "<sha from git log --oneline -1>",
        completed_at: "<ISO timestamp>"
      }
    })
    ```
 
-**Exit criteria**: Task marked completed with proof results in metadata.
+**Exit criteria**: Task marked completed with proof_dir, proof_results, proof_summary, commit_sha, and completed_at in metadata.
 
 ## Phase 11: CLEAN EXIT
 

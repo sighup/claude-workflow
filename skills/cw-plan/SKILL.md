@@ -2,7 +2,7 @@
 name: cw-plan
 description: "Transform a specification into a native task graph with dependencies. Creates parent tasks (demoable units) first, then sub-tasks after approval. Each task carries self-contained metadata for autonomous execution."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, Skill
+allowed-tools: Glob, Grep, Read, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, Skill
 ---
 
 # CW-Plan: Specification to Task Graph
@@ -284,5 +284,5 @@ Based on user selection:
 - **Parallel**: `Skill({ skill: "cw-dispatch" })`
 - **Team**: `Skill({ skill: "cw-dispatch-team" })`
 - **Single task**: `Skill({ skill: "cw-execute" })`
-- **Autonomous**: Instruct user to run `./scripts/cw-loop` from their terminal
+- **Autonomous**: Instruct user to run `./bin/cw-loop` from their terminal
 - **Done for now**: Confirm task graph is saved and ready when they return
