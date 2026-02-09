@@ -27,15 +27,38 @@ claude plugin install claude-workflow@claude-workflow --scope user
 
 ## Workflow
 
-### Single Feature
+### Interactive (inside Claude)
 
 ```
 /cw-spec  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
 ```
 
-Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. Each step provides guidance to the next step.
+Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. `/cw-review` adds a code review gate and `/cw-testing` generates and runs E2E tests.
 
-### Multiple Features (Parallel Development)
+### Full Pipeline (one command, unattended)
+
+```bash
+# Single feature — goes from prompt to PR
+./scripts/cw-pipeline --prompt "Build JWT authentication" --name auth
+
+# From existing spec
+./scripts/cw-pipeline --spec docs/specs/01-spec-auth.md --name auth
+
+# Multiple features in parallel
+./scripts/cw-pipeline \
+  --feature "auth:prompt:Build JWT authentication" \
+  --feature "billing:spec:docs/specs/02-spec-billing.md"
+```
+
+`cw-pipeline` orchestrates the full lifecycle in a git worktree:
+
+```
+prompt → worktree → spec → plan → execute → validate → review → test → fix → re-validate → PR
+```
+
+Each stage runs non-interactively via `claude --print`. Skip stages with `--no-test`, `--no-review`, or `--no-pr`.
+
+### Worktrees (manual parallel development)
 
 Use git worktrees to develop multiple specs simultaneously. Each worktree is self-contained: one worktree = one spec + one implementation = one PR to main.
 
@@ -82,10 +105,13 @@ Keep the main session running as a **control center** to create, list, and clean
 | `/cw-dispatch` | Spawn parallel subagent workers for independent tasks (no setup required) |
 | `/cw-dispatch-team` | Persistent agent team with lead coordination for parallel task execution |
 | `/cw-validate` | Run 6 validation gates and produce a coverage matrix report |
+| `/cw-review` | Review implementation for bugs, security issues, and quality; creates fix tasks |
+| `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
-| `/cw-manifest` | Export task board state to JSON for shell-script orchestration |
 
 ## Prerequisites
+
+Shell scripts require [`jq`](https://jqlang.github.io/jq/) and the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). `gh` CLI is needed for PR creation in `cw-pipeline`.
 
 Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) which requires two env vars:
 
@@ -133,16 +159,29 @@ Every task on the board carries self-contained metadata enabling autonomous exec
 For autonomous (unattended) execution without an interactive Claude session:
 
 ```bash
-# Autonomous loop - executes tasks until complete or failure
+# Full pipeline — prompt to PR in one command
+./scripts/cw-pipeline --prompt "Build JWT auth" --name auth
+./scripts/cw-pipeline --spec docs/specs/01-auth.md --name auth --no-test
+
+# Init — generate spec + plan (no execution)
+./scripts/cw-init --prompt "Build JWT authentication"
+./scripts/cw-init --spec docs/specs/01-auth.md
+
+# Autonomous loop — execute tasks until complete or failure
 ./scripts/cw-loop                     # Quiet mode (default)
 ./scripts/cw-loop --verbose           # Stream output for visibility
 ./scripts/cw-loop --dispatch          # Use parallel task execution
 ./scripts/cw-loop -m opus -n 100      # Custom model and iterations
 
-# Human-in-the-loop - pauses after each task for review
+# Human-in-the-loop — pauses after each task for review
 ./scripts/cw-loop-interactive
 
-# Check progress (reads manifest, no Claude needed)
+# Testing — generate test scenarios then run them
+./scripts/cw-test-init --spec docs/specs/01-auth.md
+./scripts/cw-test-init --prompt "Test JWT authentication flows"
+./scripts/cw-test-loop                # Execute tests with auto-fix cycles
+
+# Check progress (reads task files, no Claude needed)
 ./scripts/cw-status
 ./scripts/cw-status --list
 ./scripts/cw-status --pending
@@ -161,5 +200,7 @@ For autonomous (unattended) execution without an interactive Claude session:
 | `CW_SLEEP` | `5` | Seconds between iterations |
 | `CW_MAX_FAILURES` | `3` | Consecutive failures before abort |
 | `CW_TIMEOUT` | `0` | Claude invocation timeout (0=none) |
+| `CW_INVOKE_RETRIES` | `3` | Retries per Claude invocation |
+| `CW_RETRY_DELAY` | `10` | Seconds between retries |
 | `CW_NON_INTERACTIVE` | `false` | Skip confirmation prompts |
 | `CW_VERBOSE` | `false` | Stream JSON output for real-time visibility |
