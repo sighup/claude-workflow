@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.1.0 (2026-02-09)
+
+### Features
+
+- Resumable pipeline with malformed task resilience
+  ([#12](https://github.com/sighup/claude-workflow/pull/12),
+  [`a7fa234`](https://github.com/sighup/claude-workflow/commit/a7fa23491d567a702546cfb074ed37f3e674cd49))
+
+
 ## v2.0.0 (2026-02-09)
 
 ### Refactoring
