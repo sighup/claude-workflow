@@ -489,7 +489,7 @@ This is running non-interactively — proceed autonomously without using AskUser
             local skip_test_init=false
             if discover_session "$work_dir" 2>/dev/null && _has_task_files 2>/dev/null; then
                 local test_task_count
-                test_task_count=$(jq -rs '[.[] | select(.metadata.task_id // "" | test("^TEST"; "i"))] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0")
+                test_task_count=$(_slurp_tasks '[.[] | select(.metadata.task_id // "" | test("^TEST"; "i"))] | length' 2>/dev/null || echo "0")
                 if [ "$test_task_count" -gt 0 ]; then
                     log_info "[$feature_name] TEST tasks already exist ($test_task_count found), skipping test init"
                     skip_test_init=true

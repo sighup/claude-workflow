@@ -215,6 +215,19 @@ _resolve_task_list_id() {
     return 1
 }
 
+# Warn once about any corrupt JSON task files in CW_TASKS_DIR
+_warn_corrupt_tasks() {
+    [ -n "$CW_TASKS_DIR" ] && [ -d "$CW_TASKS_DIR" ] || return 0
+    local bad_files=()
+    for f in "$CW_TASKS_DIR"/*.json; do
+        [ -f "$f" ] || continue
+        jq empty "$f" 2>/dev/null || bad_files+=("$(basename "$f")")
+    done
+    if [ ${#bad_files[@]} -gt 0 ]; then
+        log_warning "${#bad_files[@]} corrupt task file(s) will be skipped: ${bad_files[*]}"
+    fi
+}
+
 # Find the session ID for a project that has tasks
 # Usage: discover_session [project_path]
 # Sets: CW_SESSION_ID, CW_TASK_LIST_ID, CW_TASKS_DIR
@@ -226,14 +239,17 @@ discover_session() {
     task_list_id=$(_resolve_task_list_id "$project_path") || true
     if [ -n "$task_list_id" ]; then
         local tl_dir="$CLAUDE_TASKS_DIR/$task_list_id"
-        if [ -d "$tl_dir" ] && [ -n "$(ls -A "$tl_dir" 2>/dev/null)" ]; then
+        # Check for actual .json task files, not just any files (e.g. .DS_Store)
+        local tl_json=("$tl_dir"/*.json)
+        if [ -d "$tl_dir" ] && [ -f "${tl_json[0]}" ]; then
             CW_TASK_LIST_ID="$task_list_id"
             CW_TASKS_DIR="$tl_dir"
             log_info "Task list: $CW_TASK_LIST_ID"
             log_info "Tasks dir: $CW_TASKS_DIR"
+            _warn_corrupt_tasks
             return 0
         fi
-        # Dir empty or missing — fall through to session-based lookup
+        # No .json task files — fall through to session-based lookup
     fi
 
     # Session-based lookup (original path)
@@ -268,6 +284,7 @@ discover_session() {
 
     log_info "Session: $CW_SESSION_ID"
     log_info "Tasks dir: $CW_TASKS_DIR"
+    _warn_corrupt_tasks
     return 0
 }
 
@@ -279,6 +296,16 @@ discover_session() {
 _has_task_files() {
     local files=("$CW_TASKS_DIR"/*.json)
     [ -f "${files[0]}" ]
+}
+
+# Slurp valid task JSON files into an array, skipping corrupt files.
+# One malformed file must not break all task operations.
+# Usage: _slurp_tasks '.[] | .status'  (pass jq filter directly)
+_slurp_tasks() {
+    local filter="${1:-.}"
+    for f in "$CW_TASKS_DIR"/*.json; do
+        jq -c '.' "$f" 2>/dev/null
+    done | jq -s "$filter" 2>/dev/null
 }
 
 # Validate that a flag requiring a value actually received one
@@ -297,8 +324,7 @@ get_all_tasks() {
     fi
     _has_task_files || { echo "[]"; return 1; }
 
-    # Use jq to properly merge all task files into a single array
-    jq -s '.' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "[]"
+    _slurp_tasks '.' || echo "[]"
 }
 
 # Get count of pending unblocked tasks
@@ -310,15 +336,14 @@ get_pending_count() {
     fi
     _has_task_files || { echo "0"; return; }
 
-    # Single jq call: compute completed IDs, then count pending unblocked
-    jq -s '
+    _slurp_tasks '
         . as $all |
         [$all[] | select(.status == "completed") | .id] as $completed |
         [$all[] | select(
             .status == "pending" and
             ((.blockedBy // []) - $completed | length == 0)
         )] | length
-    ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
+    ' || echo "0"
 }
 
 # Get next task ID (first pending unblocked task)
@@ -329,15 +354,14 @@ get_next_task_id() {
     fi
     _has_task_files || { echo ""; return; }
 
-    # Single jq call: compute completed IDs, then find first pending unblocked
-    jq -rs '
+    _slurp_tasks '
         . as $all |
         [$all[] | select(.status == "completed") | .id] as $completed |
         [$all[] | select(
             .status == "pending" and
             ((.blockedBy // []) - $completed | length == 0)
         )] | sort_by(.id | tonumber? // .id) | .[0].id // empty
-    ' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
+    ' || echo ""
 }
 
 # Check if all tasks are complete
@@ -348,10 +372,10 @@ is_complete() {
     _has_task_files || return 1
 
     local result
-    result=$(jq -s '
+    result=$(_slurp_tasks '
         ([.[] | select(.status == "pending")] | length == 0) and
         ([.[] | select(.status == "in_progress")] | length == 0)
-    ' "$CW_TASKS_DIR"/*.json 2>/dev/null)
+    ')
 
     [ "$result" = "true" ]
 }
@@ -364,7 +388,7 @@ get_completed_count() {
     fi
     _has_task_files || { echo "0"; return; }
 
-    jq -s '[.[] | select(.status == "completed")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
+    _slurp_tasks '[.[] | select(.status == "completed")] | length' || echo "0"
 }
 
 # Count pending FIX-* tasks
@@ -376,11 +400,11 @@ get_pending_fix_count() {
     fi
     _has_task_files || { echo "0"; return; }
 
-    jq -s '[.[] | select(
+    _slurp_tasks '[.[] | select(
         (.subject | test("^FIX"; "i")) or
         (.metadata.task_id // "" | test("^FIX"; "i")) or
         (.metadata.fix_task_id != null)
-    ) | select(.status == "pending")] | length' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo "0"
+    ) | select(.status == "pending")] | length' || echo "0"
 }
 
 # Get task counts by status
@@ -391,13 +415,13 @@ get_task_counts() {
     fi
     _has_task_files || { echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'; return; }
 
-    jq -s '{
+    _slurp_tasks '{
         total: length,
         completed: [.[] | select(.status=="completed")] | length,
         pending: [.[] | select(.status=="pending")] | length,
         in_progress: [.[] | select(.status=="in_progress")] | length,
         failed: [.[] | select(.metadata.failure_count > 0)] | length
-    }' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'
+    }' || echo '{"total":0,"completed":0,"pending":0,"in_progress":0,"failed":0}'
 }
 
 # =============================================================================
@@ -457,21 +481,13 @@ show_task_list() {
     fi
     _has_task_files || { log_warning "No tasks found."; return 1; }
 
-    local count
-    count=$(ls "$CW_TASKS_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
-
-    if [ "$count" -eq 0 ]; then
-        log_warning "No tasks found."
-        return 1
-    fi
-
-    jq -rs '.[] |
+    _slurp_tasks '.[] |
         if .status == "completed" then "  \u001b[32m[✓]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         elif .metadata.failure_count > 0 then "  \u001b[31m[✗]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         elif .status == "in_progress" then "  \u001b[33m[~]\u001b[0m \(.metadata.task_id // .id): \(.subject)"
         else "  [ ] \(.metadata.task_id // .id): \(.subject)"
         end
-    ' "$CW_TASKS_DIR"/*.json 2>/dev/null | sort
+    ' 2>/dev/null | sort
 }
 
 # Get task subject by ID
@@ -483,7 +499,7 @@ get_task_subject() {
     fi
     _has_task_files || { echo ""; return; }
 
-    jq -rs --arg id "$task_id" '.[] | select(.id == $id) | .subject' "$CW_TASKS_DIR"/*.json 2>/dev/null || echo ""
+    jq -r '.subject' "$CW_TASKS_DIR/$task_id.json" 2>/dev/null || echo ""
 }
 
 # =============================================================================
