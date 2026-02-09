@@ -111,7 +111,7 @@ Keep the main session running as a **control center** to create, list, and clean
 
 ## Prerequisites
 
-Shell scripts require [`jq`](https://jqlang.github.io/jq/) and the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). `gh` CLI is needed for PR creation in `cw-pipeline`.
+Shell scripts require `jq`. The `gh` CLI is needed for PR creation in `cw-pipeline`.
 
 Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) which requires two env vars:
 
