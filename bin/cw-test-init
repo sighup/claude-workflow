@@ -142,24 +142,44 @@ fi
 log_success "Test scenario generation completed"
 
 # =============================================================================
+# Verify Test Tasks Were Created
+# =============================================================================
+
+# Re-discover session and count test tasks using the same filter as cw-test-loop
+if discover_session 2>/dev/null && _has_task_files 2>/dev/null; then
+    test_count=$(_slurp_tasks '[.[] | select(
+        (.metadata.test_status != null) or
+        (.metadata.test_type == "e2e") or
+        (.subject | test("^TEST"; "i")) or
+        (.metadata.task_id // "" | test("^TEST"; "i"))
+    ) | select(.metadata.test_suite != true)] | length' 2>/dev/null || echo "0")
+
+    if [ "$test_count" -eq 0 ]; then
+        log_error "cw-testing init completed but no test tasks were created on the task board."
+        log_info "Claude may have described tests without calling TaskCreate."
+        exit 1
+    fi
+    log_info "Verified $test_count test task(s) on the board"
+else
+    log_warning "Could not discover session to verify test tasks."
+    exit 1
+fi
+
+# =============================================================================
 # Summary
 # =============================================================================
 
-if discover_session 2>/dev/null; then
-    log_header "Test Init Complete"
-    if [ -n "$CW_TASK_LIST_ID" ]; then
-        log_info "Task list: $CW_TASK_LIST_ID"
-    else
-        log_info "Session: $CW_SESSION_ID"
-    fi
-    print_task_status
-    show_task_list
-
-    echo ""
-    echo -e "${GREEN}Test tasks created.${NC}"
-    echo "  Run tests: ./bin/cw-test-loop"
+log_header "Test Init Complete"
+if [ -n "$CW_TASK_LIST_ID" ]; then
+    log_info "Task list: $CW_TASK_LIST_ID"
 else
-    log_warning "Could not discover session. Check task board manually."
+    log_info "Session: $CW_SESSION_ID"
 fi
+print_task_status
+show_task_list
+
+echo ""
+echo -e "${GREEN}Test tasks created ($test_count).${NC}"
+echo "  Run tests: ./bin/cw-test-loop"
 
 exit 0
