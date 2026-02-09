@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-02-09)
+
+### Documentation
+
+- Remove Ralph-style references from e2e metadata schema
+  ([`7349ef9`](https://github.com/sighup/claude-workflow/commit/7349ef973eb584c8cf6ecb9c56eb280afd0595b5))
+
+### Features
+
+- Add cw-review skill, integrate cw-testing, align agent patterns
+  ([`aed23d7`](https://github.com/sighup/claude-workflow/commit/aed23d7c0800f97b894db354dca3737d78d6ed28))
+
+
 ## v1.7.0 (2026-02-08)
 
 ### Features
