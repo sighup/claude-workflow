@@ -311,6 +311,7 @@ run_feature_pipeline() {
 
             if ! create_worktree "$feature_name"; then
                 log_error "[$feature_name] Failed to create worktree"
+                pipeline_checkpoint "$work_dir" "1" "failed" 2>/dev/null || true
                 return 1
             fi
 
@@ -379,6 +380,7 @@ run_feature_pipeline() {
 
             if ! "$SCRIPT_DIR/cw-init" "${init_args[@]}"; then
                 log_error "[$feature_name] Init failed"
+                pipeline_checkpoint "$work_dir" "2" "failed"
                 cd "$original_dir"
                 return 1
             fi
@@ -401,15 +403,22 @@ run_feature_pipeline() {
         fi
 
         # cw-loop is already idempotent (checks is_complete on entry)
+        local stage3_ok=true
         CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" "${loop_args[@]}" "$work_dir" || {
             local loop_exit=$?
             if [ "$loop_exit" -ne 0 ]; then
                 log_warning "[$feature_name] Task execution exited with code $loop_exit"
+                stage3_ok=false
             fi
         }
 
-        log_success "[$feature_name] Task execution completed"
-        pipeline_checkpoint "$work_dir" "3" "completed"
+        if [ "$stage3_ok" = true ]; then
+            log_success "[$feature_name] Task execution completed"
+            pipeline_checkpoint "$work_dir" "3" "completed"
+        else
+            log_warning "[$feature_name] Task execution had failures (continuing pipeline)"
+            pipeline_checkpoint "$work_dir" "3" "failed"
+        fi
     else
         log_info "[$feature_name] Stage 3: Already completed"
     fi
@@ -427,10 +436,11 @@ Run the 6-gate validation against the spec. This is running non-interactively �
 
         if invoke_claude "$validate_prompt" "$CW_MODEL"; then
             log_success "[$feature_name] Validation passed"
+            pipeline_checkpoint "$work_dir" "4" "completed"
         else
             log_warning "[$feature_name] Validation had issues (continuing pipeline)"
+            pipeline_checkpoint "$work_dir" "4" "failed"
         fi
-        pipeline_checkpoint "$work_dir" "4" "completed"
     else
         log_info "[$feature_name] Stage 4: Already completed"
     fi
@@ -456,10 +466,11 @@ This is running non-interactively — proceed autonomously without using AskUser
                     log_info "[$feature_name] Executing $fix_count review fix task(s)..."
                     CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" -m "$CW_MODEL" "$work_dir" || true
                 fi
+                pipeline_checkpoint "$work_dir" "5" "completed"
             else
                 log_warning "[$feature_name] Code review had issues (continuing)"
+                pipeline_checkpoint "$work_dir" "5" "failed"
             fi
-            pipeline_checkpoint "$work_dir" "5" "completed"
         else
             log_info "[$feature_name] Stage 5: Skipped (--no-review)"
             pipeline_checkpoint "$work_dir" "5" "skipped"
@@ -499,11 +510,14 @@ This is running non-interactively — proceed autonomously without using AskUser
 
                 if "$SCRIPT_DIR/cw-test-init" "${test_init_args[@]}"; then
                     log_success "[$feature_name] Test init completed"
+                    pipeline_checkpoint "$work_dir" "6" "completed"
                 else
                     log_warning "[$feature_name] Test init failed (continuing)"
+                    pipeline_checkpoint "$work_dir" "6" "failed"
                 fi
+            else
+                pipeline_checkpoint "$work_dir" "6" "completed"
             fi
-            pipeline_checkpoint "$work_dir" "6" "completed"
         else
             log_info "[$feature_name] Stage 6: Skipped (--no-test)"
             pipeline_checkpoint "$work_dir" "6" "skipped"
@@ -524,11 +538,17 @@ This is running non-interactively — proceed autonomously without using AskUser
             fi
 
             # cw-test-loop is already idempotent
+            local stage7_ok=true
             "$SCRIPT_DIR/cw-test-loop" "${test_loop_args[@]}" "$work_dir" || {
                 local test_exit=$?
                 log_warning "[$feature_name] Test loop exited with code $test_exit"
+                stage7_ok=false
             }
-            pipeline_checkpoint "$work_dir" "7" "completed"
+            if [ "$stage7_ok" = true ]; then
+                pipeline_checkpoint "$work_dir" "7" "completed"
+            else
+                pipeline_checkpoint "$work_dir" "7" "failed"
+            fi
         else
             log_info "[$feature_name] Stage 7: Skipped (--no-test)"
             pipeline_checkpoint "$work_dir" "7" "skipped"
@@ -550,10 +570,11 @@ Run the final 6-gate validation against the spec. This is the last check before 
 
         if invoke_claude "$revalidate_prompt" "$CW_MODEL"; then
             log_success "[$feature_name] Final validation passed"
+            pipeline_checkpoint "$work_dir" "8" "completed"
         else
             log_warning "[$feature_name] Final validation had issues"
+            pipeline_checkpoint "$work_dir" "8" "failed"
         fi
-        pipeline_checkpoint "$work_dir" "8" "completed"
     else
         log_info "[$feature_name] Stage 8: Already completed"
     fi
@@ -565,6 +586,7 @@ Run the final 6-gate validation against the spec. This is the last check before 
             log_info "[$feature_name] Stage 9: PR creation..."
 
             # Idempotency: check if PR already exists
+            local stage9_ok=true
             local existing_pr
             existing_pr=$(gh pr list --head "feature/${feature_name}" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
             if [ -n "$existing_pr" ]; then
@@ -580,6 +602,7 @@ This is running non-interactively — create the PR without asking for confirmat
                     log_success "[$feature_name] PR created"
                 else
                     log_warning "[$feature_name] PR creation failed"
+                    stage9_ok=false
                 fi
             else
                 echo ""
@@ -596,12 +619,17 @@ Summarize all changes, reference the spec, and include a test plan. Use a descri
                         log_success "[$feature_name] PR created"
                     else
                         log_warning "[$feature_name] PR creation failed"
+                        stage9_ok=false
                     fi
                 else
                     log_info "[$feature_name] PR creation skipped"
                 fi
             fi
-            pipeline_checkpoint "$work_dir" "9" "completed"
+            if [ "$stage9_ok" = true ]; then
+                pipeline_checkpoint "$work_dir" "9" "completed"
+            else
+                pipeline_checkpoint "$work_dir" "9" "failed"
+            fi
         else
             log_info "[$feature_name] Stage 9: Skipped (--no-pr)"
             pipeline_checkpoint "$work_dir" "9" "skipped"
