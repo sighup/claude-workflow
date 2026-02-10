@@ -509,8 +509,27 @@ This is running non-interactively — proceed autonomously without using AskUser
                 fi
 
                 if "$SCRIPT_DIR/cw-test-init" "${test_init_args[@]}"; then
-                    log_success "[$feature_name] Test init completed"
-                    pipeline_checkpoint "$work_dir" "6" "completed"
+                    # Defense-in-depth: verify test tasks exist even after cw-test-init reports success
+                    if discover_session "$work_dir" 2>/dev/null && _has_task_files 2>/dev/null; then
+                        local verified_test_count
+                        verified_test_count=$(_slurp_tasks '[.[] | select(
+                            (.metadata.test_status != null) or
+                            (.metadata.test_type == "e2e") or
+                            (.subject | test("^TEST"; "i")) or
+                            (.metadata.task_id // "" | test("^TEST"; "i"))
+                        ) | select(.metadata.test_suite != true)] | length' 2>/dev/null || echo "0")
+
+                        if [ "$verified_test_count" -eq 0 ]; then
+                            log_warning "[$feature_name] Test init reported success but no test tasks found"
+                            pipeline_checkpoint "$work_dir" "6" "failed"
+                        else
+                            log_success "[$feature_name] Test init completed ($verified_test_count test tasks)"
+                            pipeline_checkpoint "$work_dir" "6" "completed"
+                        fi
+                    else
+                        log_warning "[$feature_name] Test init reported success but could not verify tasks"
+                        pipeline_checkpoint "$work_dir" "6" "failed"
+                    fi
                 else
                     log_warning "[$feature_name] Test init failed (continuing)"
                     pipeline_checkpoint "$work_dir" "6" "failed"

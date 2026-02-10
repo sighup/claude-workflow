@@ -179,6 +179,18 @@ while [ "$CYCLE" -lt "$CW_MAX_CYCLES" ]; do
 
     log_header "Test Cycle $CYCLE / $CW_MAX_CYCLES"
 
+    # Check if any test tasks exist at all (first cycle only)
+    if [ "$CYCLE" -eq 1 ]; then
+        COUNTS=$(get_test_task_counts)
+        TOTAL=$(echo "$COUNTS" | jq '.total')
+        if [ "$TOTAL" -eq 0 ]; then
+            log_error "No test tasks found on the task board."
+            log_info "Run 'cw-test-init' first to create test tasks."
+            exit 3
+        fi
+        log_info "Found $TOTAL test task(s) on the board"
+    fi
+
     # =========================================================================
     # Inner Loop: Execute Test Tasks
     # =========================================================================
