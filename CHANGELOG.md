@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.1.1 (2026-02-10)
+
+### Bug Fixes
+
+- Verify test tasks exist before declaring test-init success
+  ([#13](https://github.com/sighup/claude-workflow/pull/13),
+  [`eb604c4`](https://github.com/sighup/claude-workflow/commit/eb604c4ea48bfd2a3fa5e15c71580a8926f9a809))
+
+
 ## v2.1.0 (2026-02-09)
 
 ### Features
