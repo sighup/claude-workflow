@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.3.0 (2026-02-12)
+
+### Features
+
+- Add cw-review and cw-review-team code review skills
+  ([#15](https://github.com/sighup/claude-workflow/pull/15),
+  [`7cf14cf`](https://github.com/sighup/claude-workflow/commit/7cf14cf5653259474ff464600e95ccac595b3557))
+
+
 ## v2.2.0 (2026-02-12)
 
 ### Features
