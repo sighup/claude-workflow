@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.2.0 (2026-02-12)
+
+### Features
+
+- Add parallel sub-agent support to cw-review
+  ([#14](https://github.com/sighup/claude-workflow/pull/14),
+  [`80a9e8c`](https://github.com/sighup/claude-workflow/commit/80a9e8cb2c5231e61f84a8c158c5f309f0398cfb))
+
+
 ## v2.1.1 (2026-02-10)
 
 ### Bug Fixes
