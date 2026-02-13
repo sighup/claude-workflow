@@ -225,10 +225,20 @@ Open new terminals to start development:
    mkdir -p ".worktrees/${WORKTREE_DIR}/.claude"
 
    # Create settings.local.json with task list ID matching directory name
+   # Pre-approve workflow agent types so autonomous execution isn't interrupted
    cat > ".worktrees/${WORKTREE_DIR}/.claude/settings.local.json" << EOF
    {
      "env": {
        "CLAUDE_CODE_TASK_LIST_ID": "${WORKTREE_DIR}"
+     },
+     "permissions": {
+       "allow": [
+         "Task(claude-workflow:implementer)",
+         "Task(claude-workflow:validator)",
+         "Task(claude-workflow:reviewer)",
+         "Task(claude-workflow:test-executor)",
+         "Task(claude-workflow:bug-fixer)"
+       ]
      }
    }
    EOF
