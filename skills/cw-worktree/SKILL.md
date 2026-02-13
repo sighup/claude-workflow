@@ -283,14 +283,25 @@ Open new terminals to start development:
 
 10. **Auto-launch Ghostty tabs:**
 
-   After all worktrees are created, call `bin/cw-ghostty` with the created feature names to open pre-configured tabs:
+   After all worktrees are created, launch Ghostty tabs for each worktree.
 
+   **Locate `cw-ghostty`:** The script is at `bin/cw-ghostty` in the **claude-workflow** project (not the current project). Find it by running:
    ```bash
-   # Get project root
-   PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+   CW_GHOSTTY="$(command -v cw-ghostty 2>/dev/null)"
+   if [ -z "$CW_GHOSTTY" ]; then
+     CW_GHOSTTY="$(find "$HOME/Projects" -maxdepth 3 -name "cw-ghostty" -path "*/bin/cw-ghostty" 2>/dev/null | head -1)"
+   fi
+   ```
 
-   # Launch Ghostty tabs for all created worktrees
-   "$PROJECT_ROOT/bin/cw-ghostty" feature1 feature2 feature3
+   If `cw-ghostty` is not found or Ghostty is not installed, show a warning but don't fail — the worktrees are still created. Fall back to manual instructions:
+   ```
+   Ghostty auto-launch not available — open terminals manually:
+     cd .worktrees/feature-{feature-name} && claude
+   ```
+
+   **Call it** with the created feature names and `--project-root` pointing to the current project:
+   ```bash
+   "$CW_GHOSTTY" --project-root "$(git rev-parse --show-toplevel)" feature1 feature2 feature3
    ```
 
    This opens a Ghostty window with one tab per worktree, each:
@@ -298,13 +309,6 @@ Open new terminals to start development:
    - `cd`'d into the worktree directory
    - Running `claude`
    - Pre-typed with `/cw-spec {feature-name}` (user just presses Enter)
-
-   If Ghostty is not installed, show a warning but don't fail — the worktrees are still created successfully. Fall back to the manual instructions:
-
-   ```
-   Ghostty not found — open terminals manually:
-     cd .worktrees/feature-{feature-name} && claude
-   ```
 
    After successful launch, report:
    ```
@@ -749,17 +753,34 @@ Opens Ghostty tabs for existing worktrees. Use this to reopen tabs after closing
    done
    ```
 
-3. **Call cw-ghostty:**
+3. **Locate and call cw-ghostty:**
+
+   Find `cw-ghostty` (it lives in the **claude-workflow** project's `bin/`, not the current project):
+   ```bash
+   CW_GHOSTTY="$(command -v cw-ghostty 2>/dev/null)"
+   if [ -z "$CW_GHOSTTY" ]; then
+     CW_GHOSTTY="$(find "$HOME/Projects" -maxdepth 3 -name "cw-ghostty" -path "*/bin/cw-ghostty" 2>/dev/null | head -1)"
+   fi
+   ```
+
+   Then call it with `--project-root` pointing to the current project:
    ```bash
    PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 
    if [ ${#NAMES[@]} -eq 0 ]; then
      # Open all
-     "$PROJECT_ROOT/bin/cw-ghostty" --all
+     "$CW_GHOSTTY" --project-root "$PROJECT_ROOT" --all
    else
      # Open specific
-     "$PROJECT_ROOT/bin/cw-ghostty" "${NAMES[@]}"
+     "$CW_GHOSTTY" --project-root "$PROJECT_ROOT" "${NAMES[@]}"
    fi
+   ```
+
+   If `cw-ghostty` is not found, show manual instructions instead:
+   ```
+   cw-ghostty not found. Open terminals manually:
+     cd .worktrees/feature-auth && claude
+     cd .worktrees/feature-billing && claude
    ```
 
 4. **Report results:**
