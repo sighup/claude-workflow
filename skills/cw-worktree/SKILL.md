@@ -279,28 +279,52 @@ Open new terminals to start development:
    Branch: feature/{feature-name}
    Task List: feature-{feature-name} (via .claude/settings.local.json)
    Status: Ready for development
-
-   Next steps (keep THIS session open as control center):
-   1. Open NEW terminal: cd .worktrees/feature-{feature-name} && claude
-   2. Create spec: /cw-spec {feature-name}
-   3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
-   4. Create PR: gh pr create (PR contains spec + implementation)
-   5. Exit worktree session when done
-
-   From THIS session you can:
-     /cw-worktree list              # Check status of all worktrees
-     /cw-worktree create <other>    # Create more worktrees
-     /cw-worktree cleanup           # Remove merged worktrees
-
-   To resume worktree work later:
-     cd .worktrees/feature-{feature-name} && claude
-     (Tasks persist across sessions)
-
-   To sync with main before PR (from worktree session):
-     /cw-worktree sync {feature-name}
    ```
 
-10. **Include starter prompt (if context was gathered):**
+10. **Auto-launch Ghostty tabs:**
+
+   After all worktrees are created, call `bin/cw-ghostty` with the created feature names to open pre-configured tabs:
+
+   ```bash
+   # Get project root
+   PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+
+   # Launch Ghostty tabs for all created worktrees
+   "$PROJECT_ROOT/bin/cw-ghostty" feature1 feature2 feature3
+   ```
+
+   This opens a Ghostty window with one tab per worktree, each:
+   - Titled with the feature name
+   - `cd`'d into the worktree directory
+   - Running `claude`
+   - Pre-typed with `/cw-spec {feature-name}` (user just presses Enter)
+
+   If Ghostty is not installed, show a warning but don't fail — the worktrees are still created successfully. Fall back to the manual instructions:
+
+   ```
+   Ghostty not found — open terminals manually:
+     cd .worktrees/feature-{feature-name} && claude
+   ```
+
+   After successful launch, report:
+   ```
+   GHOSTTY TABS OPENED
+   ====================
+   Tabs opened for: auth, billing, search
+   Each tab has claude running with /cw-spec pre-typed — just press Enter.
+
+   From THIS session (control center):
+     /cw-worktree list              # Check status of all worktrees
+     /cw-worktree create <other>    # Create more worktrees
+     /cw-worktree open              # Reopen tabs if closed
+     /cw-worktree cleanup           # Remove merged worktrees
+
+   To reopen tabs later:
+     /cw-worktree open              # All worktrees
+     /cw-worktree open auth billing  # Specific worktrees
+   ```
+
+11. **Include starter prompt (if context was gathered):**
 
    If the feature was scoped during discovery (components identified, requirements discussed), include a starter prompt the user can paste into the worktree session. Use plain text for easy copying:
 
@@ -700,6 +724,61 @@ Removes completed or orphaned worktrees.
 
 ---
 
+### /cw-worktree open [feature-name] [feature-name-2] [...]
+
+Opens Ghostty tabs for existing worktrees. Use this to reopen tabs after closing Ghostty, or to open tabs for worktrees created earlier.
+
+**Examples:**
+```bash
+/cw-worktree open                    # Open tabs for ALL worktrees
+/cw-worktree open auth billing       # Open tabs for specific worktrees
+```
+
+**Process:**
+
+1. **Determine which worktrees to open:**
+   - If names provided: validate each exists in `.worktrees/feature-{name}/`
+   - If no names: discover all worktrees via `.worktrees/feature-*/`
+
+2. **Validate worktrees exist:**
+   ```bash
+   for name in "${NAMES[@]}"; do
+     if [ ! -d ".worktrees/feature-${name}" ]; then
+       echo "WARNING: Worktree not found: .worktrees/feature-${name}"
+     fi
+   done
+   ```
+
+3. **Call cw-ghostty:**
+   ```bash
+   PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+
+   if [ ${#NAMES[@]} -eq 0 ]; then
+     # Open all
+     "$PROJECT_ROOT/bin/cw-ghostty" --all
+   else
+     # Open specific
+     "$PROJECT_ROOT/bin/cw-ghostty" "${NAMES[@]}"
+   fi
+   ```
+
+4. **Report results:**
+   ```
+   GHOSTTY TABS OPENED
+   ====================
+   Tabs opened for: auth, billing, search
+   Each tab has claude running with /cw-spec pre-typed — just press Enter.
+   ```
+
+   If Ghostty is not installed:
+   ```
+   Ghostty is not installed. Open terminals manually:
+     cd .worktrees/feature-auth && claude
+     cd .worktrees/feature-billing && claude
+   ```
+
+---
+
 ## Integration with Claude Workflow
 
 Each worktree is a **self-contained feature unit**: one worktree = one spec + one implementation = one PR to main.
@@ -710,18 +789,20 @@ Each worktree is a **self-contained feature unit**: one worktree = one spec + on
 ┌─────────────────────────────────────────────────────────┐
 │ MAIN SESSION (project root) - Control Center           │
 │ Keep this session running to manage all worktrees:     │
-│ • /cw-worktree create <feature>                        │
+│ • /cw-worktree create <feature>  (auto-opens Ghostty)  │
 │ • /cw-worktree list                                    │
+│ • /cw-worktree open              (reopen closed tabs)  │
 │ • /cw-worktree cleanup                                 │
 └─────────────────────────────────────────────────────────┘
+     │  Auto-launched Ghostty tabs ▼
      │
-     ├──► Terminal 1: cd .worktrees/feature-auth && claude
+     ├──► Tab "auth": cd .worktrees/feature-auth && claude
      │    /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
      │
-     ├──► Terminal 2: cd .worktrees/feature-billing && claude
+     ├──► Tab "billing": cd .worktrees/feature-billing && claude
      │    /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
      │
-     └──► Terminal 3: cd .worktrees/feature-search && claude
+     └──► Tab "search": cd .worktrees/feature-search && claude
           /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
 ```
 
@@ -729,21 +810,24 @@ Each worktree is a **self-contained feature unit**: one worktree = one spec + on
 
 ```
 MAIN SESSION (control center - stays open):
-  1. /cw-worktree create auth
-  2. /cw-worktree create billing   # Create multiple if needed
-  3. /cw-worktree list             # Check status anytime
+  1. /cw-worktree create auth billing search
+     ↳ Worktrees created + Ghostty tabs auto-opened
+     ↳ Each tab has claude running, /cw-spec pre-typed
+  2. /cw-worktree list             # Check status anytime
 
-NEW TERMINAL - Worktree Session (.worktrees/feature-auth/):
-  4. cd .worktrees/feature-auth && claude
-     ↳ Task list auto-configured via .claude/settings.local.json
-  5. /cw-spec "auth" → creates docs/specs/01-spec-auth/ (committed to feature/auth)
-  6. /cw-plan → creates tasks (stored in ~/.claude/tasks/feature-auth/)
-  7. /cw-dispatch → runs workers (all in this worktree)
-  8. [Exit and resume anytime - tasks persist!]
-  9. /cw-validate → validates implementation
-  10. /cw-worktree sync auth → rebase on latest main (if needed)
-  11. gh pr create → PR contains spec + implementation
-  12. exit → done with this feature
+GHOSTTY TABS (auto-opened, one per feature):
+  3. Press Enter to run /cw-spec (already pre-typed)
+  4. /cw-plan → creates tasks (stored in ~/.claude/tasks/feature-auth/)
+  5. /cw-dispatch → runs workers (all in this worktree)
+  6. [Exit and resume anytime - tasks persist!]
+  7. /cw-validate → validates implementation
+  8. /cw-worktree sync auth → rebase on latest main (if needed)
+  9. gh pr create → PR contains spec + implementation
+  10. exit → done with this feature
+
+MAIN SESSION (reopen tabs if closed):
+  11. /cw-worktree open             # Reopen all tabs
+  12. /cw-worktree open auth        # Reopen specific tab
 
 MAIN SESSION (after PR approved):
   13. /cw-worktree cleanup → removes merged worktrees
@@ -861,22 +945,22 @@ git branch -D feature/{name}
 
 ## What Comes Next
 
-After creating a worktree (keep main session open as control center):
+After creating worktrees, Ghostty tabs open automatically:
 
-**In a NEW terminal:**
-1. `cd .worktrees/feature-{name} && claude` - task list auto-configured
-2. `/cw-spec` - create specification (committed to feature branch)
-3. `/cw-plan` - create tasks from the spec
-4. `/cw-dispatch` - execute tasks (can exit and resume anytime)
-5. `/cw-validate` - verify completion
-6. `/cw-worktree sync` - rebase on main (if needed)
-7. `gh pr create` - open PR (contains spec + implementation)
-8. `exit` - done with this feature
+**In auto-opened Ghostty tabs:**
+1. Press Enter — `/cw-spec` is already pre-typed
+2. `/cw-plan` - create tasks from the spec
+3. `/cw-dispatch` - execute tasks (can exit and resume anytime)
+4. `/cw-validate` - verify completion
+5. `/cw-worktree sync` - rebase on main (if needed)
+6. `gh pr create` - open PR (contains spec + implementation)
+7. `exit` - done with this feature
 
 **From main session (control center):**
 - `/cw-worktree list` - check status of all worktrees
 - `/cw-worktree create <other>` - create more worktrees
+- `/cw-worktree open` - reopen tabs if Ghostty was closed
 - `/cw-worktree cleanup` - remove merged worktrees (after PRs merged)
 
 **To resume work later:**
-- `cd .worktrees/feature-{name} && claude` - tasks are restored
+- `/cw-worktree open` - reopens Ghostty tabs with claude running

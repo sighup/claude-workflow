@@ -1,0 +1,249 @@
+#!/bin/bash
+#
+# cw-ghostty - Launch Ghostty tabs for Claude Workflow worktrees
+#
+# Opens a Ghostty window with one tab per worktree, each pre-configured
+# with the correct directory, claude session, and /cw-spec command.
+#
+# Usage:
+#   cw-ghostty [OPTIONS] <name> [name...]
+#   cw-ghostty --all
+#
+# Options:
+#   --all                Open tabs for all existing worktrees
+#   --no-claude          Skip launching claude (just cd into worktree)
+#   --no-pretype         Skip pre-typing /cw-spec command
+#   --project-root DIR   Explicit project root (default: git rev-parse --show-toplevel)
+#   -h, --help           Show this help message
+#
+# Environment:
+#   CW_GHOSTTY_CLAUDE_DELAY  Seconds to wait before pre-typing (default: 4)
+#
+# Exit Codes:
+#   0  Tabs launched successfully
+#   1  No valid worktrees found
+#   2  Ghostty not installed
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+FEATURE_NAMES=()
+ALL_WORKTREES=false
+NO_CLAUDE=false
+NO_PRETYPE=false
+PROJECT_ROOT=""
+CLAUDE_DELAY="${CW_GHOSTTY_CLAUDE_DELAY:-4}"
+
+# =============================================================================
+# Help
+# =============================================================================
+
+show_help() {
+    echo "Usage: cw-ghostty [OPTIONS] <name> [name...]"
+    echo "       cw-ghostty --all"
+    echo ""
+    echo "Launch Ghostty tabs for Claude Workflow worktrees."
+    echo ""
+    echo "Options:"
+    echo "  --all                Open tabs for all existing worktrees"
+    echo "  --no-claude          Skip launching claude (just cd into worktree)"
+    echo "  --no-pretype         Skip pre-typing /cw-spec command"
+    echo "  --project-root DIR   Explicit project root (default: git toplevel)"
+    echo "  -h, --help           Show this help message"
+    echo ""
+    echo "Environment:"
+    echo "  CW_GHOSTTY_CLAUDE_DELAY  Seconds before pre-typing (default: 4)"
+    echo ""
+    echo "Examples:"
+    echo "  cw-ghostty auth billing search    # Open 3 tabs"
+    echo "  cw-ghostty --all                  # Open tabs for all worktrees"
+    echo "  cw-ghostty --no-claude auth       # Just cd, don't launch claude"
+}
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --all) ALL_WORKTREES=true; shift ;;
+        --no-claude) NO_CLAUDE=true; shift ;;
+        --no-pretype) NO_PRETYPE=true; shift ;;
+        --project-root) require_arg "--project-root" "${2:-}"; PROJECT_ROOT="$2"; shift 2 ;;
+        -h|--help) show_help; exit 0 ;;
+        -*) log_error "Unknown option: $1"; show_help; exit 1 ;;
+        *) FEATURE_NAMES+=("$1"); shift ;;
+    esac
+done
+
+# =============================================================================
+# Preflight
+# =============================================================================
+
+check_ghostty() {
+    if ! command -v ghostty &> /dev/null && [ ! -d "/Applications/Ghostty.app" ]; then
+        log_error "Ghostty is not installed."
+        log_info "Install from: https://ghostty.org"
+        exit 2
+    fi
+}
+
+check_ghostty
+
+# Resolve project root
+if [ -z "$PROJECT_ROOT" ]; then
+    PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+        log_error "Not in a git repository. Use --project-root to specify."
+        exit 1
+    }
+fi
+
+# =============================================================================
+# Discover Worktrees
+# =============================================================================
+
+if [ "$ALL_WORKTREES" = true ]; then
+    for dir in "$PROJECT_ROOT"/.worktrees/feature-*/; do
+        [ -d "$dir" ] || continue
+        name="$(basename "$dir")"
+        name="${name#feature-}"
+        FEATURE_NAMES+=("$name")
+    done
+
+    if [ ${#FEATURE_NAMES[@]} -eq 0 ]; then
+        log_error "No worktrees found in $PROJECT_ROOT/.worktrees/"
+        exit 1
+    fi
+fi
+
+if [ ${#FEATURE_NAMES[@]} -eq 0 ]; then
+    log_error "No feature names provided. Use --all or specify names."
+    show_help
+    exit 1
+fi
+
+# =============================================================================
+# Validate Worktrees
+# =============================================================================
+
+VALID_NAMES=()
+for name in "${FEATURE_NAMES[@]}"; do
+    worktree_dir="$PROJECT_ROOT/.worktrees/feature-${name}"
+    if [ ! -d "$worktree_dir" ]; then
+        log_warning "Worktree not found, skipping: $worktree_dir"
+    else
+        VALID_NAMES+=("$name")
+    fi
+done
+
+if [ ${#VALID_NAMES[@]} -eq 0 ]; then
+    log_error "No valid worktrees found."
+    exit 1
+fi
+
+if [ ${#VALID_NAMES[@]} -gt 8 ]; then
+    log_warning "${#VALID_NAMES[@]} tabs requested — AppleScript timing may be unreliable for >8 tabs."
+fi
+
+log_info "Opening ${#VALID_NAMES[@]} Ghostty tab(s): ${VALID_NAMES[*]}"
+
+# =============================================================================
+# Generate and Execute AppleScript
+# =============================================================================
+
+emit_tab_setup() {
+    local name="$1"
+    local worktree_path="$PROJECT_ROOT/.worktrees/feature-${name}"
+    local is_first="$2"
+
+    if [ "$is_first" = false ]; then
+        # Open new tab
+        cat <<'APPLESCRIPT'
+    keystroke "t" using command down
+    delay 0.5
+APPLESCRIPT
+    fi
+
+    # Set tab title via precmd hook + cd into worktree
+    cat <<APPLESCRIPT
+    keystroke "t(){ printf '\\\\e]2;${name}\\\\a'; }; precmd_functions+=(t); clear"
+    key code 36 -- Return
+    delay 0.3
+    keystroke "cd ${worktree_path}"
+    key code 36 -- Return
+    delay 0.3
+APPLESCRIPT
+
+    # Optionally launch claude
+    if [ "$NO_CLAUDE" = false ]; then
+        cat <<APPLESCRIPT
+    keystroke "claude"
+    key code 36 -- Return
+    delay ${CLAUDE_DELAY}
+APPLESCRIPT
+
+        # Optionally pre-type /cw-spec (without pressing Enter)
+        if [ "$NO_PRETYPE" = false ]; then
+            cat <<APPLESCRIPT
+    keystroke "/cw-spec ${name}"
+    delay 0.3
+APPLESCRIPT
+        fi
+    fi
+}
+
+generate_applescript() {
+    cat <<'APPLESCRIPT'
+tell application "System Events"
+  tell process "ghostty"
+    set frontmost to true
+    delay 0.3
+
+    -- Open a new window
+    keystroke "n" using command down
+    delay 0.5
+
+    -- Resize window for comfortable multi-tab work
+    set {curW, curH} to size of window 1
+    set targetW to round (curW * 190 / 80)
+    set targetH to round (curH * 40 / 24)
+    set size of window 1 to {targetW, targetH}
+    delay 0.3
+APPLESCRIPT
+
+    local first=true
+    for name in "${VALID_NAMES[@]}"; do
+        emit_tab_setup "$name" "$first"
+        first=false
+    done
+
+    # Switch back to first tab
+    cat <<'APPLESCRIPT'
+
+    -- Go back to the first tab
+    keystroke "1" using command down
+  end tell
+end tell
+APPLESCRIPT
+}
+
+# Launch Ghostty if not running
+if ! pgrep -x ghostty > /dev/null; then
+    open -a Ghostty.app
+    sleep 1.5
+else
+    open -a Ghostty.app
+    sleep 0.3
+fi
+
+# Execute the generated AppleScript
+generate_applescript | osascript
+
+log_success "Ghostty tabs opened for: ${VALID_NAMES[*]}"
