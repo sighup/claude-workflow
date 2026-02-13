@@ -105,14 +105,12 @@ This pattern leverages the **control center** session to set up parallel develop
 
 ## Starter Prompt Generation
 
-When you've scoped out a feature during discovery (identified components, routes, requirements), **generate a starter prompt** that the user can paste into the worktree session. This carries the context from the control center into the feature session.
+When you've scoped out a feature during discovery (identified components, routes, requirements), **generate a starter prompt** and save it to the worktree. This carries the context from the control center into the feature session automatically — `cw-ghostty` will paste it into the split when launching.
 
-Include the starter prompt in the worktree creation output as plain text (easy to copy):
+**Save the starter prompt** to `.claude/starter-prompt.txt` inside each worktree:
 
-```
-STARTER PROMPT (copy into worktree session)
-═══════════════════════════════════════════
-
+```bash
+cat > "$PROJECT_ROOT/.worktrees/feature-{name}/.claude/starter-prompt.txt" << 'EOF'
 Build the Team Integration Settings Page.
 
 Route: /settings/team/[teamId]/integrations
@@ -126,8 +124,11 @@ Components needed:
 
 This enables teams to configure integrations through UI instead of direct API calls.
 
-Run: /cw-spec team-integration-settings
+/cw-spec team-integration-settings
+EOF
 ```
+
+When `cw-ghostty` opens splits, it checks for `.claude/starter-prompt.txt` in each worktree. If found, it pastes the full starter prompt (via clipboard). If not found, it falls back to `/cw-spec {name}`.
 
 **When to generate a starter prompt:**
 - Feature requirements were discussed before worktree creation
@@ -139,7 +140,7 @@ Run: /cw-spec team-integration-settings
 - Key components/files to create
 - Routes or API endpoints involved
 - Reference files or patterns to follow
-- The `/cw-spec` command to run
+- The `/cw-spec {name}` command as the last line
 
 **When NOT to generate a starter prompt:**
 - Simple `/cw-worktree create <name>` without prior discussion
@@ -281,9 +282,9 @@ Open new terminals to start development:
    Status: Ready for development
    ```
 
-10. **Auto-launch Ghostty tabs:**
+10. **Auto-launch Ghostty splits:**
 
-   After all worktrees are created, launch Ghostty tabs for each worktree.
+   After all worktrees are created, launch Ghostty splits for each worktree.
 
    **Locate `cw-ghostty`:** The script is at `bin/cw-ghostty` in the **claude-workflow** project (not the current project). Find it by running:
    ```bash
@@ -304,38 +305,35 @@ Open new terminals to start development:
    "$CW_GHOSTTY" --project-root "$(git rev-parse --show-toplevel)" feature1 feature2 feature3
    ```
 
-   This opens a Ghostty window with one tab per worktree, each:
-   - Titled with the feature name
+   This opens a Ghostty window with one split per worktree, each:
    - `cd`'d into the worktree directory
    - Running `claude`
    - Pre-typed with `/cw-spec {feature-name}` (user just presses Enter)
 
    After successful launch, report:
    ```
-   GHOSTTY TABS OPENED
-   ====================
-   Tabs opened for: auth, billing, search
-   Each tab has claude running with /cw-spec pre-typed — just press Enter.
+   GHOSTTY SPLITS OPENED
+   =====================
+   Splits opened for: auth, billing, search
+   Each split has claude running with /cw-spec pre-typed — just press Enter.
 
    From THIS session (control center):
      /cw-worktree list              # Check status of all worktrees
      /cw-worktree create <other>    # Create more worktrees
-     /cw-worktree open              # Reopen tabs if closed
+     /cw-worktree open              # Reopen splits if closed
      /cw-worktree cleanup           # Remove merged worktrees
 
-   To reopen tabs later:
+   To reopen splits later:
      /cw-worktree open              # All worktrees
      /cw-worktree open auth billing  # Specific worktrees
    ```
 
-11. **Include starter prompt (if context was gathered):**
+11. **Save starter prompt (if context was gathered):**
 
-   If the feature was scoped during discovery (components identified, requirements discussed), include a starter prompt the user can paste into the worktree session. Use plain text for easy copying:
+   If the feature was scoped during discovery (components identified, requirements discussed), write a starter prompt file into each worktree. `cw-ghostty` will automatically paste this into the split when launching.
 
-   ```
-   STARTER PROMPT (copy into worktree session)
-   ═══════════════════════════════════════════
-
+   ```bash
+   cat > "$PROJECT_ROOT/.worktrees/feature-{name}/.claude/starter-prompt.txt" << 'EOF'
    Build {feature-name}.
 
    {Brief description of what the feature does}
@@ -346,8 +344,11 @@ Open new terminals to start development:
 
    {Any routes, APIs, or patterns to follow}
 
-   Run: /cw-spec {feature-name}
+   /cw-spec {feature-name}
+   EOF
    ```
+
+   The `.claude/` directory already exists (created in step 9 for `settings.local.json`).
 
 ---
 
@@ -730,12 +731,12 @@ Removes completed or orphaned worktrees.
 
 ### /cw-worktree open [feature-name] [feature-name-2] [...]
 
-Opens Ghostty tabs for existing worktrees. Use this to reopen tabs after closing Ghostty, or to open tabs for worktrees created earlier.
+Opens Ghostty splits for existing worktrees. Use this to reopen splits after closing Ghostty, or to open splits for worktrees created earlier.
 
 **Examples:**
 ```bash
-/cw-worktree open                    # Open tabs for ALL worktrees
-/cw-worktree open auth billing       # Open tabs for specific worktrees
+/cw-worktree open                    # Open splits for ALL worktrees
+/cw-worktree open auth billing       # Open splits for specific worktrees
 ```
 
 **Process:**
@@ -785,10 +786,10 @@ Opens Ghostty tabs for existing worktrees. Use this to reopen tabs after closing
 
 4. **Report results:**
    ```
-   GHOSTTY TABS OPENED
-   ====================
-   Tabs opened for: auth, billing, search
-   Each tab has claude running with /cw-spec pre-typed — just press Enter.
+   GHOSTTY SPLITS OPENED
+   =====================
+   Splits opened for: auth, billing, search
+   Each split has claude running with /cw-spec pre-typed — just press Enter.
    ```
 
    If Ghostty is not installed:
@@ -812,18 +813,18 @@ Each worktree is a **self-contained feature unit**: one worktree = one spec + on
 │ Keep this session running to manage all worktrees:     │
 │ • /cw-worktree create <feature>  (auto-opens Ghostty)  │
 │ • /cw-worktree list                                    │
-│ • /cw-worktree open              (reopen closed tabs)  │
+│ • /cw-worktree open              (reopen splits)       │
 │ • /cw-worktree cleanup                                 │
 └─────────────────────────────────────────────────────────┘
-     │  Auto-launched Ghostty tabs ▼
+     │  Auto-launched Ghostty splits ▼
      │
-     ├──► Tab "auth": cd .worktrees/feature-auth && claude
+     ├──► Split "auth": cd .worktrees/feature-auth && claude
      │    /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
      │
-     ├──► Tab "billing": cd .worktrees/feature-billing && claude
+     ├──► Split "billing": cd .worktrees/feature-billing && claude
      │    /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
      │
-     └──► Tab "search": cd .worktrees/feature-search && claude
+     └──► Split "search": cd .worktrees/feature-search && claude
           /cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create
 ```
 
@@ -832,11 +833,11 @@ Each worktree is a **self-contained feature unit**: one worktree = one spec + on
 ```
 MAIN SESSION (control center - stays open):
   1. /cw-worktree create auth billing search
-     ↳ Worktrees created + Ghostty tabs auto-opened
-     ↳ Each tab has claude running, /cw-spec pre-typed
+     ↳ Worktrees created + Ghostty splits auto-opened
+     ↳ Each split has claude running, /cw-spec pre-typed
   2. /cw-worktree list             # Check status anytime
 
-GHOSTTY TABS (auto-opened, one per feature):
+GHOSTTY SPLITS (auto-opened, one per feature):
   3. Press Enter to run /cw-spec (already pre-typed)
   4. /cw-plan → creates tasks (stored in ~/.claude/tasks/feature-auth/)
   5. /cw-dispatch → runs workers (all in this worktree)
@@ -846,9 +847,9 @@ GHOSTTY TABS (auto-opened, one per feature):
   9. gh pr create → PR contains spec + implementation
   10. exit → done with this feature
 
-MAIN SESSION (reopen tabs if closed):
-  11. /cw-worktree open             # Reopen all tabs
-  12. /cw-worktree open auth        # Reopen specific tab
+MAIN SESSION (reopen splits if closed):
+  11. /cw-worktree open             # Reopen all splits
+  12. /cw-worktree open auth        # Reopen specific split
 
 MAIN SESSION (after PR approved):
   13. /cw-worktree cleanup → removes merged worktrees
@@ -966,9 +967,9 @@ git branch -D feature/{name}
 
 ## What Comes Next
 
-After creating worktrees, Ghostty tabs open automatically:
+After creating worktrees, Ghostty splits open automatically:
 
-**In auto-opened Ghostty tabs:**
+**In auto-opened Ghostty splits:**
 1. Press Enter — `/cw-spec` is already pre-typed
 2. `/cw-plan` - create tasks from the spec
 3. `/cw-dispatch` - execute tasks (can exit and resume anytime)
@@ -980,8 +981,8 @@ After creating worktrees, Ghostty tabs open automatically:
 **From main session (control center):**
 - `/cw-worktree list` - check status of all worktrees
 - `/cw-worktree create <other>` - create more worktrees
-- `/cw-worktree open` - reopen tabs if Ghostty was closed
+- `/cw-worktree open` - reopen splits if Ghostty was closed
 - `/cw-worktree cleanup` - remove merged worktrees (after PRs merged)
 
 **To resume work later:**
-- `/cw-worktree open` - reopens Ghostty tabs with claude running
+- `/cw-worktree open` - reopens Ghostty splits with claude running

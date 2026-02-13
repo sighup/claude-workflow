@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# cw-ghostty - Launch Ghostty tabs for Claude Workflow worktrees
+# cw-ghostty - Launch Ghostty splits for Claude Workflow worktrees
 #
-# Opens a Ghostty window with one tab per worktree, each pre-configured
+# Opens a Ghostty window with one split per worktree, each pre-configured
 # with the correct directory, claude session, and /cw-spec command.
 #
 # Usage:
@@ -10,7 +10,8 @@
 #   cw-ghostty --all
 #
 # Options:
-#   --all                Open tabs for all existing worktrees
+#   --all                Open splits for all existing worktrees
+#   --tabs               Use tabs instead of splits
 #   --no-claude          Skip launching claude (just cd into worktree)
 #   --no-pretype         Skip pre-typing /cw-spec command
 #   --project-root DIR   Explicit project root (default: git rev-parse --show-toplevel)
@@ -20,7 +21,7 @@
 #   CW_GHOSTTY_CLAUDE_DELAY  Seconds to wait before pre-typing (default: 4)
 #
 # Exit Codes:
-#   0  Tabs launched successfully
+#   0  Splits launched successfully
 #   1  No valid worktrees found
 #   2  Ghostty not installed
 #
@@ -36,6 +37,7 @@ source "$SCRIPT_DIR/lib/cw-common.sh"
 
 FEATURE_NAMES=()
 ALL_WORKTREES=false
+USE_TABS=false
 NO_CLAUDE=false
 NO_PRETYPE=false
 PROJECT_ROOT=""
@@ -49,10 +51,11 @@ show_help() {
     echo "Usage: cw-ghostty [OPTIONS] <name> [name...]"
     echo "       cw-ghostty --all"
     echo ""
-    echo "Launch Ghostty tabs for Claude Workflow worktrees."
+    echo "Launch Ghostty splits for Claude Workflow worktrees."
     echo ""
     echo "Options:"
-    echo "  --all                Open tabs for all existing worktrees"
+    echo "  --all                Open splits for all existing worktrees"
+    echo "  --tabs               Use tabs instead of splits"
     echo "  --no-claude          Skip launching claude (just cd into worktree)"
     echo "  --no-pretype         Skip pre-typing /cw-spec command"
     echo "  --project-root DIR   Explicit project root (default: git toplevel)"
@@ -62,8 +65,9 @@ show_help() {
     echo "  CW_GHOSTTY_CLAUDE_DELAY  Seconds before pre-typing (default: 4)"
     echo ""
     echo "Examples:"
-    echo "  cw-ghostty auth billing search    # Open 3 tabs"
-    echo "  cw-ghostty --all                  # Open tabs for all worktrees"
+    echo "  cw-ghostty auth billing search    # Open 3 splits"
+    echo "  cw-ghostty --all                  # Open splits for all worktrees"
+    echo "  cw-ghostty --tabs auth billing    # Use tabs instead of splits"
     echo "  cw-ghostty --no-claude auth       # Just cd, don't launch claude"
 }
 
@@ -74,6 +78,7 @@ show_help() {
 while [[ $# -gt 0 ]]; do
     case $1 in
         --all) ALL_WORKTREES=true; shift ;;
+        --tabs) USE_TABS=true; shift ;;
         --no-claude) NO_CLAUDE=true; shift ;;
         --no-pretype) NO_PRETYPE=true; shift ;;
         --project-root) require_arg "--project-root" "${2:-}"; PROJECT_ROOT="$2"; shift 2 ;;
@@ -149,29 +154,45 @@ if [ ${#VALID_NAMES[@]} -eq 0 ]; then
 fi
 
 if [ ${#VALID_NAMES[@]} -gt 8 ]; then
-    log_warning "${#VALID_NAMES[@]} tabs requested — AppleScript timing may be unreliable for >8 tabs."
+    log_warning "${#VALID_NAMES[@]} panes requested — AppleScript timing may be unreliable for >8 panes."
 fi
 
-log_info "Opening ${#VALID_NAMES[@]} Ghostty tab(s): ${VALID_NAMES[*]}"
+PANE_TYPE="split"
+[ "$USE_TABS" = true ] && PANE_TYPE="tab"
+log_info "Opening ${#VALID_NAMES[@]} Ghostty ${PANE_TYPE}(s): ${VALID_NAMES[*]}"
 
 # =============================================================================
 # Generate and Execute AppleScript
 # =============================================================================
 
-emit_tab_setup() {
+emit_pane_setup() {
     local name="$1"
     local worktree_path="$PROJECT_ROOT/.worktrees/feature-${name}"
-    local is_first="$2"
+    local pane_index="$2"  # 0=first pane, 1=second (split right), 2+=subsequent (split down)
 
-    if [ "$is_first" = false ]; then
-        # Open new tab
-        cat <<'APPLESCRIPT'
+    if [ "$pane_index" -gt 0 ]; then
+        if [ "$USE_TABS" = true ]; then
+            # Open new tab
+            cat <<'APPLESCRIPT'
     keystroke "t" using command down
     delay 0.5
 APPLESCRIPT
+        elif [ "$pane_index" -eq 1 ]; then
+            # First split: Cmd+D (split right — creates two columns)
+            cat <<'APPLESCRIPT'
+    keystroke "d" using command down
+    delay 0.5
+APPLESCRIPT
+        else
+            # Subsequent splits: Cmd+Shift+D (split down — stack in right column)
+            cat <<'APPLESCRIPT'
+    keystroke "d" using {command down, shift down}
+    delay 0.5
+APPLESCRIPT
+        fi
     fi
 
-    # Set tab title via precmd hook + cd into worktree
+    # Set title via precmd hook + cd into worktree
     cat <<APPLESCRIPT
     keystroke "t(){ printf '\\\\e]2;${name}\\\\a'; }; precmd_functions+=(t); clear"
     key code 36 -- Return
@@ -189,12 +210,23 @@ APPLESCRIPT
     delay ${CLAUDE_DELAY}
 APPLESCRIPT
 
-        # Optionally pre-type /cw-spec (without pressing Enter)
+        # Pre-type starter prompt or fallback to /cw-spec {name}
         if [ "$NO_PRETYPE" = false ]; then
-            cat <<APPLESCRIPT
+            local starter_file="$worktree_path/.claude/starter-prompt.txt"
+            if [ -f "$starter_file" ]; then
+                # Paste starter prompt via clipboard (preserves multi-line content)
+                cat <<APPLESCRIPT
+    do shell script "cat '${starter_file}' | /usr/bin/pbcopy"
+    delay 0.2
+    keystroke "v" using command down
+    delay 0.3
+APPLESCRIPT
+            else
+                cat <<APPLESCRIPT
     keystroke "/cw-spec ${name}"
     delay 0.3
 APPLESCRIPT
+            fi
         fi
     fi
 }
@@ -210,7 +242,7 @@ tell application "System Events"
     keystroke "n" using command down
     delay 0.5
 
-    -- Resize window for comfortable multi-tab work
+    -- Resize window for comfortable multi-pane work
     set {curW, curH} to size of window 1
     set targetW to round (curW * 190 / 80)
     set targetH to round (curH * 40 / 24)
@@ -218,20 +250,38 @@ tell application "System Events"
     delay 0.3
 APPLESCRIPT
 
-    local first=true
+    local index=0
     for name in "${VALID_NAMES[@]}"; do
-        emit_tab_setup "$name" "$first"
-        first=false
+        emit_pane_setup "$name" "$index"
+        index=$((index + 1))
     done
 
-    # Switch back to first tab
-    cat <<'APPLESCRIPT'
+    if [ "$USE_TABS" = true ]; then
+        # Switch back to first tab
+        cat <<'APPLESCRIPT'
 
     -- Go back to the first tab
     keystroke "1" using command down
   end tell
 end tell
 APPLESCRIPT
+    else
+        # Navigate back to first split: Cmd+[ repeated (goto_split:previous)
+        local count=${#VALID_NAMES[@]}
+        if [ "$count" -gt 1 ]; then
+            echo ""
+            echo "    -- Go back to the first split"
+            for (( i = 1; i < count; i++ )); do
+                echo '    keystroke "[" using command down'
+                echo '    delay 0.2'
+            done
+        fi
+
+        cat <<'APPLESCRIPT'
+  end tell
+end tell
+APPLESCRIPT
+    fi
 }
 
 # Launch Ghostty if not running
@@ -246,4 +296,4 @@ fi
 # Execute the generated AppleScript
 generate_applescript | osascript
 
-log_success "Ghostty tabs opened for: ${VALID_NAMES[*]}"
+log_success "Ghostty ${PANE_TYPE}s opened for: ${VALID_NAMES[*]}"
