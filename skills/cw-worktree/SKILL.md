@@ -1,6 +1,6 @@
 ---
 name: cw-worktree
-description: "Manage git worktrees for parallel feature development. Create, list, switch, and merge feature worktrees to enable working on multiple specs simultaneously."
+description: "Manage git worktrees for parallel feature development. Use when starting multiple features at once, or to list, switch between, and merge existing worktrees."
 user-invocable: true
 allowed-tools: Bash, Glob, Grep, Read, AskUserQuestion
 ---
@@ -331,7 +331,7 @@ Open new terminals to start development:
    Run: /cw-spec {feature-name}
    ```
 
----
+***
 
 ### /cw-worktree list
 
@@ -367,7 +367,7 @@ Lists all active worktrees and their status.
    - 02-spec-billing → .worktrees/feature-billing
    ```
 
----
+***
 
 ### /cw-worktree status <feature-name>
 
@@ -426,7 +426,7 @@ Shows detailed status for a specific feature worktree.
    Ready to merge: Yes | No (uncommitted changes)
    ```
 
----
+***
 
 ### /cw-worktree merge <feature-name>
 
@@ -568,7 +568,7 @@ Merges a completed feature branch back to main.
    - Push to remote: git push origin main
    ```
 
----
+***
 
 ### /cw-worktree sync <feature-name>
 
@@ -644,7 +644,7 @@ Rebases the feature branch on the latest main to prepare for PR or resolve confl
    Ready for PR: gh pr create
    ```
 
----
+***
 
 ### /cw-worktree cleanup
 
@@ -708,7 +708,7 @@ Removes completed or orphaned worktrees.
    git worktree prune
    ```
 
----
+***
 
 ## Integration with Claude Workflow
 

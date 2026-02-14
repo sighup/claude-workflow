@@ -1,6 +1,6 @@
 ---
 name: cw-validate
-description: "Validate implementation against spec using 6 gates and generate a coverage matrix. Checks proof artifacts, repository patterns, credential safety, and requirement coverage."
+description: "Validate implementation against spec using 6 gates and generate a coverage matrix. Use after implementation is complete to verify coverage, proof artifacts, and credential safety before review."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate
 ---

@@ -1,6 +1,6 @@
 ---
 name: cw-testing
-description: "E2E testing with auto-fix. Generate tests from specs, execute in isolated sub-agents, auto-fix application bugs when tests fail."
+description: "E2E testing with auto-fix. Generate tests from specs, execute in isolated sub-agents, and auto-fix application bugs. Use after implementation to verify end-to-end behavior."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, Task, AskUserQuestion
 ---
@@ -41,7 +41,7 @@ You are the **Test Orchestrator** in the Claude Workflow system. You verify impl
 
 Parse user input to determine subcommand. If none provided, show help and ask.
 
----
+***
 
 ## Subcommand: init
 
@@ -72,7 +72,7 @@ Parse user input to determine subcommand. If none provided, show help and ask.
    ```
 6. **Output summary** - see `references/output-examples.md`
 
----
+***
 
 ## Subcommand: run
 
@@ -134,7 +134,7 @@ Check stopping conditions (all passed, max iterations, all blocked). If continui
 ### Output
 See `references/output-examples.md` for run output format.
 
----
+***
 
 ## Subcommand: status
 
@@ -143,7 +143,7 @@ See `references/output-examples.md` for run output format.
 List all test tasks with their status, pass/fail timestamps, and fix history.
 See `references/output-examples.md` for format.
 
----
+***
 
 ## Subcommand: reset
 
@@ -155,7 +155,7 @@ Reset test tasks to pending. Options:
 
 Ask user whether to delete fix tasks and clear artifacts.
 
----
+***
 
 ## References
 
@@ -167,7 +167,7 @@ Ask user whether to delete fix tasks and clear artifacts.
 | `references/automation-backends.md` | Backend detection and usage |
 | `references/output-examples.md` | Output format examples |
 
----
+***
 
 ## Error Handling
 
@@ -178,7 +178,7 @@ Ask user whether to delete fix tasks and clear artifacts.
 | Network/timeout | Retry 3x, then mark failed |
 | Fix cannot determine cause | Report failure with investigation notes |
 
----
+***
 
 ## What Comes Next
 
