@@ -1,6 +1,6 @@
 ---
 name: cw-worktree
-description: "Manage git worktrees for parallel feature development. Create, list, switch, and merge feature worktrees to enable working on multiple specs simultaneously."
+description: "Manage git worktrees for parallel feature development. Use when starting multiple features at once, or to list, switch between, and merge existing worktrees."
 user-invocable: true
 allowed-tools: Bash, Glob, Grep, Read, AskUserQuestion
 ---
@@ -296,11 +296,12 @@ Open new terminals to start development:
 
    After all worktrees are created, launch Ghostty splits for each worktree.
 
-   **Locate `cw-ghostty`:** The script is at `bin/cw-ghostty` in the **claude-workflow** project (not the current project). Find it by running:
+   **Locate `cw-ghostty`:** The script is at `bin/cw-ghostty` in the **claude-workflow** plugin. Find it by checking PATH, then the known plugin install location:
    ```bash
    CW_GHOSTTY="$(command -v cw-ghostty 2>/dev/null)"
    if [ -z "$CW_GHOSTTY" ]; then
-     CW_GHOSTTY="$(find "$HOME/Projects" -maxdepth 3 -name "cw-ghostty" -path "*/bin/cw-ghostty" 2>/dev/null | head -1)"
+     local candidate="$HOME/.claude/plugins/marketplaces/claude-workflow/bin/cw-ghostty"
+     [ -x "$candidate" ] && CW_GHOSTTY="$candidate"
    fi
    ```
 
@@ -360,7 +361,7 @@ Open new terminals to start development:
 
    The `.claude/` directory already exists (created in step 9 for `settings.local.json`).
 
----
+***
 
 ### /cw-worktree list
 
@@ -396,7 +397,7 @@ Lists all active worktrees and their status.
    - 02-spec-billing → .worktrees/feature-billing
    ```
 
----
+***
 
 ### /cw-worktree status <feature-name>
 
@@ -455,7 +456,7 @@ Shows detailed status for a specific feature worktree.
    Ready to merge: Yes | No (uncommitted changes)
    ```
 
----
+***
 
 ### /cw-worktree merge <feature-name>
 
@@ -597,7 +598,7 @@ Merges a completed feature branch back to main.
    - Push to remote: git push origin main
    ```
 
----
+***
 
 ### /cw-worktree sync <feature-name>
 
@@ -673,7 +674,7 @@ Rebases the feature branch on the latest main to prepare for PR or resolve confl
    Ready for PR: gh pr create
    ```
 
----
+***
 
 ### /cw-worktree cleanup
 
@@ -737,7 +738,7 @@ Removes completed or orphaned worktrees.
    git worktree prune
    ```
 
----
+***
 
 ### /cw-worktree open [feature-name] [feature-name-2] [...]
 
@@ -766,11 +767,12 @@ Opens Ghostty splits for existing worktrees. Use this to reopen splits after clo
 
 3. **Locate and call cw-ghostty:**
 
-   Find `cw-ghostty` (it lives in the **claude-workflow** project's `bin/`, not the current project):
+   Find `cw-ghostty` (it lives in the **claude-workflow** plugin's `bin/`):
    ```bash
    CW_GHOSTTY="$(command -v cw-ghostty 2>/dev/null)"
    if [ -z "$CW_GHOSTTY" ]; then
-     CW_GHOSTTY="$(find "$HOME/Projects" -maxdepth 3 -name "cw-ghostty" -path "*/bin/cw-ghostty" 2>/dev/null | head -1)"
+     local candidate="$HOME/.claude/plugins/marketplaces/claude-workflow/bin/cw-ghostty"
+     [ -x "$candidate" ] && CW_GHOSTTY="$candidate"
    fi
    ```
 
@@ -809,7 +811,7 @@ Opens Ghostty splits for existing worktrees. Use this to reopen splits after clo
      cd .worktrees/feature-billing && claude
    ```
 
----
+***
 
 ## Integration with Claude Workflow
 
