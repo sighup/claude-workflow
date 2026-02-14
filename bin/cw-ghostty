@@ -153,6 +153,12 @@ if [ ${#VALID_NAMES[@]} -eq 0 ]; then
     exit 1
 fi
 
+# Auto-switch to tabs when more than 3 worktrees (splits get too small)
+if [ "$USE_TABS" = false ] && [ ${#VALID_NAMES[@]} -gt 3 ]; then
+    log_info "${#VALID_NAMES[@]} worktrees requested — using tabs for usability"
+    USE_TABS=true
+fi
+
 if [ ${#VALID_NAMES[@]} -gt 8 ]; then
     log_warning "${#VALID_NAMES[@]} panes requested — AppleScript timing may be unreliable for >8 panes."
 fi
@@ -168,7 +174,7 @@ log_info "Opening ${#VALID_NAMES[@]} Ghostty ${PANE_TYPE}(s): ${VALID_NAMES[*]}"
 emit_pane_setup() {
     local name="$1"
     local worktree_path="$PROJECT_ROOT/.worktrees/feature-${name}"
-    local pane_index="$2"  # 0=first pane, 1=second (split right), 2+=subsequent (split down)
+    local pane_index="$2"  # 0=first pane, 1+=subsequent
 
     if [ "$pane_index" -gt 0 ]; then
         if [ "$USE_TABS" = true ]; then
@@ -177,16 +183,10 @@ emit_pane_setup() {
     keystroke "t" using command down
     delay 0.5
 APPLESCRIPT
-        elif [ "$pane_index" -eq 1 ]; then
-            # First split: Cmd+D (split right — creates two columns)
+        else
+            # Split right — vertical side-by-side columns
             cat <<'APPLESCRIPT'
     keystroke "d" using command down
-    delay 0.5
-APPLESCRIPT
-        else
-            # Subsequent splits: Cmd+Shift+D (split down — stack in right column)
-            cat <<'APPLESCRIPT'
-    keystroke "d" using {command down, shift down}
     delay 0.5
 APPLESCRIPT
         fi
