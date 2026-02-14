@@ -208,6 +208,9 @@ APPLESCRIPT
     keystroke "claude"
     key code 36 -- Return
     delay ${CLAUDE_DELAY}
+    -- Accept "trust this folder" prompt if shown (Enter confirms default selection)
+    key code 36 -- Return
+    delay 1
 APPLESCRIPT
 
         # Pre-type starter prompt or fallback to /cw-spec {name}
