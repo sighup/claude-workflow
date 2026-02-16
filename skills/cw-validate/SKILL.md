@@ -219,5 +219,20 @@ Report saved: [path to validation report]
 ## What Comes Next
 
 After validation:
-- **PASS**: Implementation ready for final code review and merge
 - **FAIL**: Report shows exactly what needs fixing; fix issues and re-validate
+- **PASS**: Use AskUserQuestion to offer code review
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Validation passed! Would you like to run a code review?",
+    header: "Review",
+    options: [
+      { label: "Run /cw-review", description: "Review code for bugs, security issues, and quality problems (recommended)" },
+      { label: "Run /cw-review-team", description: "Team-based review with parallel concern-partitioned reviewers" },
+      { label: "Done for now", description: "Skip review" }
+    ],
+    multiSelect: false
+  }]
+})
+```
