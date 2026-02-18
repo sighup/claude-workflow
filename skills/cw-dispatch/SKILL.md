@@ -124,11 +124,14 @@ TaskUpdate({
 
 Send a **single message** with multiple Task tool calls for parallel execution.
 
+**Model Selection**: Read `metadata.model` from TaskGet for each task. If set (non-null), pass it as the `model` parameter to Task(). If null/missing, omit the parameter to inherit the session's default model. If a task has no `metadata` at all, log a warning but proceed with the session default.
+
 **CRITICAL: Use EXACTLY this prompt template. Do NOT give workers direct implementation instructions.**
 
 ```
 Task({
   subagent_type: "claude-workflow:implementer",
+  model: task.metadata.model || undefined,  // omit if null to inherit
   description: "Execute task T01",
   prompt: "You are worker-1. Your assigned task is T01. Run cw-execute to implement it.
 

@@ -277,6 +277,8 @@ Update task board with proof artifact locations.
 without calling TaskUpdate. If you attempt to exit after Phase 8 but before completing
 this phase, you will be prompted to call TaskUpdate before stopping.
 
+**Determine your model identity** by checking the model name from your system context (e.g. `sonnet`, `opus`, `haiku`). Record this in `model_used`.
+
 ```
 TaskUpdate({
   taskId: "<native-id>",
@@ -289,12 +291,14 @@ TaskUpdate({
     ],
     proof_summary: "T01-proofs.md",
     commit_sha: "<sha from git log>",
-    completed_at: "2026-01-24T15:30:00Z"
+    completed_at: "2026-01-24T15:30:00Z",
+    model_used: "sonnet"  // The model you are running as (sonnet, opus, haiku)
   }
 })
 ```
 
 The `proof_dir` and `proof_summary` fields allow cw-validate to locate artifacts.
+The `model_used` field records which model actually executed the task for auditability.
 
 ### Phase 11: CLEAN EXIT
 
@@ -310,6 +314,7 @@ CW-EXECUTE COMPLETE
 ====================
 Task: T01 - [subject]
 Status: COMPLETED
+Model: [model_used]
 
 Proof Artifacts (committed):
   [PASS] docs/specs/.../01-proofs/T01-01-test.txt
