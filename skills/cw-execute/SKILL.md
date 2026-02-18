@@ -1,6 +1,6 @@
 ---
 name: cw-execute
-description: "Execute a single task from the native task board using the 11-phase protocol: orient, baseline, context, implement, verify-local, proof, sanitize, commit, verify-full, report, clean exit."
+description: "Execute a single task from the task board using the 11-phase implementation protocol. Use after cw-plan or cw-dispatch assigns a task, or when manually implementing a specific task by ID."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion
 ---
