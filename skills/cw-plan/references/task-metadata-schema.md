@@ -130,6 +130,15 @@ When a worker completes a task, it fills:
     { "type": "test", "status": "pass", "output_file": "T01-01-test.txt" },
     { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
   ],
-  "completed_at": "2026-01-24T15:30:00Z"
+  "completed_at": "2026-01-24T15:30:00Z",
+  "model_used": "sonnet"                  // Actual model that executed this task
 }
 ```
+
+### Result Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `proof_results` | array | Pass/fail per proof artifact with output file references |
+| `completed_at` | string\|null | ISO 8601 timestamp when task was completed |
+| `model_used` | string\|null | The model that actually executed the task (e.g. `sonnet`, `opus`, `haiku`). Filled by the worker at completion. |
