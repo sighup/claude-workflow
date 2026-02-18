@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.5.0 (2026-02-18)
+
+### Features
+
+- Add per-task model selection via task metadata
+  ([#17](https://github.com/sighup/claude-workflow/pull/17),
+  [`792a644`](https://github.com/sighup/claude-workflow/commit/792a64416c93decba5d22c6d293cd970afa6a23b))
+
+
 ## v2.4.0 (2026-02-18)
 
 ### Features
