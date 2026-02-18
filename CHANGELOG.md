@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.4.0 (2026-02-18)
+
+### Features
+
+- Improve skill descriptions and pre-approve workflow permissions
+  ([#16](https://github.com/sighup/claude-workflow/pull/16),
+  [`b565300`](https://github.com/sighup/claude-workflow/commit/b5653009c889fdf5363fd148063dcc7636a52b59))
+
+
 ## v2.3.0 (2026-02-12)
 
 ### Features
