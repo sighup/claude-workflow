@@ -124,7 +124,7 @@ TaskUpdate({
 
 Send a **single message** with multiple Task tool calls for parallel execution.
 
-**Model Selection**: Read `metadata.model` from TaskGet for each task. If set (non-null), pass it as the `model` parameter to Task(). If null/missing, omit the parameter to inherit the session's default model.
+**Model Selection**: Read `metadata.model` from TaskGet for each task. If set (non-null), pass it as the `model` parameter to Task(). If null/missing, omit the parameter to inherit the session's default model. If a task has no `metadata` at all, log a warning but proceed with the session default.
 
 **CRITICAL: Use EXACTLY this prompt template. Do NOT give workers direct implementation instructions.**
 
