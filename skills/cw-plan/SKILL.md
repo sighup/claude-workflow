@@ -1,6 +1,6 @@
 ---
 name: cw-plan
-description: "Transform a specification into a native task graph with dependencies. Creates parent tasks (demoable units) first, then sub-tasks after approval. Each task carries self-contained metadata for autonomous execution."
+description: "Transform a specification into a task graph with dependencies. Use after cw-spec to break a spec into executable tasks with proper sequencing before dispatching with cw-dispatch."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, Skill
 ---
