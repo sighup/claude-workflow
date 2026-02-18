@@ -88,6 +88,12 @@ After restarting, run /cw-plan again to continue.
 3. **Assess Codebase**: Review existing patterns, conventions, and infrastructure
 4. **Identify Dependencies**: Map logical ordering between demoable units
 5. **Evaluate Complexity**: Assign `trivial`, `standard`, or `complex` to each unit
+6. **Assign Model**: Map complexity to model recommendation:
+   - `trivial` → `"haiku"` (fast, cost-effective)
+   - `standard` → `null` (inherit session default)
+   - `complex` → `"opus"` (maximum capability)
+
+   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`) or `null`.
 
 ### Phase 1.5: Proof Capture Capability
 
@@ -176,6 +182,7 @@ TaskCreate({
     },
     role: "implementer",
     complexity: "trivial|standard|complex",
+    model: null,  // Set to "opus" for complex tasks, "haiku" for trivial, null for default
     proof_results: null,
     completed_at: null
   }
