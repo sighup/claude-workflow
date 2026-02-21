@@ -2,6 +2,10 @@
 
 <!-- version list -->
 
+## v1.0.0 (2026-02-21)
+
+- Initial Release
+
 ## v2.5.0 (2026-02-18)
 
 ### Features
