@@ -8,7 +8,7 @@ A Claude Code plugin that unifies spec-driven development, autonomous task execu
 
 ```bash
 # Add the marketplace
-claude plugin marketplace add https://github.com/sighup/claude-workflow.git
+claude plugin marketplace add https://github.com/liatrio-labs/claude-workflow.git
 
 # Install at project scope (shared with team via .claude/settings.json)
 claude plugin install claude-workflow@claude-workflow --scope project
