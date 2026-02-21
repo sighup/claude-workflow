@@ -35,20 +35,6 @@ claude plugin install claude-workflow@claude-workflow --scope user
 
 Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. `/cw-review` adds a code review gate and `/cw-testing` generates and runs E2E tests.
 
-### Full Pipeline (one command, unattended)
-
-```bash
-./bin/cw-pipeline --prompt "Build JWT authentication" --name auth
-```
-
-Orchestrates the full lifecycle in a git worktree:
-
-```
-prompt → worktree → spec → plan → execute → validate → review → test → fix → re-validate → PR
-```
-
-Each stage runs non-interactively via `claude --print`. Skip stages with `--no-test`, `--no-review`, or `--no-pr`. See [examples/shell-scripts.md](examples/shell-scripts.md) for more options.
-
 ### Worktrees (manual parallel development)
 
 Use `/cw-worktree` to develop multiple features simultaneously. Each worktree gets its own feature branch and **isolated task list** (via `.claude/settings.local.json`). Tasks persist in `~/.claude/tasks/{worktree-name}/`, enabling seamless resume across sessions. See [examples/workflows.md](examples/workflows.md) for the full multi-terminal walkthrough.
@@ -104,39 +90,17 @@ Every task on the board carries self-contained metadata enabling autonomous exec
   "proof_artifacts": [
     { "type": "test", "command": "npm test -- src/auth/login.test.ts", "expected": "All pass" }
   ],
+  "commit": { "template": "feat(auth): add login endpoint" },
   "verification": {
     "pre": ["npm run lint"],
     "post": ["npm test"]
   },
-  "complexity": "standard"
+  "role": "implementer",
+  "complexity": "standard",
+  "model": null
 }
 ```
 
 ## Shell Scripts
 
-For autonomous (unattended) execution without an interactive Claude session:
-
-| Script | Purpose |
-|--------|---------|
-| `cw-pipeline` | Full end-to-end: prompt → worktree → spec → plan → execute → validate → review → test → PR |
-| `cw-init` | Generate spec + plan without executing |
-| `cw-loop` | Autonomous task execution loop (sequential or parallel with `--dispatch`) |
-| `cw-loop-interactive` | Human-in-the-loop execution with pause after each task |
-| `cw-test-init` | Generate E2E test scenarios as `TEST-*` tasks |
-| `cw-test-loop` | Execute tests with auto-fix cycles |
-| `cw-status` | Check task progress (no Claude needed) |
-See [examples/shell-scripts.md](examples/shell-scripts.md) for detailed usage and flag combinations.
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CW_MODEL` | `sonnet` | Claude model for execution |
-| `CW_MAX_ITERATIONS` | `50` | Max loop iterations |
-| `CW_SLEEP` | `5` | Seconds between iterations |
-| `CW_MAX_FAILURES` | `3` | Consecutive failures before abort |
-| `CW_TIMEOUT` | `0` | Claude invocation timeout (0=none) |
-| `CW_INVOKE_RETRIES` | `3` | Retries per Claude invocation |
-| `CW_RETRY_DELAY` | `10` | Seconds between retries |
-| `CW_NON_INTERACTIVE` | `false` | Skip confirmation prompts |
-| `CW_VERBOSE` | `false` | Stream JSON output for real-time visibility |
+Shell scripts in `bin/` are optional and enable autonomous (unattended) execution without an interactive Claude session — useful for CI pipelines or scripted workflows. All core functionality is available through the skills above. See [examples/shell-scripts.md](examples/shell-scripts.md) for usage and environment variable reference.
