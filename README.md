@@ -50,6 +50,7 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-dispatch-team` | Persistent agent team with lead coordination for parallel task execution |
 | `/cw-validate` | Run 6 validation gates and produce a coverage matrix report |
 | `/cw-review` | Review implementation for bugs, security issues, and quality; creates fix tasks |
+| `/cw-review-team` | Concern-partitioned team review — each reviewer sees all files through a specialized lens (security, correctness, spec compliance) |
 | `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
 
