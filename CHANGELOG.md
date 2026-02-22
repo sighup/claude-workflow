@@ -2,6 +2,74 @@
 
 <!-- version list -->
 
+## v2.6.0 (2026-02-22)
+
+### Bug Fixes
+
+- Map standard complexity to sonnet instead of null
+  ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+- Present execution options in cw-spec after architect subagent completes
+  ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+- Restore version to 2.5.0 and remove spurious v1.0.0 changelog entry
+  ([`0207405`](https://github.com/liatrio-labs/claude-workflow/commit/0207405739ba5e31d18b14c160b8eb6f24954143))
+
+- Update remaining Architect reference to Planner in cw-spec
+  ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+### Chores
+
+- New repo location
+  ([`f4aed8f`](https://github.com/liatrio-labs/claude-workflow/commit/f4aed8f6a0bd42c9c566733fb10538a343618fe1))
+
+- Update repo references from sighup to liatrio-labs
+  ([`e4831d7`](https://github.com/liatrio-labs/claude-workflow/commit/e4831d739374bfe948771097eb914f99e6754c28))
+
+### Documentation
+
+- Add missing cw-review-team to skills table in README
+  ([#2](https://github.com/liatrio-labs/claude-workflow/pull/2),
+  [`5a1fdc8`](https://github.com/liatrio-labs/claude-workflow/commit/5a1fdc88d6a43a44ea8df11a902a8d9b667399e5))
+
+- Clarify shell scripts are optional in README
+  ([#1](https://github.com/liatrio-labs/claude-workflow/pull/1),
+  [`0e39ce5`](https://github.com/liatrio-labs/claude-workflow/commit/0e39ce596d64437e4c70ab84848ab0cfeb894504))
+
+- De-emphasize shell scripts and fix task metadata in README
+  ([#1](https://github.com/liatrio-labs/claude-workflow/pull/1),
+  [`0e39ce5`](https://github.com/liatrio-labs/claude-workflow/commit/0e39ce596d64437e4c70ab84848ab0cfeb894504))
+
+### Features
+
+- Add post-wave validation and improve execution option descriptions
+  ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+- Planner subagent with two-pass planning, context-aware recommendations, and execution routing
+  ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+- Set architect agent model to opus ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+- Spawn architect subagent for /cw-plan from cw-spec
+  ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+- Two-pass architect spawning with context-aware sub-task recommendation
+  ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+### Refactoring
+
+- Rename architect agent to planner ([#3](https://github.com/liatrio-labs/claude-workflow/pull/3),
+  [`4baff14`](https://github.com/liatrio-labs/claude-workflow/commit/4baff14db00a077e743d3095d61a9f59d7475ece))
+
+
 ## v2.5.0 (2026-02-18)
 
 ### Features
