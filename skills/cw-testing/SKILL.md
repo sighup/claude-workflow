@@ -45,32 +45,74 @@ Parse user input to determine subcommand. If none provided, show help and ask.
 
 ## Subcommand: init
 
-**Usage**: `/cw-testing init "Test login"` or `/cw-testing init --spec <path>`
+**Usage**:
+```
+/cw-testing init                    # auto-discover current spec
+/cw-testing init --spec <path>      # use specific spec (checks for gherkin.md first)
+/cw-testing init --gherkin <path>   # use specific gherkin.md directly
+/cw-testing init "Test login"       # derive from natural language
+```
 
 ### Process
 
-1. **Analyze input** - natural language or spec file
-2. **Detect automation tools** - check for chrome-devtools MCP, playwright MCP
-3. **Ask user to select backend** - see `references/automation-backends.md`
-4. **Create parent suite task** with metadata:
-   ```json
-   {
-     "test_type": "e2e",
-     "test_suite": true,
-     "base_url": "http://localhost:3000",
-     "automation": { "backend": "chrome-devtools" },
-     "fix_config": { "enabled": true, "max_attempts": 2 }
-   }
-   ```
-5. **Create test step tasks** with natural language action/verify:
-   ```json
-   {
-     "test_status": "pending",
-     "action": { "type": "interact", "prompt": "Click the Login button" },
-     "verify": { "prompt": "Verify dashboard is visible", "expected": "Dashboard shown" }
-   }
-   ```
-6. **Output summary** - see `references/output-examples.md`
+**Step 1: LOCATE source**
+
+Determine the test source in this order:
+
+1. `--gherkin <path>` provided → use it directly (skip to step 1b)
+2. `--spec <path>` provided → check for `gherkin.md` in the same directory
+   - Found → use `gherkin.md` (skip to step 1b)
+   - Not found → derive from spec prose (skip to step 2)
+3. Natural language string provided → derive from prompt (skip to step 2)
+4. **No argument** → auto-discover:
+   - Glob `docs/specs/*/` for spec directories, sorted by modification time
+   - In the most recently modified directory, check for `gherkin.md`
+   - Found → use it (skip to step 1b)
+   - Not found → use the spec `.md` file in that directory (derive from prose, skip to step 2)
+   - Multiple directories modified at nearly the same time → use `AskUserQuestion` to confirm which spec
+
+**Step 1b: Parse Gherkin source**
+
+Read the `gherkin.md` file. For each `## Feature:` block, collect all `Scenario:` entries. Map clauses to task fields:
+
+| Gherkin clause | Task field | Notes |
+|----------------|------------|-------|
+| `When` | `action.prompt` | Rewrite as imperative instruction; prepend `Given` context if it clarifies the precondition |
+| `When` verb | `action.type` | `navigate` if contains "Navigate to / Visit / Go to / Open" + URL or path; `wait` if contains "Wait for / until"; `interact` otherwise |
+| `Then` + all `And` clauses | `verify.prompt` | Join into a single verification instruction |
+| Scenario title | `verify.expected` | Concise label for the expected outcome |
+
+One step task per `Scenario:`. Step task subject: `Test: [scenario title]`.
+
+**Step 2: Detect automation tools** — check for chrome-devtools MCP, playwright MCP
+
+**Step 3: Ask user to select backend** — see `references/automation-backends.md`
+
+**Step 4: Create parent suite task** with metadata:
+```json
+{
+  "test_type": "e2e",
+  "test_suite": true,
+  "base_url": "http://localhost:3000",
+  "gherkin_source": "docs/specs/<spec-name>/gherkin.md",
+  "artifacts_dir": "docs/specs/<spec-name>/testing",
+  "automation": { "backend": "chrome-devtools" },
+  "fix_config": { "enabled": true, "max_attempts": 2 }
+}
+```
+- `artifacts_dir`: derive from the spec directory when a `gherkin_source` is set (e.g., `docs/specs/01-spec-login/gherkin.md` → `docs/specs/01-spec-login/testing`). Use `artifacts` for ad-hoc natural language suites.
+- Omit `gherkin_source` and use `artifacts_dir: "artifacts"` when the suite was derived from prose or natural language.
+
+**Step 5: Create test step tasks** with natural language action/verify:
+```json
+{
+  "test_status": "pending",
+  "action": { "type": "interact", "prompt": "Click the Login button" },
+  "verify": { "prompt": "Verify dashboard is visible", "expected": "Dashboard shown" }
+}
+```
+
+**Step 6: Output summary** — see `references/output-examples.md`
 
 ***
 

@@ -21,7 +21,7 @@ Load the test task and understand what to execute.
    - verify.expected: Description of expected outcome
    - parent_suite: ID of parent task
 3. TaskGet({ taskId: "<parent_suite>" })
-   - Extract: base_url, automation.backend
+   - Extract: base_url, automation.backend, artifacts_dir (default to "artifacts" if absent)
 4. Output orientation:
    "EXECUTING: [step_id] - [subject]"
    "Backend: [automation.backend]"
@@ -62,7 +62,7 @@ Check the result and capture proof artifacts.
    - Look for expected elements/text/behavior
    - Compare against verify.expected
 
-2. Capture artifacts to artifacts/[step_id]-*.png or .txt:
+2. Capture artifacts to [artifacts_dir]/[step_id]-*.png or .txt:
    - Screenshot of current state (if browser backend)
    - Command output (if CLI backend)
    - User confirmation (if manual backend)
@@ -85,7 +85,7 @@ TaskUpdate({
     test_status: "passed",
     passed_at: "<ISO timestamp>",
     artifacts: {
-      screenshots: ["artifacts/[step_id]-result.png"]
+      screenshots: ["[artifacts_dir]/[step_id]-result.png"]
     }
   }
 })
@@ -101,7 +101,7 @@ TaskUpdate({
     failed_at: "<ISO timestamp>",
     failure_reason: "[specific description of what went wrong]",
     artifacts: {
-      screenshots: ["artifacts/[step_id]-failure.png"]
+      screenshots: ["[artifacts_dir]/[step_id]-failure.png"]
     }
   }
 })
