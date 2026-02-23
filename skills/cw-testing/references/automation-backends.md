@@ -8,6 +8,7 @@ Reference for supported automation backends in cw-testing.
 |---------|---------------|----------|
 | `chrome-devtools` | Chrome DevTools MCP | Web UI testing with browser automation |
 | `playwright` | Playwright MCP | Web UI testing with Playwright |
+| `playwright-bdd` | `bddgen` CLI, `@playwright/test` | Standard Gherkin → compiled tests, CI-friendly |
 | `cli` | Bash only | API testing, CLI tools, non-browser tests |
 | `manual` | None | Manual verification with user confirmation |
 
@@ -21,6 +22,11 @@ try: mcp__chrome-devtools__list_pages() → available
 
 # Playwright MCP
 try: mcp__playwright__* → available
+
+# playwright-bdd (global or local install)
+command -v bddgen 2>/dev/null  # global install
+# OR
+npx bddgen --version 2>/dev/null  # local install
 
 # Bash is always available
 # Manual mode is always available
@@ -67,6 +73,14 @@ Best for:
 - Complex scenarios automation can't handle
 - Environments without MCP access
 
+## playwright-bdd Backend
+
+Requires `bddgen` CLI and `@playwright/test`. See `playwright-bdd-backend.md` for full details.
+
+This backend compiles `.feature` files into TypeScript test specs **before** execution. Tests run headlessly via Bash — no AI agent involvement during execution. CI-compatible.
+
+**Key constraint**: `bddgen` exits non-zero if any step lacks a TypeScript implementation. All steps must be defined before the suite can run.
+
 ## Backend Verification
 
 During `run`, verify the selected backend is available:
@@ -75,6 +89,7 @@ During `run`, verify the selected backend is available:
 |---------|-------------|
 | `chrome-devtools` | Call `mcp__chrome-devtools__list_pages()` |
 | `playwright` | Call `mcp__playwright__list_browsers()` |
+| `playwright-bdd` | `command -v bddgen 2>/dev/null \|\| npx bddgen --version 2>/dev/null` |
 | `cli` | Verify `curl` or test commands work |
 | `manual` | No verification needed |
 

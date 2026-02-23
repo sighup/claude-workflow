@@ -84,9 +84,69 @@ Glob all `*.feature` files from the located directory. Read each file in turn. F
 
 One step task per `Scenario:`. Step task subject: `Test: [scenario title]`.
 
-**Step 2: Detect automation tools** — check for chrome-devtools MCP, playwright MCP
+**Step 2: Detect automation tools** — check for chrome-devtools MCP, playwright MCP, and bddgen:
+
+```bash
+# Check playwright-bdd availability
+command -v bddgen 2>/dev/null || npx bddgen --version 2>/dev/null
+```
+
+If `bddgen` is found, add `playwright-bdd` as a selectable backend option.
 
 **Step 3: Ask user to select backend** — see `references/automation-backends.md`
+
+**Step 2b: playwright-bdd setup** (only when backend == `playwright-bdd`)
+
+After the user selects `playwright-bdd`, perform these steps before creating tasks:
+
+1. **Check prerequisites** — verify `@playwright/test` is installed:
+   ```bash
+   npx playwright --version 2>/dev/null
+   ```
+   If missing, inform the user: "Run `npm install -g @playwright/test` (global) or `npm install @playwright/test` in your project root, then retry."
+
+2. **Generate `playwright.config.ts`** — write to `[artifacts_dir]/playwright.config.ts`:
+   ```typescript
+   import { defineConfig, devices } from '@playwright/test';
+   import { defineBddConfig, cucumberReporter } from 'playwright-bdd';
+
+   const testDir = defineBddConfig({
+     features: '../*.feature',
+     steps: 'steps/*.ts',
+     outputDir: '.features-gen',
+   });
+
+   export default defineConfig({
+     testDir,
+     reporter: [
+       ['json', { outputFile: 'results.json' }],
+       ['html', { outputFile: 'report.html', open: 'never' }],
+     ],
+     use: {
+       screenshot: 'on',
+       trace: 'on',
+     },
+     projects: [
+       { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+     ],
+   });
+   ```
+   If the file already exists, ask the user to confirm overwrite before writing.
+
+3. **Generate step definitions** — spawn an implementer sub-agent:
+   ```
+   Task({
+     subagent_type: "claude-workflow:implementer",
+     prompt: "Read all .feature files in [gherkin_dir]. For each unique Given/When/Then step across all feature files, write a TypeScript step definition in [artifacts_dir]/steps/[feature-name].steps.ts using playwright-bdd's createBdd() pattern. Use semantic Playwright locators (getByRole, getByLabel, getByText). Feature files are at: [list of .feature file paths]. Reference: skills/cw-testing/references/playwright-bdd-backend.md"
+   })
+   ```
+
+4. **Verify with bddgen** — run:
+   ```bash
+   npx bddgen --config [artifacts_dir]/playwright.config.ts
+   ```
+   - Exit 0 → proceed to Step 4
+   - Exit non-zero → show the output (which includes TypeScript scaffolds for missing steps); prompt user to review the generated scaffolds and retry, or ask if you should implement the missing steps inline before retrying
 
 **Step 4: Create parent suite task** with metadata:
 ```json
@@ -100,6 +160,17 @@ One step task per `Scenario:`. Step task subject: `Test: [scenario title]`.
   "fix_config": { "enabled": true, "max_attempts": 2 }
 }
 ```
+
+For `playwright-bdd` backend, set `automation` as:
+```json
+{
+  "automation": {
+    "backend": "playwright-bdd",
+    "playwright_config": "docs/specs/<spec-name>/testing/playwright.config.ts"
+  }
+}
+```
+
 - `artifacts_dir`: derive from `gherkin_dir` when set (e.g., `docs/specs/01-spec-login` → `docs/specs/01-spec-login/testing`). Use `artifacts` for ad-hoc natural language suites.
 - Omit `gherkin_dir` and use `artifacts_dir: "artifacts"` when the suite was derived from prose or natural language.
 
@@ -136,6 +207,10 @@ Find next unblocked task with `test_status == "pending"` or failed test needing 
 
 #### Phase 4: SPAWN TEST EXECUTOR
 
+> **Check `automation.backend` on the parent suite task first.**
+> - If `automation.backend == "playwright-bdd"` → use **Phase 4b** instead.
+> - Otherwise → use the standard flow below.
+
 **REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT execute tests inline.
 
 ```
@@ -147,6 +222,31 @@ Task({
 ```
 
 Wait for the sub-agent to complete, then read the task status via TaskGet.
+
+#### Phase 4b: PLAYWRIGHT RUNNER (playwright-bdd backend only)
+
+Instead of spawning a test-executor, run the full Playwright suite via Bash:
+
+```bash
+npx bddgen --config [playwright_config] && \
+npx playwright test --config [playwright_config] --reporter=json
+```
+
+Where `[playwright_config]` comes from `automation.playwright_config` on the parent suite task.
+
+After the command completes, read the JSON results file at `[artifacts_dir]/results.json`. Parse the results to get per-scenario pass/fail:
+
+- For each scenario result, find the matching step task by scenario title
+- **Passed**: call `TaskUpdate` with `test_status: "passed"`
+- **Failed**: call `TaskUpdate` with `test_status: "failed"` and set `failure_reason` from the JSON error message
+
+For failed scenarios, continue to Phase 6 (fix decision gate) and Phase 7 (spawn bug-fixer) as normal — fixes target application code, **not** step definitions.
+
+**Regression check (Phase 1) for playwright-bdd**: skip test-executor sub-agents and instead re-run:
+```bash
+npx playwright test --config [playwright_config] --reporter=json
+```
+Parse results the same way and check that previously-passed scenarios still pass.
 
 #### Phase 5: VERIFY RESULT
 Check task metadata for pass/fail. If failed, continue to Phase 6.
@@ -207,6 +307,7 @@ Ask user whether to delete fix tasks and clear artifacts.
 | `references/test-executor-protocol.md` | Test executor 4-phase protocol |
 | `references/bug-fixer-protocol.md` | Bug fixer 5-phase protocol |
 | `references/automation-backends.md` | Backend detection and usage |
+| `references/playwright-bdd-backend.md` | playwright-bdd config, step patterns, CLI, result parsing |
 | `references/output-examples.md` | Output format examples |
 
 ***
