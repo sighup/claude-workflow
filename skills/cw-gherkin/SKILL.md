@@ -2,7 +2,7 @@
 name: cw-gherkin
 description: "Internal subagent: generate Gherkin BDD scenarios from spec acceptance criteria. Produces one .feature file per demoable unit in the spec directory and optionally creates cw-testing task stubs on the task board. Called automatically by cw-spec."
 user-invocable: false
-allowed-tools: Glob, Grep, Read, Write, TaskCreate, TaskUpdate, TaskList, AskUserQuestion
+allowed-tools: Glob, Grep, Read, Write, Bash, TaskCreate, TaskUpdate, TaskList, AskUserQuestion
 ---
 
 # CW-Gherkin: BDD Scenario Generator
@@ -112,6 +112,17 @@ Feature: [Demoable Unit Title]
 
 After saving all files, print a summary:
 `✓ [N] .feature files saved — [M] scenarios total (e.g.: user-login.feature, dashboard-access.feature)`
+
+**Lint validation (optional):**
+
+Run the following to detect `gherkin-lint`:
+
+```bash
+command -v gherkin-lint 2>/dev/null || echo ""
+```
+
+- If found: run `gherkin-lint docs/specs/[NN]-spec-[feature-name]/*.feature` and print the output. If the linter exits non-zero, prefix the output with `⚠ gherkin-lint warnings:` and continue — do not block Phase 4.
+- If not found: skip silently, do not mention it.
 
 ### Phase 4: OFFER TASK STUBS
 
