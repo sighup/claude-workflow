@@ -193,8 +193,25 @@ For `playwright-bdd` backend, set `automation` as:
 
 ### 8-Phase Execution Loop
 
+**playwright-bdd pre-check**: Before entering Phase 1, read the parent suite task and check `automation.backend`. If `playwright-bdd`, run `bddgen` once to ensure `.features-gen/` is current:
+
+```bash
+npx bddgen --config [automation.playwright_config]
+```
+
+If `bddgen` exits non-zero, stop immediately — missing step definitions must be resolved before the loop can proceed. Report the output to the user.
+
 #### Phase 1: REGRESSION CHECK
+
 Re-verify all passed tests. If any fail, stop immediately and report regression.
+
+**playwright-bdd**: For each task with `test_status == "passed"`, run its scenario individually:
+
+```bash
+npx playwright test --config [playwright_config] --grep "Exact Scenario Title" --reporter=json
+```
+
+Escape any regex-special characters in the scenario title (`(`, `)`, `.`, `[`, `]`, `*`, `+`, `?`) with a backslash before passing to `--grep`. Parse `results.json` to confirm the scenario still passes.
 
 #### Phase 2: SELECT NEXT TEST
 Find next unblocked task with `test_status == "pending"` or failed test needing retry.
@@ -225,28 +242,22 @@ Wait for the sub-agent to complete, then read the task status via TaskGet.
 
 #### Phase 4b: PLAYWRIGHT RUNNER (playwright-bdd backend only)
 
-Instead of spawning a test-executor, run the full Playwright suite via Bash:
+Instead of spawning a test-executor, run the current scenario individually via Bash using `--grep`:
 
 ```bash
-npx bddgen --config [playwright_config] && \
-npx playwright test --config [playwright_config] --reporter=json
+npx playwright test --config [playwright_config] \
+  --grep "Exact Scenario Title" \
+  --reporter=json
 ```
 
-Where `[playwright_config]` comes from `automation.playwright_config` on the parent suite task.
+Where `[playwright_config]` comes from `automation.playwright_config` on the parent suite task, and the scenario title comes from the current step task subject (strip the `Test: ` prefix). Escape any regex-special characters in the title before passing to `--grep`.
 
-After the command completes, read the JSON results file at `[artifacts_dir]/results.json`. Parse the results to get per-scenario pass/fail:
+After the command completes, read `[artifacts_dir]/results.json` and find the matching scenario result:
 
-- For each scenario result, find the matching step task by scenario title
-- **Passed**: call `TaskUpdate` with `test_status: "passed"`
-- **Failed**: call `TaskUpdate` with `test_status: "failed"` and set `failure_reason` from the JSON error message
+- **Passed** (`spec.ok == true`): `TaskUpdate` with `test_status: "passed"` — proceed to Phase 8
+- **Failed** (`spec.ok == false`): `TaskUpdate` with `test_status: "failed"`, set `failure_reason` from `tests[0].results[0].error.message` — proceed to Phase 5
 
-For failed scenarios, continue to Phase 6 (fix decision gate) and Phase 7 (spawn bug-fixer) as normal — fixes target application code, **not** step definitions.
-
-**Regression check (Phase 1) for playwright-bdd**: skip test-executor sub-agents and instead re-run:
-```bash
-npx playwright test --config [playwright_config] --reporter=json
-```
-Parse results the same way and check that previously-passed scenarios still pass.
+Fixes target application code, **not** step definitions.
 
 #### Phase 5: VERIFY RESULT
 Check task metadata for pass/fail. If failed, continue to Phase 6.

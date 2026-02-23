@@ -123,20 +123,26 @@ Avoid CSS selectors and XPaths unless no semantic locator applies.
 npx bddgen --config docs/specs/<spec-name>/testing/playwright.config.ts
 ```
 
-### Run tests (after bddgen)
+### Run a single scenario (cw-testing loop)
+```bash
+npx playwright test \
+  --config docs/specs/<spec-name>/testing/playwright.config.ts \
+  --grep "Exact Scenario Title" \
+  --reporter=json
+```
+
+> Escape regex-special characters in the title: `( ) . [ ] * + ?` → prefix each with `\`
+
+### Run the full suite (manual / debugging)
 ```bash
 npx playwright test --config docs/specs/<spec-name>/testing/playwright.config.ts
 ```
 
-### Generate and run in one command
-```bash
-npx bddgen --config docs/specs/<spec-name>/testing/playwright.config.ts && \
-npx playwright test --config docs/specs/<spec-name>/testing/playwright.config.ts --reporter=json
-```
-
 ### Run in headed mode (debugging)
 ```bash
-npx playwright test --config docs/specs/<spec-name>/testing/playwright.config.ts --headed
+npx playwright test \
+  --config docs/specs/<spec-name>/testing/playwright.config.ts \
+  --headed
 ```
 
 ---

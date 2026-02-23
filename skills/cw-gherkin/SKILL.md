@@ -115,14 +115,29 @@ After saving all files, print a summary:
 
 **Lint validation (optional):**
 
-Run the following to detect `gherkin-lint`:
+Check for the binary:
 
 ```bash
 command -v gherkin-lint 2>/dev/null || echo ""
 ```
 
-- If found: run `gherkin-lint docs/specs/[NN]-spec-[feature-name]/*.feature` and print the output. If the linter exits non-zero, prefix the output with `⚠ gherkin-lint warnings:` and continue — do not block Phase 4.
-- If not found: skip silently, do not mention it.
+If not found: skip silently, do not mention it.
+
+If found, run in two passes:
+
+1. **Syntax check** (always): validate parse errors using an empty inline config:
+   ```bash
+   echo '{}' > /tmp/.gherkin-lintrc-syntax && \
+   gherkin-lint --config /tmp/.gherkin-lintrc-syntax docs/specs/[NN]-spec-[feature-name]/*.feature; \
+   rm /tmp/.gherkin-lintrc-syntax
+   ```
+   If this exits non-zero, prefix output with `⚠ gherkin-lint syntax errors:` and continue — do not block Phase 4.
+
+2. **Style check** (only if project config exists): check for `.gherkin-lintrc` or `.gherkin-lintrc.json` in the project root:
+   ```bash
+   ls .gherkin-lintrc 2>/dev/null || ls .gherkin-lintrc.json 2>/dev/null
+   ```
+   If found: run `gherkin-lint docs/specs/[NN]-spec-[feature-name]/*.feature` (uses project config automatically) and print the output. If the linter exits non-zero, prefix the output with `⚠ gherkin-lint warnings:` and continue — do not block Phase 4.
 
 ### Phase 4: OFFER TASK STUBS
 
