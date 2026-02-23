@@ -17,7 +17,7 @@ This document defines the metadata structure for E2E test tasks created by `/cw-
     "teardown": "npx prisma migrate reset --force"
   },
 
-  "gherkin_source": "docs/specs/01-spec-feature-name/gherkin.md",
+  "gherkin_dir": "docs/specs/01-spec-feature-name",
   "artifacts_dir": "docs/specs/01-spec-feature-name/testing",
 
   "regression_check": true,
@@ -103,7 +103,7 @@ Uses natural language prompts for action and verification:
 | `test_type` | string | Yes | Always "e2e" |
 | `test_suite` | boolean | Yes | True for parent suite task |
 | `base_url` | string | Yes | Application URL for testing |
-| `gherkin_source` | string | No | Path to `gherkin.md` used to generate this suite; omitted when derived from prose |
+| `gherkin_dir` | string | No | Directory containing the `.feature` files used to generate this suite; `cw-testing init` globs `*.feature` from here; omitted when derived from prose |
 | `artifacts_dir` | string | No | Directory for screenshots and logs; defaults to `artifacts` for ad-hoc suites, `docs/specs/<spec-name>/testing` for spec-linked suites |
 | `database.setup` | string | No | Command to setup test database |
 | `database.teardown` | string | No | Command to reset database after tests |

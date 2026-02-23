@@ -1,6 +1,6 @@
 # Integration Test Requirements
 
-When generating a `gherkin.md`, the `Recommended test type` header should reflect this decision framework. Use it to select between `Unit`, `Integration`, and `E2E`.
+When generating `.feature` files, the `# Recommended test type` comment should reflect this decision framework. Use it to select between `Unit`, `Integration`, and `E2E`.
 
 ## Decision Tree
 
@@ -88,7 +88,7 @@ Features that maintain consistency across failures, crashes, or partial writes.
 
 ## Output Header Values
 
-In `gherkin.md`, set `Recommended test type` to:
+In each `.feature` file, set the `# Recommended test type` comment to:
 
 - `Unit` — pure logic, no I/O, fully mockable
 - `Integration` — file system, processes, IPC, async, recovery

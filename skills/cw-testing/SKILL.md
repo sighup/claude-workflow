@@ -47,10 +47,10 @@ Parse user input to determine subcommand. If none provided, show help and ask.
 
 **Usage**:
 ```
-/cw-testing init                    # auto-discover current spec
-/cw-testing init --spec <path>      # use specific spec (checks for gherkin.md first)
-/cw-testing init --gherkin <path>   # use specific gherkin.md directly
-/cw-testing init "Test login"       # derive from natural language
+/cw-testing init                      # auto-discover current spec directory
+/cw-testing init --spec <path>        # use specific spec dir (globs *.feature first)
+/cw-testing init --features <dir>     # use a directory of .feature files directly
+/cw-testing init "Test login"         # derive from natural language
 ```
 
 ### Process
@@ -59,21 +59,21 @@ Parse user input to determine subcommand. If none provided, show help and ask.
 
 Determine the test source in this order:
 
-1. `--gherkin <path>` provided → use it directly (skip to step 1b)
-2. `--spec <path>` provided → check for `gherkin.md` in the same directory
-   - Found → use `gherkin.md` (skip to step 1b)
+1. `--features <dir>` provided → glob `*.feature` from that directory (skip to step 1b)
+2. `--spec <path>` provided → check for `*.feature` files in the same directory
+   - Found → use them (skip to step 1b)
    - Not found → derive from spec prose (skip to step 2)
 3. Natural language string provided → derive from prompt (skip to step 2)
 4. **No argument** → auto-discover:
    - Glob `docs/specs/*/` for spec directories, sorted by modification time
-   - In the most recently modified directory, check for `gherkin.md`
-   - Found → use it (skip to step 1b)
+   - In the most recently modified directory, check for `*.feature` files
+   - Found → use them (skip to step 1b)
    - Not found → use the spec `.md` file in that directory (derive from prose, skip to step 2)
    - Multiple directories modified at nearly the same time → use `AskUserQuestion` to confirm which spec
 
 **Step 1b: Parse Gherkin source**
 
-Read the `gherkin.md` file. For each `## Feature:` block, collect all `Scenario:` entries. Map clauses to task fields:
+Glob all `*.feature` files from the located directory. Read each file in turn. For each `Feature:` block, collect all `Scenario:` entries across all files. Map clauses to task fields:
 
 | Gherkin clause | Task field | Notes |
 |----------------|------------|-------|
@@ -94,14 +94,14 @@ One step task per `Scenario:`. Step task subject: `Test: [scenario title]`.
   "test_type": "e2e",
   "test_suite": true,
   "base_url": "http://localhost:3000",
-  "gherkin_source": "docs/specs/<spec-name>/gherkin.md",
+  "gherkin_dir": "docs/specs/<spec-name>",
   "artifacts_dir": "docs/specs/<spec-name>/testing",
   "automation": { "backend": "chrome-devtools" },
   "fix_config": { "enabled": true, "max_attempts": 2 }
 }
 ```
-- `artifacts_dir`: derive from the spec directory when a `gherkin_source` is set (e.g., `docs/specs/01-spec-login/gherkin.md` → `docs/specs/01-spec-login/testing`). Use `artifacts` for ad-hoc natural language suites.
-- Omit `gherkin_source` and use `artifacts_dir: "artifacts"` when the suite was derived from prose or natural language.
+- `artifacts_dir`: derive from `gherkin_dir` when set (e.g., `docs/specs/01-spec-login` → `docs/specs/01-spec-login/testing`). Use `artifacts` for ad-hoc natural language suites.
+- Omit `gherkin_dir` and use `artifacts_dir: "artifacts"` when the suite was derived from prose or natural language.
 
 **Step 5: Create test step tasks** with natural language action/verify:
 ```json

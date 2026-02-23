@@ -1,6 +1,6 @@
 ---
 name: cw-gherkin
-description: "Internal subagent: generate Gherkin BDD scenarios from spec acceptance criteria. Produces a gherkin.md file in the spec directory and optionally creates cw-testing task stubs on the task board. Called automatically by cw-spec."
+description: "Internal subagent: generate Gherkin BDD scenarios from spec acceptance criteria. Produces one .feature file per demoable unit in the spec directory and optionally creates cw-testing task stubs on the task board. Called automatically by cw-spec."
 user-invocable: false
 allowed-tools: Glob, Grep, Read, Write, TaskCreate, TaskUpdate, TaskList, AskUserQuestion
 ---
@@ -13,15 +13,15 @@ Always begin your response with: **CW-GHERKIN**
 
 ## Overview
 
-You are an internal subagent in the Claude Workflow system. You read a completed spec and produce behavioral Gherkin scenarios for each demoable unit, saved as `gherkin.md` alongside the spec. You are called automatically by `cw-spec` after spec generation.
+You are an internal subagent in the Claude Workflow system. You read a completed spec and produce behavioral Gherkin scenarios for each demoable unit, saved as standard `.feature` files alongside the spec. You are called automatically by `cw-spec` after spec generation.
 
 ## Critical Constraints
 
 - **NEVER** write structural verification scenarios (grep for code existence, check file contains function name, verify function is defined, etc.)
 - **ALWAYS** write behavioral scenarios (execute the feature → verify observable outcome)
 - **NEVER** create cw-testing tasks without asking the user first
-- **ALWAYS** save `gherkin.md` in the same directory as the spec file
-- **NEVER** modify the spec file — only create `gherkin.md`
+- **ALWAYS** save `.feature` files in the same directory as the spec file
+- **NEVER** modify the spec file — only create `.feature` files
 
 ## Process
 
@@ -30,7 +30,7 @@ You are an internal subagent in the Claude Workflow system. You read a completed
 Determine the spec to process, in order of precedence:
 
 1. `--spec <path>` argument provided in the invocation prompt
-2. Most recently modified `*.md` file in `docs/specs/*/` (excluding `gherkin.md`)
+2. Most recently modified `*.md` file in `docs/specs/*/` (excluding any `.feature` files)
 3. Use `AskUserQuestion` if ambiguous (multiple specs modified recently)
 
 Read the spec file fully before proceeding.
@@ -79,16 +79,16 @@ Scenario: Validation function exists
   Then the function definition is found
 ```
 
-**`gherkin.md` format:**
+**`.feature` file format:**
 
-```markdown
-# Gherkin Scenarios: [NN]-spec-[feature-name]
+One file per demoable unit. Name each file using the kebab-case of the demoable unit title (e.g., "User Login" → `user-login.feature`, "Dashboard Access Control" → `dashboard-access-control.feature`).
 
-> Source: `docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md`
-> Pattern: [selected pattern from feature type table]
-> Recommended test type: Integration | Unit | E2E
+```gherkin
+# Source: docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md
+# Pattern: [selected pattern from feature type table]
+# Recommended test type: Integration | Unit | E2E
 
-## Feature: [Demoable Unit 1 Title]
+Feature: [Demoable Unit Title]
 
   Scenario: [Functional requirement as observable behavior]
     Given [precondition — environment or state setup]
@@ -100,14 +100,6 @@ Scenario: Validation function exists
     Given [precondition]
     When [action]
     Then [outcome]
-
-## Feature: [Demoable Unit 2 Title]
-
-  Scenario: [Requirement as behavior]
-    Given [precondition]
-    When [action]
-    Then [outcome]
-    And [additional verification]
 ```
 
 **Scenario quality checklist** (every scenario must satisfy all):
@@ -116,22 +108,23 @@ Scenario: Validation function exists
 - [ ] No `Then` clause reads source code, greps files, or checks function existence
 - [ ] `Given` clause sets up a real precondition (not "the system is correct")
 
-**Save to:** `docs/specs/[NN]-spec-[feature-name]/gherkin.md`
+**Save to:** `docs/specs/[NN]-spec-[feature-name]/[kebab-case-unit-title].feature` — one file per demoable unit.
 
-After saving, print the path and a brief count: `✓ gherkin.md saved — [N] features, [M] scenarios total`
+After saving all files, print a summary:
+`✓ [N] .feature files saved — [M] scenarios total (e.g.: user-login.feature, dashboard-access.feature)`
 
 ### Phase 4: OFFER TASK STUBS
 
-> **When called from `cw-spec` automatically:** skip this phase and return after saving `gherkin.md`. The spec review step in `cw-spec` will note that `gherkin.md` was created.
+> **When called from `cw-spec` automatically:** skip this phase and return after saving `.feature` files. The spec review step in `cw-spec` will note that `.feature` files were created.
 >
 > **When the invocation prompt does not include a `--spec` path** (future direct invocation): proceed with the question below.
 
-After saving `gherkin.md`, ask:
+After saving all `.feature` files, ask:
 
 ```
 AskUserQuestion({
   questions: [{
-    question: "gherkin.md created. Create cw-testing task stubs so /cw-testing run can execute these scenarios?",
+    question: ".feature files created. Create cw-testing task stubs so /cw-testing run can execute these scenarios?",
     header: "Task stubs",
     options: [
       {
@@ -139,7 +132,7 @@ AskUserQuestion({
         description: "Create parent suite + one step task per scenario on the task board"
       },
       {
-        label: "No — gherkin.md only",
+        label: "No — .feature files only",
         description: "Save scenarios as documentation; create cw-testing tasks later"
       }
     ],
@@ -160,7 +153,7 @@ Read `skills/cw-testing/references/e2e-metadata-schema.md` for the full schema r
      {
        "test_type": "e2e",
        "test_suite": true,
-       "gherkin_source": "docs/specs/[NN]-spec-[feature-name]/gherkin.md",
+       "gherkin_dir": "docs/specs/[NN]-spec-[feature-name]",
        "regression_check": true,
        "regression_failures": [],
        "stats": {
@@ -195,6 +188,6 @@ Read `skills/cw-testing/references/e2e-metadata-schema.md` for the full schema r
    | T03 | Test: [scenario 2] | step | 2 |
    | ... | ... | ... | ... |
 
-**If "No — gherkin.md only":**
+**If "No — .feature files only":**
 
-Confirm: `gherkin.md saved to docs/specs/[NN]-spec-[feature-name]/gherkin.md. Run /cw-testing init later to generate test tasks.`
+Confirm: `.feature files saved to docs/specs/[NN]-spec-[feature-name]/. Run /cw-testing init later to generate test tasks.`
