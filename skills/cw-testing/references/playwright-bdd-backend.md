@@ -196,7 +196,19 @@ Playwright's JSON reporter writes `[artifacts_dir]/results.json`. Key fields for
               "results": [
                 {
                   "status": "passed",
-                  "error": null
+                  "error": null,
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/abs/path/to/test-results/scenario-chromium/screenshot.png"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/abs/path/to/test-results/scenario-chromium/trace.zip"
+                    }
+                  ]
                 }
               ]
             }
@@ -211,6 +223,8 @@ Playwright's JSON reporter writes `[artifacts_dir]/results.json`. Key fields for
 To determine pass/fail per scenario:
 - `spec.ok == true` → scenario passed
 - `spec.ok == false` → scenario failed; extract `tests[0].results[0].error.message` for `failure_reason`
+
+To extract screenshots: filter `tests[0].results[0].attachments` where `contentType == "image/png"` and collect `path` values. Store in `artifacts: { screenshots: [...] }` on the step task.
 
 ---
 

@@ -258,10 +258,12 @@ npx playwright test --config [playwright_config] \
 
 Where `[playwright_config]` comes from `automation.playwright_config` on the parent suite task, and the scenario title comes from the current step task subject (strip the `Test: ` prefix). Escape any regex-special characters in the title before passing to `--grep`.
 
-After the command completes, read `[artifacts_dir]/results.json` (where `artifacts_dir` is `metadata.artifacts_dir` from the parent suite task) and find the matching scenario result:
+After the command completes, read `[artifacts_dir]/results.json` (where `artifacts_dir` is `metadata.artifacts_dir` from the parent suite task) and find the matching scenario result.
 
-- **Passed** (`spec.ok == true`): `TaskUpdate` with `test_result: "passed"`, `passed_at: "<ISO timestamp>"`, and `artifacts: { screenshots: [] }` — proceed to Phase 7
-- **Failed** (`spec.ok == false`): `TaskUpdate` with `test_result: "failed"`, `failed_at: "<ISO timestamp>"`, and `failure_reason` from `tests[0].results[0].error.message` — proceed to Phase 5
+Extract screenshot paths from `tests[0].results[0].attachments` — filter entries where `contentType == "image/png"` and collect their `path` values.
+
+- **Passed** (`spec.ok == true`): `TaskUpdate` with `test_result: "passed"`, `passed_at: "<ISO timestamp>"`, and `artifacts: { screenshots: [<extracted paths>] }` — proceed to Phase 7
+- **Failed** (`spec.ok == false`): `TaskUpdate` with `test_result: "failed"`, `failed_at: "<ISO timestamp>"`, `failure_reason` from `tests[0].results[0].error.message`, and `artifacts: { screenshots: [<extracted paths>] }` — proceed to Phase 5
 
 Fixes target application code, **not** step definitions.
 
