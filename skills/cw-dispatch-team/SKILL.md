@@ -172,14 +172,14 @@ Apply the same conflict checks as Step 2 — verify no file overlaps between ass
 
 Send a **single message** with multiple Task tool calls for parallel launch. Spawn **one teammate per ready task** — no arbitrary cap.
 
-**Model Selection**: Read `metadata.model` from TaskGet for each task. If set (non-null), pass it as the `model` parameter to Task(). If null/missing, omit the parameter to inherit the session's default model. If a task has no `metadata` at all, log a warning but proceed with the session default.
+**Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override.
 
 **CRITICAL: Use EXACTLY this prompt template. Do NOT give teammates direct implementation instructions.**
 
 ```
 Task({
   subagent_type: "claude-workflow:implementer",
-  model: task.metadata.model || undefined,  // omit if null to inherit
+  model: "sonnet",  // from task metadata: "haiku" | "sonnet" | "opus"
   team_name: "{task-list-id}-team",
   name: "worker-1",
   description: "Execute task T01",

@@ -2,7 +2,7 @@
 name: cw-validate
 description: "Validate implementation against spec using 6 gates and generate a coverage matrix. Use after implementation is complete to verify coverage, proof artifacts, and credential safety before review."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate
+allowed-tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate, AskUserQuestion
 ---
 
 # CW-Validate: Implementation Validator
@@ -220,17 +220,18 @@ Report saved: [path to validation report]
 
 After validation:
 - **FAIL**: Report shows exactly what needs fixing; fix issues and re-validate
-- **PASS**: Use AskUserQuestion to offer code review
+- **PASS**: Use AskUserQuestion to offer the next step
 
 ```
 AskUserQuestion({
   questions: [{
-    question: "Validation passed! Would you like to run a code review?",
-    header: "Review",
+    question: "Validation passed! What would you like to do next?",
+    header: "Next step",
     options: [
-      { label: "Run /cw-review", description: "Review code for bugs, security issues, and quality problems (recommended)" },
+      { label: "Run /cw-testing", description: "Execute E2E tests against the running application (recommended)" },
+      { label: "Run /cw-review", description: "Review code for bugs, security issues, and quality problems" },
       { label: "Run /cw-review-team", description: "Team-based review with parallel concern-partitioned reviewers" },
-      { label: "Done for now", description: "Skip review" }
+      { label: "Done for now", description: "Exit — validation report saved" }
     ],
     multiSelect: false
   }]

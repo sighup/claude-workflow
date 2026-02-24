@@ -30,24 +30,10 @@ claude plugin install claude-workflow@claude-workflow --scope user
 ### Interactive (inside Claude)
 
 ```
-/cw-spec  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
+/cw-spec  →  [/cw-gherkin]  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
 ```
 
 Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. `/cw-review` adds a code review gate and `/cw-testing` generates and runs E2E tests.
-
-### Full Pipeline (one command, unattended)
-
-```bash
-./bin/cw-pipeline --prompt "Build JWT authentication" --name auth
-```
-
-Orchestrates the full lifecycle in a git worktree:
-
-```
-prompt → worktree → spec → plan → execute → validate → review → test → fix → re-validate → PR
-```
-
-Each stage runs non-interactively via `claude --print`. Skip stages with `--no-test`, `--no-review`, or `--no-pr`. See [examples/shell-scripts.md](examples/shell-scripts.md) for more options.
 
 ### Worktrees (manual parallel development)
 
@@ -64,7 +50,9 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-dispatch-team` | Persistent agent team with lead coordination for parallel task execution |
 | `/cw-validate` | Run 6 validation gates and produce a coverage matrix report |
 | `/cw-review` | Review implementation for bugs, security issues, and quality; creates fix tasks |
+| `/cw-review-team` | Concern-partitioned team review — each reviewer sees all files through a specialized lens (security, correctness, spec compliance) |
 | `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
+| `/cw-gherkin` | Generate Gherkin BDD scenarios from spec acceptance criteria; optionally creates cw-testing task stubs |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
 
 ## Prerequisites
@@ -104,39 +92,17 @@ Every task on the board carries self-contained metadata enabling autonomous exec
   "proof_artifacts": [
     { "type": "test", "command": "npm test -- src/auth/login.test.ts", "expected": "All pass" }
   ],
+  "commit": { "template": "feat(auth): add login endpoint" },
   "verification": {
     "pre": ["npm run lint"],
     "post": ["npm test"]
   },
-  "complexity": "standard"
+  "role": "implementer",
+  "complexity": "standard",
+  "model": null
 }
 ```
 
 ## Shell Scripts
 
-For autonomous (unattended) execution without an interactive Claude session:
-
-| Script | Purpose |
-|--------|---------|
-| `cw-pipeline` | Full end-to-end: prompt → worktree → spec → plan → execute → validate → review → test → PR |
-| `cw-init` | Generate spec + plan without executing |
-| `cw-loop` | Autonomous task execution loop (sequential or parallel with `--dispatch`) |
-| `cw-loop-interactive` | Human-in-the-loop execution with pause after each task |
-| `cw-test-init` | Generate E2E test scenarios as `TEST-*` tasks |
-| `cw-test-loop` | Execute tests with auto-fix cycles |
-| `cw-status` | Check task progress (no Claude needed) |
-See [examples/shell-scripts.md](examples/shell-scripts.md) for detailed usage and flag combinations.
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CW_MODEL` | `sonnet` | Claude model for execution |
-| `CW_MAX_ITERATIONS` | `50` | Max loop iterations |
-| `CW_SLEEP` | `5` | Seconds between iterations |
-| `CW_MAX_FAILURES` | `3` | Consecutive failures before abort |
-| `CW_TIMEOUT` | `0` | Claude invocation timeout (0=none) |
-| `CW_INVOKE_RETRIES` | `3` | Retries per Claude invocation |
-| `CW_RETRY_DELAY` | `10` | Seconds between retries |
-| `CW_NON_INTERACTIVE` | `false` | Skip confirmation prompts |
-| `CW_VERBOSE` | `false` | Stream JSON output for real-time visibility |
+Shell scripts in `bin/` are optional and enable autonomous (unattended) execution without an interactive Claude session — useful for CI pipelines or scripted workflows. All core functionality is available through the skills above. See [examples/shell-scripts.md](examples/shell-scripts.md) for usage and environment variable reference.

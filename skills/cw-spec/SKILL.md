@@ -49,7 +49,7 @@ Check existing specs to determine the next sequence number.
 
 If working in a pre-existing project, review:
 
-- Current architecture patterns and conventions
+- Current plannerure patterns and conventions
 - Relevant existing components or features
 - Integration constraints or dependencies
 - Repository standards from: README.md, CONTRIBUTING.md, CLAUDE.md, package.json, config files
@@ -63,7 +63,7 @@ Use this context to inform scope validation and requirements.
 Evaluate whether the feature is appropriately sized.
 
 **Too Large (split into multiple specs):**
-- Rewriting entire application architecture
+- Rewriting entire application plannerure
 - Migrating complete database systems
 - Implementing full authentication from scratch
 - Building complete admin dashboards
@@ -183,7 +183,7 @@ Generate the specification using this structure:
 [Existing patterns implementation should follow]
 
 ## Technical Considerations
-[Implementation constraints, dependencies, architectural decisions]
+[Implementation constraints, dependencies, plannerural decisions]
 
 ## Security Considerations
 [API keys, tokens, data privacy, auth requirements]
@@ -196,6 +196,18 @@ Generate the specification using this structure:
 ```
 
 **Save to:** `./docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md`
+
+After saving the spec, automatically generate Gherkin BDD scenarios as a subagent (no user prompt required):
+
+```
+Task({
+  subagent_type: "claude-workflow:spec-writer",
+  description: "Generate Gherkin scenarios for [NN]-spec-[feature-name]",
+  prompt: "Generate Gherkin BDD scenarios for this spec. --spec docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md. Read protocol at: skills/cw-gherkin/SKILL.md. This is an automated call from cw-spec — skip Phase 4 (task stubs offer) and return after saving .feature files."
+})
+```
+
+This runs silently. Once complete, note in the Step 6 review that `.feature` files were created alongside the spec.
 
 ### Step 6: Review and Refinement
 
@@ -245,7 +257,7 @@ AskUserQuestion({
     question: "The specification is complete and committed to this feature branch. What would you like to do next?",
     header: "Next Step",
     options: [
-      { label: "Run /cw-plan (Recommended)", description: "Transform this spec into an executable task graph" },
+      { label: "Run /cw-plan (Recommended)", description: "Spawn the planner subagent to transform this spec into an executable task graph" },
       { label: "Review spec again", description: "Make additional changes before planning" },
       { label: "Done for now", description: "Continue later with /cw-plan" }
     ],
@@ -265,7 +277,7 @@ AskUserQuestion({
     header: "Workflow",
     options: [
       { label: "Create worktree (Recommended)", description: "Move to .worktrees/feature-{name}/ with isolated branch and task list" },
-      { label: "Continue here", description: "Run /cw-plan in current directory (spec stays on current branch)" },
+      { label: "Continue here", description: "Spawn planner subagent to run /cw-plan in current directory (spec stays on current branch)" },
       { label: "Done for now", description: "Save the spec and continue later" }
     ],
     multiSelect: false
@@ -275,10 +287,65 @@ AskUserQuestion({
 
 **Handle user selection:**
 
-- **Run /cw-plan**: Invoke the skill directly:
+- **Run /cw-plan**: Two-pass planning flow:
+
+  **Pass 1 — Parent task creation:**
   ```
-  Skill({ skill: "cw-plan" })
+  Task({ subagent_type: "claude-workflow:planner", description: "Create parent tasks (Phase 1+2)", prompt: "The spec is ready. Run /cw-plan to complete Phase 1 and Phase 2 (parent task creation) only. Output the PLANNING SUMMARY and exit — do not proceed to Phase 3." })
   ```
+  Relay the PLANNING SUMMARY to the user, then present the decomposition question. Use the planner's `Recommendation` field to mark the suggested option:
+  ```
+  AskUserQuestion({
+    questions: [{
+      question: "I've created [N] parent tasks. [Planner's Reason sentence]. How would you like to proceed?",
+      header: "Tasks",
+      options: [
+        { label: "Generate sub-tasks (Recommended)", description: "Decompose parent tasks into atomic implementation steps" },
+        { label: "Execute as-is", description: "Run parent tasks directly — workers handle internal decomposition via cw-execute" },
+        { label: "Adjust tasks", description: "Provide feedback to revise the task graph before proceeding" }
+      ],
+      multiSelect: false
+    }]
+  })
+  ```
+  > Mark `(Recommended)` on whichever option matches the planner's `Recommendation` field. If "Execute as-is" is recommended, move the label to that option instead.
+
+  **Based on user selection:**
+
+  - **Generate sub-tasks**: spawn planner for Phase 3:
+    ```
+    Task({ subagent_type: "claude-workflow:planner", description: "Generate sub-tasks (Phase 3)", prompt: "The parent tasks are already on the board. Run /cw-plan Phase 3 only — create sub-tasks for each parent task, then exit." })
+    ```
+
+  - **Execute as-is**: proceed directly to execution options below.
+
+  - **Adjust tasks**: ask the user for their feedback, then re-run Pass 1 with that feedback:
+    ```
+    Task({ subagent_type: "claude-workflow:planner", description: "Revise parent tasks (Phase 1+2)", prompt: "Revise the parent task graph based on this feedback: [user feedback]. Clear existing tasks if needed, recreate them, output an updated PLANNING SUMMARY, and exit." })
+    ```
+    Then re-present the decomposition question with the updated summary.
+
+  **After Phase 3 completes (or if executing as-is)**, present execution options:
+  ```
+  AskUserQuestion({
+    questions: [{
+      question: "The task graph is ready for execution. How would you like to proceed?",
+      header: "Execution",
+      options: [
+        { label: "Parallel (/cw-dispatch)", description: "Spawn parallel subagent workers — ready workers run concurrently, no extra setup needed" },
+        { label: "Team (/cw-dispatch-team)", description: "Persistent agent team with lead coordination (requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and CLAUDE_CODE_TASK_LIST_ID)" },
+        { label: "Single task (/cw-execute)", description: "Execute one task at a time with full visibility and control" },
+        { label: "Done for now", description: "Save the task graph and execute later" }
+      ],
+      multiSelect: false
+    }]
+  })
+  ```
+  Based on user selection:
+  - **Parallel**: `Skill({ skill: "cw-dispatch" })`
+  - **Team**: `Skill({ skill: "cw-dispatch-team" })`
+  - **Single task**: `Skill({ skill: "cw-execute" })`
+  - **Done for now**: Confirm task graph is saved and exit
 
 - **Create worktree**: Inform user to create worktree and move spec there:
   ```

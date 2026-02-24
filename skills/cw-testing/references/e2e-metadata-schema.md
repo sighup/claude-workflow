@@ -17,32 +17,23 @@ This document defines the metadata structure for E2E test tasks created by `/cw-
     "teardown": "npx prisma migrate reset --force"
   },
 
+  "gherkin_dir": "docs/specs/01-spec-feature-name",
+  "artifacts_dir": "docs/specs/01-spec-feature-name/testing",
+
   "regression_check": true,
   "regression_failures": [],
 
   "automation": {
-    "backend": "chrome-devtools",
-    "detected_tools": ["chrome-devtools", "bash"],
-    "user_selected": "chrome-devtools"
+    "backend": "chrome-devtools"
   },
 
   "loop_config": {
-    "max_iterations": 50,
-    "max_consecutive_failures": 3
+    "max_iterations": 50
   },
 
   "fix_config": {
     "enabled": true,
     "max_attempts": 2
-  },
-
-  "stats": {
-    "total_steps": 5,
-    "passed": 3,
-    "failed": 1,
-    "pending": 1,
-    "blocked": 0,
-    "last_run": "2026-01-15T10:35:00Z"
   }
 }
 ```
@@ -54,7 +45,7 @@ Uses natural language prompts for action and verification:
 ```json
 {
   "test_type": "e2e",
-  "test_status": "pending",
+  "test_result": "pending",
   "parent_suite": "T01",
   "step_number": 2,
 
@@ -100,29 +91,23 @@ Uses natural language prompts for action and verification:
 | `test_type` | string | Yes | Always "e2e" |
 | `test_suite` | boolean | Yes | True for parent suite task |
 | `base_url` | string | Yes | Application URL for testing |
+| `gherkin_dir` | string | No | Directory containing the `.feature` files used to generate this suite; `cw-testing init` globs `*.feature` from here; omitted when derived from prose |
+| `artifacts_dir` | string | No | Directory for screenshots and logs; defaults to `artifacts` for ad-hoc suites, `docs/specs/<spec-name>/testing` for spec-linked suites |
 | `database.setup` | string | No | Command to setup test database |
 | `database.teardown` | string | No | Command to reset database after tests |
 | `regression_check` | boolean | Yes | Enable regression checking between steps |
 | `regression_failures` | array | Yes | List of detected regressions |
-| `automation.backend` | string | Yes | Selected backend: "chrome-devtools", "playwright", "cli", or "manual" |
-| `automation.detected_tools` | array | No | List of tools detected during init |
-| `automation.user_selected` | string | No | User's explicit choice (if different from detected) |
+| `automation.backend` | string | Yes | Selected backend: "chrome-devtools", "playwright-bdd", "cli", or "manual" |
 | `loop_config.max_iterations` | number | No | Max test loop iterations (default 50) |
-| `loop_config.max_consecutive_failures` | number | No | Stop after N consecutive failures (default 3) |
 | `fix_config.enabled` | boolean | No | Enable auto-fix loop (default true) |
 | `fix_config.max_attempts` | number | No | Max fix attempts per test (default 2) |
-| `stats.total_steps` | number | No | Total test steps |
-| `stats.passed` | number | No | Count of passed steps |
-| `stats.failed` | number | No | Count of failed steps |
-| `stats.pending` | number | No | Count of pending steps |
-| `stats.last_run` | string | No | ISO timestamp of last run |
 
 ### Test Step Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `test_type` | string | Yes | Always "e2e" |
-| `test_status` | string | Yes | "pending", "passed", "failed", or "blocked" |
+| `test_result` | string | Yes | "pending", "passed", "failed", or "blocked" |
 | `parent_suite` | string | Yes | Task ID of parent suite |
 | `step_number` | number | Yes | Order in test sequence (1-based) |
 | `action.type` | string | Yes | Action type: "navigate", "interact", or "wait" |
@@ -141,88 +126,7 @@ Uses natural language prompts for action and verification:
 | `fix_history` | array | No | History of fix attempts |
 | `blocked_reason` | string | No | Why test is blocked (if status is blocked) |
 
-## Action Types
-
-Actions use natural language prompts that the test executor interprets.
-
-### navigate
-
-Go to a URL or click links that change pages.
-
-```json
-{
-  "action": {
-    "type": "navigate",
-    "prompt": "Navigate to /login"
-  }
-}
-```
-
-**Example prompts:**
-- "Navigate to /login"
-- "Click the 'Dashboard' link in the navigation menu"
-- "Go back to the previous page"
-
-### interact
-
-Fill forms, click buttons, type text, select options.
-
-```json
-{
-  "action": {
-    "type": "interact",
-    "prompt": "Enter 'test@example.com' in the email field, 'Password123!' in the password field, then click the Login button"
-  }
-}
-```
-
-**Example prompts:**
-- "Enter 'test@example.com' in the email field"
-- "Click the Submit button"
-- "Select 'United States' from the country dropdown"
-- "Check the 'Remember me' checkbox"
-
-### wait
-
-Wait for elements, animations, or async operations.
-
-```json
-{
-  "action": {
-    "type": "wait",
-    "prompt": "Wait for the loading spinner to disappear and the dashboard content to be visible"
-  }
-}
-```
-
-**Example prompts:**
-- "Wait for the page to finish loading"
-- "Wait for the success message to appear"
-- "Wait for the modal to close"
-
-## Verification Prompts
-
-Verification uses natural language to describe what to check.
-
-```json
-{
-  "verify": {
-    "prompt": "Verify the dashboard is visible with a welcome message containing the user's email",
-    "expected": "Dashboard visible with welcome message"
-  }
-}
-```
-
-**Good verification prompts:**
-- "Verify the page title is 'Dashboard' and a welcome message containing the user's email is visible"
-- "Verify an error message is displayed below the password field"
-- "Verify the URL has changed to '/dashboard'"
-
-**Bad verification prompts:**
-- "Verify it works" (too vague)
-- "Check the API returned 200" (not visually verifiable)
-
-## Test Status Values
+## Test Result Values
 
 | Status | Meaning | Set When |
 |--------|---------|----------|
@@ -338,115 +242,3 @@ When a previously-passed test fails during regression checking:
 | `screenshot` | string | Screenshot showing the regression |
 | `previous_passed_at` | string | When this test last passed |
 
-## Example: Complete Test Suite
-
-### Parent Task
-
-```
-Subject: E2E: User Authentication Flow
-Description: End-to-end tests for login, registration, and logout flows.
-```
-
-```json
-{
-  "test_type": "e2e",
-  "test_suite": true,
-  "base_url": "http://localhost:3000",
-  "database": {
-    "setup": "npm run db:seed:test",
-    "teardown": null
-  },
-  "regression_check": true,
-  "regression_failures": [],
-  "stats": {
-    "total_steps": 5,
-    "passed": 0,
-    "failed": 0,
-    "pending": 5
-  }
-}
-```
-
-### Step 1: Navigate to Login
-
-```
-Subject: Test: User can navigate to login page
-Description: Verify the login page is accessible and displays the login form.
-```
-
-```json
-{
-  "test_type": "e2e",
-  "test_status": "pending",
-  "parent_suite": "T01",
-  "step_number": 1,
-  "action": {
-    "type": "navigate",
-    "prompt": "Navigate to /login"
-  },
-  "verify": {
-    "prompt": "Verify the login form is displayed with email and password fields and a Login button",
-    "expected": "Login form visible with all fields"
-  },
-  "artifacts": {
-    "screenshots": [],
-    "logs": []
-  }
-}
-```
-
-### Step 2: Enter Credentials
-
-```
-Subject: Test: User can enter login credentials
-Description: Verify user can type email and password into the form.
-```
-
-```json
-{
-  "test_type": "e2e",
-  "test_status": "pending",
-  "parent_suite": "T01",
-  "step_number": 2,
-  "action": {
-    "type": "interact",
-    "prompt": "Enter 'test@example.com' in the email field and 'TestPassword123!' in the password field"
-  },
-  "verify": {
-    "prompt": "Verify both fields show the entered values (password may be masked)",
-    "expected": "Form fields filled with credentials"
-  },
-  "artifacts": {
-    "screenshots": [],
-    "logs": []
-  }
-}
-```
-
-### Step 3: Submit Login
-
-```
-Subject: Test: User can submit login form
-Description: Verify form submission redirects to dashboard.
-```
-
-```json
-{
-  "test_type": "e2e",
-  "test_status": "pending",
-  "parent_suite": "T01",
-  "step_number": 3,
-  "action": {
-    "type": "interact",
-    "prompt": "Click the Login button to submit the form"
-  },
-  "verify": {
-    "prompt": "Verify the page redirects to /dashboard and displays a welcome message with the user's email",
-    "expected": "Dashboard visible with welcome message"
-  },
-  "artifacts": {
-    "screenshots": [],
-    "logs": []
-  }
-}
-```

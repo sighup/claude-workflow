@@ -22,7 +22,7 @@ skills:
 
 - Receives work from: Team Lead
 - Produces: Specification file at `docs/specs/[NN]-spec-[feature]/[NN]-spec-[feature].md`
-- Hands off to: Architect (who runs `/cw-plan` on the spec)
+- Hands off to: Planner (who runs `/cw-plan` on the spec)
 - Never modifies code - only creates specification documents
 - Communicates scope concerns to lead immediately
 

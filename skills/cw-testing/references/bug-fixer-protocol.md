@@ -125,7 +125,7 @@ TaskUpdate({
   taskId: "<linked-test-task-id>",
   status: "pending",
   metadata: {
-    test_status: "pending",
+    test_result: "pending",
     linked_fix_task: "<fix-task-id>",
     fix_history: [...existing, {
       fix_task_id: "<fix-task-id>",
