@@ -76,6 +76,7 @@ docs/specs/01-spec-login/
 ## playwright.config.ts Template
 
 ```typescript
+import path from 'path';
 import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig, cucumberReporter } from 'playwright-bdd';
 
@@ -88,8 +89,8 @@ const testDir = defineBddConfig({
 export default defineConfig({
   testDir,
   reporter: [
-    ['json', { outputFile: 'results.json' }],
-    ['html', { outputFile: 'report.html', open: 'never' }],
+    ['json', { outputFile: path.join(__dirname, 'results.json') }],
+    ['html', { outputFile: path.join(__dirname, 'report.html'), open: 'never' }],
   ],
   use: {
     screenshot: 'on',

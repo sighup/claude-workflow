@@ -19,7 +19,6 @@ Iteration 1/50
 ```
 Iteration 2/50
 ─────────────────────────────────────────
-[✓] Regression check: T01 verified
 [~] Executing: T02 - User can enter credentials
 [✗] T02 FAILED: Login button not found
 
@@ -29,7 +28,8 @@ Iteration 2/50
     Bug found: LoginForm component missing submit button
     Fix applied: Added submit button to LoginForm.tsx
     Commit: abc1234 fix(auth): add missing login submit button
-[→] Resetting T02 to pending for regression test
+[✓] Regression check: 1 passed test verified (T01)
+[→] Resetting T02 to pending, re-executing...
 ```
 
 ### Bug Fix Failed
@@ -81,7 +81,7 @@ Results:
 Status: 2/3 PASSED, 1 BLOCKED
 Bug fixes: 3 attempted (1 successful, 2 need manual intervention)
 
-Review fix task investigation notes, then run `/cw-testing reset --step T03`.
+Review fix task investigation notes, then invoke `/cw-testing` to reset blocked tests and re-run.
 ```
 
 ## Status Output
@@ -137,17 +137,18 @@ Test Steps Created:
   T02: User can enter credentials (blocked by T01)
   T03: User can submit login form (blocked by T02)
 
-Run `/cw-testing run` to execute the test suite.
+Invoke `/cw-testing` to execute the test suite.
 ```
 
 ## Reset Output
 
+Shown after the user selects "Reset and re-run all" or "Reset failed/blocked only" from the completion prompt:
+
 ```
 CW-TESTING RESET COMPLETE
 =========================
-Reset: 5 test tasks
+Reset: 5 test tasks (test_result → pending, fix_attempt → 0)
 Fix tasks: kept
-Artifacts: cleared
 
-Run `/cw-testing run` to start fresh.
+Proceeding to re-execute...
 ```
