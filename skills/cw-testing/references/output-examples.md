@@ -84,33 +84,6 @@ Bug fixes: 3 attempted (1 successful, 2 need manual intervention)
 Review fix task investigation notes, then invoke `/cw-testing` to reset blocked tests and re-run.
 ```
 
-## Status Output
-
-```
-CW-TESTING STATUS
-=================
-E2E Test Suite: [name]
-Base URL: [url]
-─────────────────────────────────────────
-  [✓] T01: User can navigate to login page
-       Passed: 2026-01-15T10:30:00Z
-
-  [✓] T02: User can enter credentials
-       Passed: 2026-01-15T10:30:15Z (after bug fix)
-       Bug fixed: abc1234
-
-  [~] T03: User can submit login form
-       Status: in_progress
-
-  [ ] T04: User sees error for invalid credentials
-       Status: pending (blocked by T03)
-
-  [B] T05: User can update profile
-       Blocked: Max fix attempts exceeded
-─────────────────────────────────────────
-Progress: 2/5 passed, 1 in progress, 1 pending, 1 blocked
-```
-
 ## Status Icons
 
 | Icon | Meaning |

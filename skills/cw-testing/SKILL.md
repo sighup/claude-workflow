@@ -318,17 +318,6 @@ See `references/output-examples.md` for run output format.
 
 ***
 
-## Error Handling
-
-| Error | Action |
-|-------|--------|
-| Browser action fails | Capture screenshot, mark failed, trigger fix |
-| Regression detected | Stop loop, report regression |
-| Network/timeout | Retry 3x, then mark failed |
-| Fix cannot determine cause | Report failure with investigation notes |
-
-***
-
 ## What Comes Next
 
 After testing:

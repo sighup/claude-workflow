@@ -8,11 +8,7 @@ Regression checking is a critical feature that distinguishes E2E testing from si
 
 ## When Regression Checks Run
 
-```
-1. Once at session start — before the first test executes
-2. After each bug fix — before resuming the loop
-3. Only if regression_check: true on parent suite
-```
+Once at session start (before the first test) and after each bug fix, if `regression_check: true` on the parent suite.
 
 ### Flow Diagram
 
@@ -40,16 +36,7 @@ START
 
 ### Step 1: Collect Passed Tests
 
-```
-passed_tests = []
-for each task in TaskList():
-  if task.metadata.test_type == "e2e" and
-     task.metadata.test_result == "passed":
-    passed_tests.append(task)
-
-# Sort by step_number to verify in order
-passed_tests.sort(key=lambda t: t.metadata.step_number)
-```
+Call `TaskList`. For each task with `test_type == "e2e"` and `test_result == "passed"`, collect it. Sort by `step_number` ascending.
 
 ### Step 2: Re-Execute Passed Tests
 
@@ -160,38 +147,3 @@ If a test occasionally fails due to timing, increase the timeout in `action.prom
 
 Regression checks always run sequentially in `step_number` order to ensure state consistency. Tests are re-executed one at a time regardless of how they were originally run.
 
-## Why Regression Checking Matters
-
-### Without Regression Checking
-
-```
-Step 1: PASS (login page loads)
-Step 2: PASS (can enter credentials)
-Step 3: PASS (can submit form)  ← Changes introduced here break Step 1
-Step 4: PASS (can see dashboard)
-Step 5: FAIL (can log out)
-
-Result: Test 5 fails, but the real issue is in Step 3's changes
-```
-
-### With Regression Checking
-
-```
-Step 1: PASS (login page loads)
-Step 2: PASS (can enter credentials)
-Step 3: PASS (can submit form)  ← Bug fix applied here, regression check runs
-
-Regression check after fix:
-  Step 1: FAIL - Login page no longer loads!
-
-Result: Immediately identifies Step 3's changes broke Step 1
-```
-
-## Best Practices
-
-1. **Keep Tests Atomic**: Each test should verify one thing
-2. **Use Stable Selectors**: Prefer `data-testid` over CSS classes
-3. **Set Appropriate Timeouts**: Long enough for real scenarios, short enough to fail fast
-4. **Document Dependencies**: Make test order explicit via blockedBy
-5. **Review Regressions Promptly**: Don't let regressions accumulate
-6. **Consider Test Isolation**: Reset state between test runs if needed
