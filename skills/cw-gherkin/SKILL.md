@@ -147,19 +147,21 @@ If found, run in two passes:
 
 After saving all `.feature` files, ask:
 
+> **Note**: If the user intends to use `playwright-bdd` as the automation backend, they should choose "No" here. `cw-testing init` is required for playwright-bdd regardless — it generates `playwright.config.ts`, step definitions, and verifies with `bddgen` before creating tasks. Creating task stubs here would be duplicated by `cw-testing init`.
+
 ```
 AskUserQuestion({
   questions: [{
-    question: ".feature files created. Create cw-testing task stubs so /cw-testing run can execute these scenarios?",
+    question: ".feature files created. Create cw-testing task stubs so /cw-testing run can execute these scenarios? Skip this if you plan to use playwright-bdd — run /cw-testing init instead.",
     header: "Task stubs",
     options: [
       {
         label: "Yes — create tasks",
-        description: "Create parent suite + one step task per scenario on the task board"
+        description: "Create parent suite + one step task per scenario (for chrome-devtools, playwright MCP, cli, or manual backends)"
       },
       {
         label: "No — .feature files only",
-        description: "Save scenarios as documentation; create cw-testing tasks later"
+        description: "Save scenarios as documentation; run /cw-testing init later to set up the backend and create tasks"
       }
     ],
     multiSelect: false
