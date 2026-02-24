@@ -197,6 +197,18 @@ Generate the specification using this structure:
 
 **Save to:** `./docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md`
 
+After saving the spec, automatically generate Gherkin BDD scenarios as a subagent (no user prompt required):
+
+```
+Task({
+  subagent_type: "claude-workflow:spec-writer",
+  description: "Generate Gherkin scenarios for [NN]-spec-[feature-name]",
+  prompt: "Generate Gherkin BDD scenarios for this spec. --spec docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md. Read protocol at: skills/cw-gherkin/SKILL.md. This is an automated call from cw-spec — skip Phase 4 (task stubs offer) and return after saving .feature files."
+})
+```
+
+This runs silently. Once complete, note in the Step 6 review that `.feature` files were created alongside the spec.
+
 ### Step 6: Review and Refinement
 
 Present the spec and ask:

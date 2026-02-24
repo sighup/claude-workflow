@@ -339,19 +339,19 @@ Report saved: [path to review report]
 
 ## What Comes Next
 
-After review:
-- **APPROVED**: Implementation ready for PR creation or final validation
-- **CHANGES REQUESTED**: Execute FIX tasks, then re-review
+After review, prompt the user with context-sensitive options based on the review outcome.
+
+### When CHANGES REQUESTED (blocking issues found)
 
 ```
 AskUserQuestion({
   questions: [{
-    question: "Code review complete. What would you like to do next?",
+    question: "Code review complete — changes requested. What would you like to do next?",
     header: "Next Step",
     options: [
       { label: "Execute fixes (Recommended)", description: "Run /cw-dispatch to execute the FIX-REVIEW tasks" },
-      { label: "Run /cw-validate", description: "Verify coverage against spec and run validation gates" },
-      { label: "Create PR", description: "Proceed to pull request creation" },
+      { label: "Re-run /cw-testing", description: "Re-run tests to check for regressions before fixing" },
+      { label: "Create PR", description: "Proceed to pull request creation without fixing" },
       { label: "Done for now", description: "Review the report and decide later" }
     ],
     multiSelect: false
@@ -359,8 +359,28 @@ AskUserQuestion({
 })
 ```
 
-Based on user selection:
+### When APPROVED (no blocking issues)
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Code review complete — approved. What would you like to do next?",
+    header: "Next Step",
+    options: [
+      { label: "Create PR (Recommended)", description: "Proceed to pull request creation" },
+      { label: "Re-run /cw-testing", description: "Re-run tests to confirm nothing regressed" },
+      { label: "Run /cw-validate", description: "Verify coverage against spec and run validation gates" },
+      { label: "Done for now", description: "Review the report and decide later" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+### Based on user selection
+
 - **Execute fixes**: Invoke `/cw-dispatch` to process FIX-REVIEW tasks
+- **Re-run /cw-testing**: Invoke the skill directly: `Skill({ skill: "cw-testing", args: "run" })`
 - **Run /cw-validate**: Invoke the skill directly: `Skill({ skill: "cw-validate" })`
 - **Create PR**: Summarize changes and suggest PR title/body
 - **Done for now**: Summarize what was found and exit
