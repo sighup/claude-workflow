@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.7.1 (2026-02-24)
+
+### Bug Fixes
+
+- **cw-plan**: Remove null model option, always set explicit model
+  ([#6](https://github.com/liatrio-labs/claude-workflow/pull/6),
+  [`42c1b90`](https://github.com/liatrio-labs/claude-workflow/commit/42c1b90e35d7a87294ba82f8cae2dbf06e06cf59))
+
+
 ## v2.7.0 (2026-02-24)
 
 ### Features
