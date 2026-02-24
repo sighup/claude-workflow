@@ -244,7 +244,7 @@ Open new terminals to start development:
          "Skill(cw-testing)",
          "Skill(cw-worktree)",
          "Task(claude-workflow:spec-writer)",
-         "Task(claude-workflow:architect)",
+         "Task(claude-workflow:planner)",
          "Task(claude-workflow:implementer)",
          "Task(claude-workflow:validator)",
          "Task(claude-workflow:reviewer)",

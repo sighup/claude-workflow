@@ -4,35 +4,30 @@ This document describes how regression checking works in `/cw-testing run` to en
 
 ## Overview
 
-Regression checking is a critical feature that distinguishes E2E testing from simple task completion. Before executing each new test step, the system re-verifies ALL previously passed steps to detect if recent changes have broken existing functionality.
+Regression checking is a critical feature that distinguishes E2E testing from simple task completion. At session start and after each bug fix, the system re-verifies ALL previously passed steps to detect if recent changes have broken existing functionality.
 
 ## When Regression Checks Run
 
-```
-For each iteration of the test loop:
-  1. BEFORE executing the next pending test
-  2. AFTER the previous test completes
-  3. Only if regression_check: true on parent suite
-```
+Once at session start (before the first test) and after each bug fix, if `regression_check: true` on the parent suite.
 
 ### Flow Diagram
 
 ```
 START
   │
-  ├─ Get next pending test
+  ├─ Pre-run regression check (all passed tests)
+  │   │
+  │   ├─ All pass → begin loop
+  │   └─ Any fail → STOP (regression detected)
   │
-  ├─ Are there any passed tests?
+  ├─ Loop: select → execute → verify
+  │
+  ├─ Bug fix applied?
   │   │
-  │   ├─ NO → Execute next test
-  │   │
-  │   └─ YES → Run regression check
+  │   └─ YES → regression check (all passed tests)
   │             │
-  │             ├─ All passed tests still pass?
-  │             │   │
-  │             │   ├─ YES → Execute next test
-  │             │   │
-  │             │   └─ NO → STOP (regression detected)
+  │             ├─ All pass → continue loop
+  │             └─ Any fail → STOP (regression detected)
   │
   └─ Continue loop
 ```
@@ -41,34 +36,28 @@ START
 
 ### Step 1: Collect Passed Tests
 
+Call `TaskList`. For each task with `test_type == "e2e"` and `test_result == "passed"`, collect it. Sort by `step_number` ascending.
+
+### Step 2: Re-Execute Passed Tests
+
+For each passed test, re-execute it using the suite's automation backend (read from parent suite `automation.backend`):
+
+**playwright-bdd backend:**
+```bash
+npx playwright test --config [playwright_config] \
+  --grep "[scenario title]" --reporter=json
 ```
-passed_tests = []
-for each task in TaskList():
-  if task.metadata.test_type == "e2e" and
-     task.metadata.test_status == "passed":
-    passed_tests.append(task)
+Parse `results.json`: `spec.ok == true` → pass; `spec.ok == false` → regression detected.
 
-# Sort by step_number to verify in order
-passed_tests.sort(key=lambda t: t.metadata.step_number)
+**Other backends (chrome-devtools, cli, manual):**
+Spawn a `test-executor` sub-agent per passed test:
 ```
-
-### Step 2: Re-Execute Proof Artifacts
-
-For each passed test, re-execute its proof artifacts:
-
+Task({
+  subagent_type: "claude-workflow:test-executor",
+  prompt: "Execute test step [step_id]. Task ID: [native-task-id]. Read protocol at: skills/cw-testing/references/test-executor-protocol.md"
+})
 ```
-for task in passed_tests:
-  for artifact in task.metadata.proof_artifacts:
-    result = execute_artifact(artifact)
-
-    if result.failed:
-      # Regression detected!
-      return RegressionFailure(
-        task_id=task.id,
-        artifact=artifact,
-        error=result.error
-      )
-```
+Read `test_result` via `TaskGet`. If `test_result != "passed"` → regression detected.
 
 ### Step 3: Handle Results
 
@@ -99,33 +88,7 @@ Continue to execute next pending test
 
 ## What to Check During Regression
 
-### For Each Proof Artifact Type
-
-| Type | Regression Check |
-|------|-----------------|
-| navigate | Page loads without error |
-| click | Element exists and is clickable |
-| fill | Element exists and accepts input |
-| assert | Expected text/element is present |
-| screenshot | Page renders (check for error states) |
-| wait | Expected content appears within timeout |
-
-### Regression Check Modes
-
-**Full Mode (Default)**
-- Re-execute all actions in proof_artifacts
-- Verify expected outcomes match
-- Most thorough but slowest
-
-**Quick Mode (`--regression=quick`)**
-- Only check assertions (skip navigate/click/fill)
-- Faster but less thorough
-- Good for frequent runs
-
-**Skip Mode (`--no-regression`)**
-- Skip regression checking entirely
-- Fastest but risky
-- Use only for development/debugging
+Re-run the full test (action + verify) just as during initial execution. The test's `verify.prompt` defines what must still be true. A passed test that fails on re-execution is a regression regardless of which specific element changed.
 
 ## Output Format
 
@@ -160,9 +123,9 @@ Screenshot: artifacts/T01.2-regression-2026-01-15.png
 Recommendation:
   1. Check recent commits for changes to the login form
   2. Verify the data-testid attribute is still present
-  3. Run `/cw-testing status` to see full test state
+  3. Invoke `/cw-testing` to see current test state
 
-Test loop stopped. Fix the regression and run `/cw-testing run` again.
+Test loop stopped. Fix the regression and invoke `/cw-testing` again.
 ════════════════════════════════════════════════════════
 ```
 
@@ -178,93 +141,9 @@ Some tests may depend on state created by earlier tests (e.g., "logged in" state
 
 ### Flaky Tests
 
-If a test occasionally fails due to timing:
-
-```json
-{
-  "proof_artifacts": [
-    {
-      "action": "wait",
-      "text": "Dashboard",
-      "timeout": 10000,
-      "retry": 3
-    }
-  ]
-}
-```
-
-The `retry` field allows re-attempting before marking as failed.
+If a test occasionally fails due to timing, increase the timeout in `action.prompt` (e.g., "Wait up to 10 seconds for the spinner to disappear") or add an explicit `wait` step before the flaky action.
 
 ### Parallel Tests
 
-Tests with no dependencies can be marked as parallelizable:
+Regression checks always run sequentially in `step_number` order to ensure state consistency. Tests are re-executed one at a time regardless of how they were originally run.
 
-```json
-{
-  "metadata": {
-    "parallel_safe": true
-  }
-}
-```
-
-However, regression checks always run sequentially to ensure state consistency.
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CW_REGRESSION_MODE` | `full` | "full", "quick", or "skip" |
-| `CW_REGRESSION_RETRY` | `1` | Retries per artifact before failing |
-| `CW_REGRESSION_TIMEOUT` | `30000` | Max time per test (ms) |
-
-### Parent Suite Metadata
-
-```json
-{
-  "regression_check": true,
-  "regression_config": {
-    "mode": "full",
-    "retry_count": 2,
-    "timeout_ms": 30000,
-    "stop_on_first_failure": true
-  }
-}
-```
-
-## Why Regression Checking Matters
-
-### Without Regression Checking
-
-```
-Step 1: PASS (login page loads)
-Step 2: PASS (can enter credentials)
-Step 3: PASS (can submit form)  ← Changes introduced here break Step 1
-Step 4: PASS (can see dashboard)
-Step 5: FAIL (can log out)
-
-Result: Test 5 fails, but the real issue is in Step 3's changes
-```
-
-### With Regression Checking
-
-```
-Step 1: PASS (login page loads)
-Step 2: PASS (can enter credentials)
-Step 3: PASS (can submit form)  ← Changes break Step 1
-
-Regression check before Step 4:
-  Step 1: FAIL - Login page no longer loads!
-
-Result: Immediately identifies Step 3's changes broke Step 1
-```
-
-## Best Practices
-
-1. **Keep Tests Atomic**: Each test should verify one thing
-2. **Use Stable Selectors**: Prefer `data-testid` over CSS classes
-3. **Set Appropriate Timeouts**: Long enough for real scenarios, short enough to fail fast
-4. **Document Dependencies**: Make test order explicit via blockedBy
-5. **Review Regressions Promptly**: Don't let regressions accumulate
-6. **Consider Test Isolation**: Reset state between test runs if needed
