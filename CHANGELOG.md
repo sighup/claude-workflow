@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.7.0 (2026-02-24)
+
+### Features
+
+- Add cw-gherkin skill and playwright-bdd test backend
+  ([#5](https://github.com/liatrio-labs/claude-workflow/pull/5),
+  [`3ffea70`](https://github.com/liatrio-labs/claude-workflow/commit/3ffea709e5d5505f9adc26547f47c473c4fa0786))
+
+
 ## v2.6.0 (2026-02-22)
 
 ### Bug Fixes
