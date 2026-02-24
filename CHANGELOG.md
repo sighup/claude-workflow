@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.6.0 (2026-02-24)
+
+### Features
+
+- Integrate liatrio changes (planner subagent, cw-gherkin, cw-testing improvements)
+  ([#18](https://github.com/sighup/claude-workflow/pull/18),
+  [`c091aae`](https://github.com/sighup/claude-workflow/commit/c091aaeeffab3e8b24721a6c33d21398ed265ede))
+
+
 ## v2.5.0 (2026-02-18)
 
 ### Features
