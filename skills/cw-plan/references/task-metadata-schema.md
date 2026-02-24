@@ -51,7 +51,7 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
   // Worker Assignment
   "role": "implementer",                 // implementer | validator | spec-writer
   "complexity": "standard",             // trivial | standard | complex
-  "model": "sonnet",                    // Model override: sonnet | opus | haiku | null (null = inherit)
+  "model": "sonnet",                    // Model: "haiku" (trivial) | "sonnet" (standard) | "opus" (complex)
 
   // Results (filled by worker after execution)
   "proof_results": null,                 // Filled with pass/fail per artifact
@@ -90,7 +90,7 @@ Each requirement must be:
 |-------|------|----------|-------------|
 | `role` | string | Yes | Worker role: `implementer`, `validator`, `spec-writer` |
 | `complexity` | string | Yes | Task complexity: `trivial`, `standard`, `complex` |
-| `model` | string\|null | No | Model override for this task (`sonnet`, `opus`, `haiku`). `null` = inherit from session. |
+| `model` | string | Yes | Model for this task: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex) |
 
 ### Proof Artifact Types
 

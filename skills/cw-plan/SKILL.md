@@ -94,7 +94,7 @@ After restarting, run /cw-plan again to continue.
    - `standard` → `"sonnet"` (capable for most implementation tasks)
    - `complex` → `"opus"` (maximum capability)
 
-   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`) or `null`.
+   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`).
 
 ### Phase 1.5: Proof Capture Capability
 
@@ -185,7 +185,7 @@ TaskCreate({
     },
     role: "implementer",
     complexity: "trivial|standard|complex",
-    model: null,  // Set to "opus" for complex, "sonnet" for standard, "haiku" for trivial
+    model: "sonnet",  // "haiku" for trivial, "sonnet" for standard, "opus" for complex
     proof_results: null,
     completed_at: null
   }
