@@ -16,8 +16,9 @@ Reference for supported automation backends in cw-testing.
 During setup, check which tools are available:
 
 ```
-# Chrome DevTools MCP
-try: mcp__chrome-devtools__list_pages() → available
+# Chrome DevTools MCP — check tool list, do NOT invoke any tool
+Check whether mcp__chrome-devtools__take_snapshot is in the available tool list.
+Calling any chrome-devtools tool during detection would open a browser uninvited.
 
 # playwright-bdd (global or local install)
 command -v bddgen 2>/dev/null  # global install
@@ -79,7 +80,7 @@ During execution, verify the selected backend is available:
 
 | Backend | Verification |
 |---------|-------------|
-| `chrome-devtools` | Call `mcp__chrome-devtools__list_pages()` |
+| `chrome-devtools` | Check that `mcp__chrome-devtools__take_snapshot` is in the available tool list |
 | `playwright-bdd` | `command -v bddgen 2>/dev/null \|\| npx bddgen --version 2>/dev/null` |
 | `cli` | Verify `curl` or test commands work |
 | `manual` | No verification needed |

@@ -81,9 +81,10 @@ On reset: update affected step tasks with `test_result: "pending"`, `fix_attempt
 
 Check which tools are available:
 
-```bash
-# Chrome DevTools MCP
-try: mcp__chrome-devtools__list_pages()
+```
+# Chrome DevTools MCP — check tool availability without invoking
+Check whether mcp__chrome-devtools__take_snapshot is in the available tool list.
+Do NOT call any chrome-devtools tool — this would open a browser session uninvited.
 
 # playwright-bdd (only offer if source type == gherkin)
 command -v bddgen 2>/dev/null || npx bddgen --version 2>/dev/null
