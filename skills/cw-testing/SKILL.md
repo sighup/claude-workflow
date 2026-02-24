@@ -54,12 +54,29 @@ Call `TaskList`. For each task whose subject starts with `E2E:`, call `TaskGet` 
 
 - **Not found** → proceed to Setup (Step 3)
 - **Found, tests pending or failed** → proceed to Execute
-- **Found, all tests complete** (all `test_result` values are `"passed"` or `"blocked"`) → show status summary (see `references/output-examples.md`), then ask:
+- **Found, all tests complete** (all `test_result` values are `"passed"` or `"blocked"`) → show status summary (see `references/output-examples.md`), then ask using the conditional prompt below
 
+**If all passed (none blocked):**
 ```
 AskUserQuestion({
   questions: [{
-    question: "All tests have completed. What would you like to do?",
+    question: "All tests passed! What would you like to do next?",
+    header: "Next action",
+    options: [
+      { label: "Run /cw-review", description: "Review code for bugs, security issues, and quality problems (recommended)" },
+      { label: "Reset and re-run all", description: "Reset all test results to pending and re-execute the full suite" },
+      { label: "Done", description: "Exit — results are saved on the task board" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+**If some blocked:**
+```
+AskUserQuestion({
+  questions: [{
+    question: "Testing complete with blocked tests. What would you like to do?",
     header: "Next action",
     options: [
       { label: "Reset and re-run all", description: "Reset all test results to pending and re-execute the full suite" },
@@ -297,7 +314,7 @@ Then run a **regression check** against all tasks with `test_result == "passed"`
 
 #### Phase 7: PROGRESS CHECK
 
-Check stopping conditions (all passed or blocked, max iterations, no selectable tasks). If all tests are complete, output the final status summary (see `references/output-examples.md`) and offer reset or done via AskUserQuestion. If continuing, return to Phase 1.
+Check stopping conditions (all passed or blocked, max iterations, no selectable tasks). If all tests are complete, output the final status summary (see `references/output-examples.md`) and use the conditional AskUserQuestion from Step 2 (all passed → offer /cw-review; some blocked → offer reset options). If continuing, return to Phase 1.
 
 ### Output
 
@@ -321,6 +338,6 @@ See `references/output-examples.md` for run output format.
 ## What Comes Next
 
 After testing:
-- **All passed** → Consider committing artifacts
+- **All passed** → Run `/cw-review` for a code quality check before merge
 - **Some blocked** → Review fix task notes, manually fix, then invoke `/cw-testing` to reset and re-run blocked tests
 - **Regression** → Investigate recent changes, fix, then invoke `/cw-testing` to reset and re-run
