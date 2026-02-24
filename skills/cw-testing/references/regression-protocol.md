@@ -9,10 +9,9 @@ Regression checking is a critical feature that distinguishes E2E testing from si
 ## When Regression Checks Run
 
 ```
-For each iteration of the test loop:
-  1. BEFORE executing the next pending test
-  2. AFTER the previous test completes
-  3. Only if regression_check: true on parent suite
+1. Once at session start — before the first test executes
+2. After each bug fix — before resuming the loop
+3. Only if regression_check: true on parent suite
 ```
 
 ### Flow Diagram
@@ -20,19 +19,19 @@ For each iteration of the test loop:
 ```
 START
   │
-  ├─ Get next pending test
+  ├─ Pre-run regression check (all passed tests)
+  │   │
+  │   ├─ All pass → begin loop
+  │   └─ Any fail → STOP (regression detected)
   │
-  ├─ Are there any passed tests?
+  ├─ Loop: select → execute → verify
+  │
+  ├─ Bug fix applied?
   │   │
-  │   ├─ NO → Execute next test
-  │   │
-  │   └─ YES → Run regression check
+  │   └─ YES → regression check (all passed tests)
   │             │
-  │             ├─ All passed tests still pass?
-  │             │   │
-  │             │   ├─ YES → Execute next test
-  │             │   │
-  │             │   └─ NO → STOP (regression detected)
+  │             ├─ All pass → continue loop
+  │             └─ Any fail → STOP (regression detected)
   │
   └─ Continue loop
 ```
@@ -45,7 +44,7 @@ START
 passed_tests = []
 for each task in TaskList():
   if task.metadata.test_type == "e2e" and
-     task.metadata.test_status == "passed":
+     task.metadata.test_result == "passed":
     passed_tests.append(task)
 
 # Sort by step_number to verify in order
@@ -110,22 +109,6 @@ Continue to execute next pending test
 | screenshot | Page renders (check for error states) |
 | wait | Expected content appears within timeout |
 
-### Regression Check Modes
-
-**Full Mode (Default)**
-- Re-execute all actions in proof_artifacts
-- Verify expected outcomes match
-- Most thorough but slowest
-
-**Quick Mode (`--regression=quick`)**
-- Only check assertions (skip navigate/click/fill)
-- Faster but less thorough
-- Good for frequent runs
-
-**Skip Mode (`--no-regression`)**
-- Skip regression checking entirely
-- Fastest but risky
-- Use only for development/debugging
 
 ## Output Format
 
@@ -160,9 +143,9 @@ Screenshot: artifacts/T01.2-regression-2026-01-15.png
 Recommendation:
   1. Check recent commits for changes to the login form
   2. Verify the data-testid attribute is still present
-  3. Run `/cw-testing status` to see full test state
+  3. Invoke `/cw-testing` to see current test state
 
-Test loop stopped. Fix the regression and run `/cw-testing run` again.
+Test loop stopped. Fix the regression and invoke `/cw-testing` again.
 ════════════════════════════════════════════════════════
 ```
 

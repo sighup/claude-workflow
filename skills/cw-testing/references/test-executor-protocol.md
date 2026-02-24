@@ -82,7 +82,7 @@ TaskUpdate({
   taskId: "<task-id>",
   status: "completed",
   metadata: {
-    test_status: "passed",
+    test_result: "passed",
     passed_at: "<ISO timestamp>",
     artifacts: {
       screenshots: ["[artifacts_dir]/[step_id]-result.png"]
@@ -97,7 +97,7 @@ TaskUpdate({
   taskId: "<task-id>",
   status: "completed",
   metadata: {
-    test_status: "failed",
+    test_result: "failed",
     failed_at: "<ISO timestamp>",
     failure_reason: "[specific description of what went wrong]",
     artifacts: {

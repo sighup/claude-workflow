@@ -27,6 +27,35 @@ npx playwright test   (runs the generated spec files, produces JSON + HTML repor
 
 ---
 
+## Setup Procedure
+
+When setting up the `playwright-bdd` backend for a spec:
+
+1. **Check prerequisites** — verify `@playwright/test` is installed:
+   ```bash
+   npx playwright --version 2>/dev/null
+   ```
+   If missing, inform the user: "Run `npm install -g @playwright/test` (global) or `npm install @playwright/test` in your project root, then retry."
+
+2. **Generate `playwright.config.ts`** — write to `[artifacts_dir]/playwright.config.ts` using the template below. If the file already exists, ask the user to confirm overwrite before writing.
+
+3. **Generate step definitions** — spawn an implementer sub-agent:
+   ```
+   Task({
+     subagent_type: "claude-workflow:implementer",
+     prompt: "Read all .feature files in [gherkin_dir]. For each unique Given/When/Then step across all feature files, write a TypeScript step definition in [artifacts_dir]/steps/[feature-name].steps.ts using playwright-bdd's createBdd() pattern. Use semantic Playwright locators (getByRole, getByLabel, getByText). Feature files are at: [list of .feature file paths]. Reference: skills/cw-testing/references/playwright-bdd-backend.md"
+   })
+   ```
+
+4. **Verify with bddgen** — run:
+   ```bash
+   npx bddgen --config [artifacts_dir]/playwright.config.ts
+   ```
+   - Exit 0 → setup complete; proceed
+   - Exit non-zero → show the output (which includes TypeScript scaffolds for missing steps); prompt user to review the scaffolds and retry, or spawn an implementer sub-agent to fill in the missing step bodies before retrying
+
+---
+
 ## File Layout
 
 ```

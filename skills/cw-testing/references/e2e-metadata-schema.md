@@ -57,7 +57,7 @@ Uses natural language prompts for action and verification:
 ```json
 {
   "test_type": "e2e",
-  "test_status": "pending",
+  "test_result": "pending",
   "parent_suite": "T01",
   "step_number": 2,
 
@@ -109,7 +109,7 @@ Uses natural language prompts for action and verification:
 | `database.teardown` | string | No | Command to reset database after tests |
 | `regression_check` | boolean | Yes | Enable regression checking between steps |
 | `regression_failures` | array | Yes | List of detected regressions |
-| `automation.backend` | string | Yes | Selected backend: "chrome-devtools", "playwright", "cli", or "manual" |
+| `automation.backend` | string | Yes | Selected backend: "chrome-devtools", "playwright-bdd", "cli", or "manual" |
 | `automation.detected_tools` | array | No | List of tools detected during init |
 | `automation.user_selected` | string | No | User's explicit choice (if different from detected) |
 | `loop_config.max_iterations` | number | No | Max test loop iterations (default 50) |
@@ -127,7 +127,7 @@ Uses natural language prompts for action and verification:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `test_type` | string | Yes | Always "e2e" |
-| `test_status` | string | Yes | "pending", "passed", "failed", or "blocked" |
+| `test_result` | string | Yes | "pending", "passed", "failed", or "blocked" |
 | `parent_suite` | string | Yes | Task ID of parent suite |
 | `step_number` | number | Yes | Order in test sequence (1-based) |
 | `action.type` | string | Yes | Action type: "navigate", "interact", or "wait" |
@@ -227,7 +227,7 @@ Verification uses natural language to describe what to check.
 - "Verify it works" (too vague)
 - "Check the API returned 200" (not visually verifiable)
 
-## Test Status Values
+## Test Result Values
 
 | Status | Meaning | Set When |
 |--------|---------|----------|
@@ -382,7 +382,7 @@ Description: Verify the login page is accessible and displays the login form.
 ```json
 {
   "test_type": "e2e",
-  "test_status": "pending",
+  "test_result": "pending",
   "parent_suite": "T01",
   "step_number": 1,
   "action": {
@@ -410,7 +410,7 @@ Description: Verify user can type email and password into the form.
 ```json
 {
   "test_type": "e2e",
-  "test_status": "pending",
+  "test_result": "pending",
   "parent_suite": "T01",
   "step_number": 2,
   "action": {
@@ -438,7 +438,7 @@ Description: Verify form submission redirects to dashboard.
 ```json
 {
   "test_type": "e2e",
-  "test_status": "pending",
+  "test_result": "pending",
   "parent_suite": "T01",
   "step_number": 3,
   "action": {

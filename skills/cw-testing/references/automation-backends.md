@@ -7,21 +7,17 @@ Reference for supported automation backends in cw-testing.
 | Backend | Tools Required | Best For |
 |---------|---------------|----------|
 | `chrome-devtools` | Chrome DevTools MCP | Web UI testing with browser automation |
-| `playwright` | Playwright MCP | Web UI testing with Playwright |
 | `playwright-bdd` | `bddgen` CLI, `@playwright/test` | Standard Gherkin → compiled tests, CI-friendly |
 | `cli` | Bash only | API testing, CLI tools, non-browser tests |
 | `manual` | None | Manual verification with user confirmation |
 
 ## Detection
 
-During `init`, check which tools are available:
+During setup, check which tools are available:
 
 ```
 # Chrome DevTools MCP
 try: mcp__chrome-devtools__list_pages() → available
-
-# Playwright MCP
-try: mcp__playwright__* → available
 
 # playwright-bdd (global or local install)
 command -v bddgen 2>/dev/null  # global install
@@ -45,10 +41,6 @@ Requires the Chrome DevTools MCP server to be configured and running.
 | Get page state | `mcp__chrome-devtools__take_snapshot()` |
 | Wait for text | `mcp__chrome-devtools__wait_for({ text })` |
 | Press key | `mcp__chrome-devtools__press_key({ key })` |
-
-## Playwright MCP
-
-Requires Playwright MCP server. Use equivalent Playwright commands.
 
 ## CLI Backend
 
@@ -83,12 +75,11 @@ This backend compiles `.feature` files into TypeScript test specs **before** exe
 
 ## Backend Verification
 
-During `run`, verify the selected backend is available:
+During execution, verify the selected backend is available:
 
 | Backend | Verification |
 |---------|-------------|
 | `chrome-devtools` | Call `mcp__chrome-devtools__list_pages()` |
-| `playwright` | Call `mcp__playwright__list_browsers()` |
 | `playwright-bdd` | `command -v bddgen 2>/dev/null \|\| npx bddgen --version 2>/dev/null` |
 | `cli` | Verify `curl` or test commands work |
 | `manual` | No verification needed |
