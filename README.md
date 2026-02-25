@@ -73,6 +73,13 @@ Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent tea
 
 `/cw-dispatch` (subagent workers) needs no setup and is the recommended default. `/cw-plan` will offer both options after task graph creation.
 
+`/cw-testing` supports multiple backends. To use the `playwright-bdd` backend (Gherkin → Playwright, CI-friendly):
+
+```bash
+npm install --save-dev playwright-bdd @playwright/test
+npx playwright install
+```
+
 ## Task Metadata
 
 Every task on the board carries self-contained metadata enabling autonomous execution:
