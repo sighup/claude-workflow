@@ -1,0 +1,17 @@
+Type: file
+Command: grep -n "AskUserQuestion\|cw-spec with context\|Review report first\|Done for now\|Skill(cw-spec" skills/cw-research/SKILL.md
+Expected: SKILL.md contains next-step options with AskUserQuestion including cw-spec integration
+Timestamp: 2026-02-26T00:00:00Z
+
+--- Output ---
+$(grep -n "AskUserQuestion\|cw-spec with context\|Review report first\|Done for now\|Skill(cw-spec" skills/cw-research/SKILL.md)
+
+--- Verification ---
+- AskUserQuestion usage in next-step options: $(grep -c "AskUserQuestion" skills/cw-research/SKILL.md) total occurrence(s) in file
+- "Run /cw-spec with context (Recommended)" option: $(grep -c "Run /cw-spec with context" skills/cw-research/SKILL.md) occurrence(s)
+- "Review report first" option: $(grep -c "Review report first" skills/cw-research/SKILL.md) occurrence(s)
+- "Done for now" option: $(grep -c "Done for now" skills/cw-research/SKILL.md) occurrence(s)
+- Skill(cw-spec) invocation: $(grep -c 'Skill(cw-spec' skills/cw-research/SKILL.md) occurrence(s)
+- Step 10 (Present Results and Next-Step Options): $(grep -c "Step 10: Present Results and Next-Step Options" skills/cw-research/SKILL.md) occurrence(s)
+
+Status: PASS

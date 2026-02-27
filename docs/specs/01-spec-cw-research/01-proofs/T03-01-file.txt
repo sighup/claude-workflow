@@ -1,0 +1,20 @@
+Type: file
+Command: grep -n "Meta-Prompt\|meta-prompt\|feature name\|problem statement\|components\|architectural constraints\|patterns to follow\|demoable unit\|code location\|Code References" skills/cw-research/SKILL.md
+Expected: SKILL.md contains meta-prompt generation instructions with specific fields (feature name, problem statement, components, constraints, patterns, demoable units, code references)
+Timestamp: 2026-02-26T00:00:00Z
+
+--- Output ---
+$(grep -n "Meta-Prompt\|meta-prompt\|feature name\|problem statement\|components\|architectural constraints\|patterns to follow\|demoable unit\|Code References\|Suggested Demoable" skills/cw-research/SKILL.md)
+
+--- Verification ---
+- "Meta-Prompt" section header found: $(grep -c "## Meta-Prompt" skills/cw-research/SKILL.md) occurrence(s)
+- "Generate Meta-Prompt" step found: $(grep -c "Generate Meta-Prompt" skills/cw-research/SKILL.md) occurrence(s)
+- Feature name field: $(grep -c "Feature name" skills/cw-research/SKILL.md) occurrence(s)
+- Problem statement field: $(grep -c "Problem statement" skills/cw-research/SKILL.md) occurrence(s)
+- Key components/files field: $(grep -c "Key components/files" skills/cw-research/SKILL.md) occurrence(s)
+- Architectural constraints field: $(grep -c "Architectural constraints" skills/cw-research/SKILL.md) occurrence(s)
+- Relevant patterns field: $(grep -c "Relevant patterns" skills/cw-research/SKILL.md) occurrence(s)
+- Suggested demoable unit themes: $(grep -c "Suggested demoable unit themes\|Suggested Demoable Units" skills/cw-research/SKILL.md) occurrence(s)
+- Code location references: $(grep -c "Specific code location\|Code References" skills/cw-research/SKILL.md) occurrence(s)
+
+Status: PASS

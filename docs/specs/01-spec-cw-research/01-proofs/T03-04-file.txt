@@ -1,0 +1,14 @@
+Type: file
+Command: grep -n "Skill(cw-research)\|Task(claude-workflow:researcher)" skills/cw-worktree/SKILL.md
+Expected: cw-worktree SKILL.md permissions template includes Skill(cw-research) and Task(claude-workflow:researcher)
+Timestamp: 2026-02-26T00:00:00Z
+
+--- Output ---
+$(grep -n "Skill(cw-research)\|Task(claude-workflow:researcher)" skills/cw-worktree/SKILL.md)
+
+--- Verification ---
+- Skill(cw-research) in permissions: $(grep -c "Skill(cw-research)" skills/cw-worktree/SKILL.md) occurrence(s)
+- Task(claude-workflow:researcher) in permissions: $(grep -c "Task(claude-workflow:researcher)" skills/cw-worktree/SKILL.md) occurrence(s)
+- Skill auto-discovery (skill at skills/cw-research/SKILL.md): $(test -f skills/cw-research/SKILL.md && echo "YES" || echo "NO")
+
+Status: PASS

@@ -434,9 +434,80 @@ Write the report file:
 Write({ file_path: "docs/specs/research-{topic_slug}.md", content: "{compiled report}" })
 ```
 
-### Step 9: Present Results
+### Step 9: Generate Meta-Prompt
 
-After saving the report, present a summary to the user:
+After saving the report, generate a "Meta-Prompt" section and append it to the end of the research report. The meta-prompt is a ready-to-use `/cw-spec` starter prompt enriched with codebase knowledge discovered during research.
+
+**9a. Compose the meta-prompt:**
+
+Derive each field from the research findings:
+
+| Field | Source |
+|-------|--------|
+| Feature name | Research topic, converted to a spec-friendly name |
+| Problem statement | Summary section findings -- what gap or need exists |
+| Key components/files | Files and modules identified across all dimensions |
+| Architectural constraints | Patterns, conventions, and boundaries discovered in Architecture & Patterns |
+| Relevant patterns to follow | Naming conventions, error handling, test patterns from the codebase |
+| Suggested demoable unit themes | Logical groupings of work based on module boundaries and data flow |
+| Specific code location references | File paths and line references for entry points, models, routes, configs |
+
+**9b. Append the meta-prompt to the report:**
+
+```markdown
+## Meta-Prompt
+
+> Ready-to-use starter prompt for `/cw-spec`. Copy the content below or select
+> "Run /cw-spec with context" when prompted.
+
+---
+
+Build **{feature name}**.
+
+**Problem:** {problem statement derived from research findings}
+
+**Key Components & Files:**
+- `{path/to/file1}` -- {purpose}
+- `{path/to/file2}` -- {purpose}
+- `{path/to/file3}` -- {purpose}
+
+**Architectural Constraints:**
+- {constraint 1, e.g., "All API routes use the middleware pattern in src/middleware/"}
+- {constraint 2, e.g., "State management follows the store pattern in src/stores/"}
+- {constraint 3}
+
+**Patterns to Follow:**
+- {pattern 1, e.g., "Error handling uses Result<T, AppError> pattern (see src/errors.rs)"}
+- {pattern 2, e.g., "Tests use describe/it structure with factory helpers (see tests/helpers/)"}
+- {pattern 3}
+
+**Suggested Demoable Units:**
+1. {unit theme 1, e.g., "Core data model and validation"} -- {brief rationale}
+2. {unit theme 2, e.g., "API endpoints and middleware integration"} -- {brief rationale}
+3. {unit theme 3, e.g., "UI components and state management"} -- {brief rationale}
+
+**Code References:**
+- Entry point: `{path}`
+- Configuration: `{path}`
+- Related modules: `{path1}`, `{path2}`
+- Test examples: `{path}`
+
+Run: `/cw-spec {feature-name}`
+```
+
+Update the saved report file with the appended meta-prompt section:
+
+```
+Read({ file_path: "docs/specs/research-{topic_slug}.md" })
+# Append the meta-prompt section to the existing content
+Write({ file_path: "docs/specs/research-{topic_slug}.md", content: "{existing content}\n\n{meta-prompt section}" })
+```
+
+### Step 10: Present Results and Next-Step Options
+
+After saving the report with the meta-prompt, present a summary and offer next-step options to the user.
+
+**10a. Present the completion summary:**
 
 ```
 CW-RESEARCH COMPLETE
@@ -452,14 +523,57 @@ Key findings:
 - {finding 2}
 - {finding 3}
 
-The research report is ready for use with /cw-spec.
+A meta-prompt for /cw-spec has been generated at the end of the report.
 ```
+
+**10b. Present next-step options:**
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "How would you like to proceed?",
+    header: "Next Steps",
+    options: [
+      { label: "Run /cw-spec with context (Recommended)", description: "Invoke cw-spec with the generated meta-prompt as enriched context" },
+      { label: "Review report first", description: "Review and optionally edit the research report before proceeding" },
+      { label: "Done for now", description: "Save the report and exit -- you can run /cw-spec later" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+**Handle user selection:**
+
+- **Run /cw-spec with context (Recommended)**: Extract the meta-prompt content (everything between the `---` markers in the Meta-Prompt section) and invoke cw-spec with it:
+  ```
+  Skill(cw-spec, "{meta-prompt content}")
+  ```
+  This passes the enriched research context directly into cw-spec, significantly accelerating its Context Assessment step (Step 2).
+
+- **Review report first**: Display the report path and let the user review or edit the report. After they confirm, re-offer the choice between running cw-spec or exiting:
+  ```
+  The report is saved at: docs/specs/research-{topic_slug}.md
+
+  Review the report and let me know when you are ready to proceed.
+  After review, you can run /cw-spec manually with the meta-prompt, or
+  re-run /cw-research to regenerate.
+  ```
+
+- **Done for now**: Confirm the report is saved and exit:
+  ```
+  Report saved: docs/specs/research-{topic_slug}.md
+
+  To use this research later:
+  - Run /cw-spec and paste the meta-prompt from the report
+  - Or reference the report in your spec prompt for enriched context
+  ```
 
 ## What Comes Next
 
 After the research report is saved, the typical workflow continues:
 
-1. `/cw-spec {feature-name}` -- create a specification using the research report as context
+1. `/cw-spec {feature-name}` -- create a specification using the research report as context (the meta-prompt accelerates this)
 2. `/cw-plan` -- transform the spec into a task graph
 3. `/cw-dispatch` -- execute tasks in parallel
 
