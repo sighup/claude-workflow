@@ -1,0 +1,33 @@
+Type: file
+Command: grep -n "inaccessible\|do NOT fail\|graceful\|Inaccessible Sources\|auth-required\|Authentication required" skills/cw-research/SKILL.md
+Expected: SKILL.md contains graceful error handling for inaccessible sources
+Timestamp: 2026-02-26T12:00:00Z
+
+Output:
+286:**5c. Graceful error handling for inaccessible sources:**
+288:When a source cannot be accessed, do NOT fail or halt the research process. Instead, note it in the report and continue:
+293:> Status: Inaccessible -- {reason}
+296:- "Authentication required -- WebFetch cannot access pages behind login"
+307:**Important:** Warn the user upfront if any provided URLs appear to require authentication
+318:- Access status (accessible, inaccessible, partial)
+396:### Inaccessible Sources
+399:Only include this subsection if there were inaccessible sources.}
+448:External sources incorporated: {N} ({M} inaccessible)
+
+Verification:
+- Step 5c "Graceful error handling for inaccessible sources" at line 286
+- Explicit instruction: "do NOT fail or halt the research process" at line 288
+- Template for inaccessible source reporting with reasons (lines 290-305):
+  - Authentication required
+  - 404 Not Found
+  - File not found
+  - Connection timeout
+- Upfront warning about auth-required URLs at line 307 with alternatives:
+  - Use gh CLI for GitHub resources
+  - Paste relevant content directly
+  - Provide exported/downloaded files
+- Report template includes "Inaccessible Sources" subsection at line 396
+- Results summary includes inaccessible count at line 448
+- Access status tracking (accessible, inaccessible, partial) at line 318
+
+Status: PASS
