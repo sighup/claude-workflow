@@ -1,0 +1,13 @@
+Type: file
+Command: head -6 skills/cw-research/SKILL.md | grep -E "^name:|^user-invocable:"
+Expected: frontmatter contains name: cw-research and user-invocable: true
+Timestamp: 2026-02-26T21:40:00Z
+
+Output:
+name: cw-research
+user-invocable: true
+
+Additionally verified allowed-tools line:
+allowed-tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task
+
+Status: PASS
