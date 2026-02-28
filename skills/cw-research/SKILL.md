@@ -64,6 +64,14 @@ Launch parallel `Task(Explore)` subagents to explore the codebase across five re
 
 **Launch all five subagents in a single message for maximum concurrency.** Each subagent explores one dimension: Tech Stack & Project Structure, Architecture & Patterns, Dependencies & Integrations, Test & Quality Patterns, and Data Models & API Surface.
 
+```
+Task({
+  subagent_type: "Explore",
+  description: "Auto-Explore: {dimension name}",
+  prompt: "{subagent prompt from references/research-dimensions.md}"
+})
+```
+
 See `references/research-dimensions.md` for dimension focus areas, subagent prompt templates, and topic filtering examples.
 
 **Collecting results:** After all five subagents complete, collect their findings into the report template (Step 3).
@@ -165,6 +173,7 @@ For each focus area selected by the user (or all five dimensions if the user con
 
 ```
 Task({
+  subagent_type: "Explore",
   description: "Deep-Dive: {dimension name}",
   prompt: "Perform a deep-dive exploration of {dimension name} in this codebase. Initial findings from auto-explore: {summary of initial findings for this dimension}. Go deeper: {specific questions or areas to investigate based on initial findings and user direction}. Topic filter: {topic or 'none'}. Return detailed markdown findings with specific file references, code pattern examples, and actionable insights. Use Glob, Grep, and Read tools."
 })
@@ -180,6 +189,7 @@ When the user provided custom exploration directions, formulate subagent prompts
 
 ```
 Task({
+  subagent_type: "Explore",
   description: "Deep-Dive: {user-described focus area}",
   prompt: "Explore this codebase focusing on: {user's description}. Find relevant files, patterns, configurations, and conventions. Return detailed markdown findings with specific file references. Use Glob, Grep, and Read tools."
 })
