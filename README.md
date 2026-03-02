@@ -30,7 +30,7 @@ claude plugin install claude-workflow@claude-workflow --scope user
 ### Interactive (inside Claude)
 
 ```
-/cw-spec  →  [cw-gherkin]  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
+[/cw-research]  →  /cw-spec  →  [/cw-gherkin]  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
 ```
 
 Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. `/cw-review` adds a code review gate and `/cw-testing` generates and runs E2E tests.
@@ -43,6 +43,7 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 
 | Skill | Purpose |
 |-------|---------|
+| `/cw-research` | Explore codebase across 5 dimensions and produce a structured research report with `/cw-spec` meta-prompt |
 | `/cw-spec` | Generate structured specification with demoable units and proof artifacts |
 | `/cw-plan` | Transform spec into native task graph with dependencies and metadata |
 | `/cw-execute` | Execute one task using the 11-phase protocol (orient → commit → clean exit) |
