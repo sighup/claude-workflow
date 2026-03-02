@@ -2,6 +2,59 @@
 
 <!-- version list -->
 
+## v2.8.0 (2026-03-02)
+
+### Bug Fixes
+
+- **cw-research**: Add subagent_type: "Explore" to all Task() calls
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+### Chores
+
+- Remove spec artifacts from repository
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+### Documentation
+
+- Add cw-research to README workflow diagram and skills table
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+- Add playwright-bdd as optional prerequisite for cw-testing
+  ([#7](https://github.com/liatrio-labs/claude-workflow/pull/7),
+  [`b22bb98`](https://github.com/liatrio-labs/claude-workflow/commit/b22bb9871ec427911b1de11cefa6623a1e72dce9))
+
+### Features
+
+- Add cw-research skill for codebase exploration
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+- **cw-research**: Add interactive refinement with external context sources
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+- **cw-research**: Add MANDATORY FIRST ACTION section for project detection
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+- **cw-research**: Add meta-prompt generation, agent definition, and integration wiring
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+- **cw-research**: Create core skill with auto-explore and basic report
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+### Refactoring
+
+- **cw-research**: Extract inline content to references/ directory
+  ([#8](https://github.com/liatrio-labs/claude-workflow/pull/8),
+  [`5c4f863`](https://github.com/liatrio-labs/claude-workflow/commit/5c4f8639fdabea5c62309ae5b572e14d9dd2d5d3))
+
+
 ## v2.7.1 (2026-02-24)
 
 ### Bug Fixes
