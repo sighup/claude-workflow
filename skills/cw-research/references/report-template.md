@@ -86,6 +86,26 @@ Note any surprising patterns, potential risks, or areas of complexity.}
 
 ### Request/Response Shapes
 {Validation, serialization, key data contracts}
+
+## External Context
+
+{Overview of external sources consulted and their relevance to the research topic.
+Only include this section if external context sources were provided in Step 5.}
+
+### {Source Title or Description}
+> Source: {URL or file path}
+> Type: {web | file | image | search}
+
+{Summary of relevant information extracted from this source.
+Focus on how it relates to the codebase findings above.}
+
+### Inaccessible Sources
+
+{Only include if there were inaccessible sources.}
+
+| Source | Reason |
+|--------|--------|
+| {URL or path} | {Authentication required / Not found / Timeout / etc.} |
 ```
 
 ## Report Size Guidelines
