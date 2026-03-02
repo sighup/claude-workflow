@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.8.1 (2026-03-02)
+
+### Bug Fixes
+
+- **cw-research**: Add external context section to report template
+  ([#9](https://github.com/liatrio-labs/claude-workflow/pull/9),
+  [`86d4ab7`](https://github.com/liatrio-labs/claude-workflow/commit/86d4ab76f59b10cc1d9badf42c85a422b21ea966))
+
+
 ## v2.8.0 (2026-03-02)
 
 ### Bug Fixes
