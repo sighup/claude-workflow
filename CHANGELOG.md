@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v2.9.0 (2026-03-02)
+
+### Features
+
+- Add LSP support across skills and agents
+  ([#10](https://github.com/liatrio-labs/claude-workflow/pull/10),
+  [`8a3ef6c`](https://github.com/liatrio-labs/claude-workflow/commit/8a3ef6cb69baaa9588c46ed879a50a0a50d8d098))
+
+- Add LSP support to cw-execute, cw-review, cw-spec, and bug-fixer
+  ([#10](https://github.com/liatrio-labs/claude-workflow/pull/10),
+  [`8a3ef6c`](https://github.com/liatrio-labs/claude-workflow/commit/8a3ef6cb69baaa9588c46ed879a50a0a50d8d098))
+
+- Save research report in directory so cw-spec can co-locate it with the spec
+  ([#10](https://github.com/liatrio-labs/claude-workflow/pull/10),
+  [`8a3ef6c`](https://github.com/liatrio-labs/claude-workflow/commit/8a3ef6cb69baaa9588c46ed879a50a0a50d8d098))
+
+
 ## v2.8.1 (2026-03-02)
 
 ### Bug Fixes
