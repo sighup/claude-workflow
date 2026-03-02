@@ -233,6 +233,7 @@ Open new terminals to start development:
      },
      "permissions": {
        "allow": [
+         "Skill(cw-research)",
          "Skill(cw-spec)",
          "Skill(cw-plan)",
          "Skill(cw-execute)",
@@ -243,6 +244,7 @@ Open new terminals to start development:
          "Skill(cw-review-team)",
          "Skill(cw-testing)",
          "Skill(cw-worktree)",
+         "Task(claude-workflow:researcher)",
          "Task(claude-workflow:spec-writer)",
          "Task(claude-workflow:planner)",
          "Task(claude-workflow:implementer)",
