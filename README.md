@@ -8,7 +8,7 @@ A Claude Code plugin that unifies spec-driven development, autonomous task execu
 
 ```bash
 # Add the marketplace
-claude plugin marketplace add https://github.com/sighup/claude-workflow.git
+claude plugin marketplace add https://github.com/liatrio-labs/claude-workflow.git
 
 # Install at project scope (shared with team via .claude/settings.json)
 claude plugin install claude-workflow@claude-workflow --scope project
@@ -30,7 +30,7 @@ claude plugin install claude-workflow@claude-workflow --scope user
 ### Interactive (inside Claude)
 
 ```
-/cw-spec  →  [/cw-gherkin]  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
+[/cw-research]  →  /cw-spec  →  [/cw-gherkin]  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
 ```
 
 Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. `/cw-review` adds a code review gate and `/cw-testing` generates and runs E2E tests.
@@ -43,6 +43,7 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 
 | Skill | Purpose |
 |-------|---------|
+| `/cw-research` | Explore codebase across 5 dimensions and produce a structured research report with `/cw-spec` meta-prompt |
 | `/cw-spec` | Generate structured specification with demoable units and proof artifacts |
 | `/cw-plan` | Transform spec into native task graph with dependencies and metadata |
 | `/cw-execute` | Execute one task using the 11-phase protocol (orient → commit → clean exit) |
@@ -52,7 +53,7 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-review` | Review implementation for bugs, security issues, and quality; creates fix tasks |
 | `/cw-review-team` | Concern-partitioned team review — each reviewer sees all files through a specialized lens (security, correctness, spec compliance) |
 | `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
-| `/cw-gherkin` | Generate Gherkin BDD scenarios from spec acceptance criteria; optionally creates cw-testing task stubs |
+| `cw-gherkin` | Generate Gherkin BDD scenarios from spec acceptance criteria; called automatically by cw-spec |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
 
 ## Prerequisites
@@ -72,6 +73,13 @@ Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent tea
 ```
 
 `/cw-dispatch` (subagent workers) needs no setup and is the recommended default. `/cw-plan` will offer both options after task graph creation.
+
+`/cw-testing` supports multiple backends. To use the `playwright-bdd` backend (Gherkin → Playwright, CI-friendly):
+
+```bash
+npm install --save-dev playwright-bdd @playwright/test
+npx playwright install
+```
 
 ## Task Metadata
 
