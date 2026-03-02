@@ -8,7 +8,7 @@ capabilities:
   - Create atomic commits with sanitized content
 color: green
 model: inherit
-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskGet, TaskUpdate, TaskList, AskUserQuestion, SendMessage
+tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskGet, TaskUpdate, TaskList, AskUserQuestion, SendMessage, LSP
 skills:
   - cw-execute
 ---

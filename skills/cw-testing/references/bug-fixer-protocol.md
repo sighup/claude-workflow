@@ -32,6 +32,22 @@ Load fix task and understand the failure context.
 
 Identify the application bug causing the test failure.
 
+#### LSP Availability Check
+
+At the start of investigation, probe whether an LSP server is available. Pick a source file related to the failing feature and attempt a single `documentSymbol` operation:
+
+```
+LSP({
+  operation: "documentSymbol",
+  filePath: "{source file related to failing feature}",
+  line: 1,
+  character: 1
+})
+```
+
+- **LSP available**: The operation returned symbols. Set `lsp_available = true`.
+- **LSP unavailable**: The operation returned an error. Set `lsp_available = false`.
+
 ```
 Investigation checklist:
 1. Read failure artifacts (screenshots, logs, console errors)
@@ -40,6 +56,10 @@ Investigation checklist:
    - Glob for component/service files related to the feature
    - Grep for relevant function names, API endpoints
    - Read source files in the implementation
+   - When lsp_available = true, use LSP for deeper analysis:
+     - goToDefinition to trace types/functions from the failing code path
+     - findReferences to understand how the buggy function is used
+     - incomingCalls/outgoingCalls to map the call chain leading to the bug
 4. Check recent git history:
    - git log --oneline -10 -- <relevant-files>
 5. Identify the root cause in APPLICATION code:

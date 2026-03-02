@@ -2,7 +2,7 @@
 name: cw-research
 description: "Perform preliminary codebase fact-finding and produce a structured research report. Use before cw-spec to understand an unfamiliar or complex codebase and generate enriched context for specification writing."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task
+allowed-tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task, LSP
 ---
 
 # CW-Research: Codebase Research and Context Aggregation
@@ -29,7 +29,7 @@ You are a **Senior Technical Analyst** responsible for:
 - **NEVER** include credentials, API keys, or secrets in research reports -- redact sensitive values
 - **NEVER** produce exhaustive file listings -- focus on key findings with links to specific files
 - **ALWAYS** begin responses with the context marker **CW-RESEARCH**
-- **ALWAYS** save reports to `docs/specs/research-{topic}.md`
+- **ALWAYS** save reports to `docs/specs/research-{topic}/research-{topic}.md`
 - **ALWAYS** use `Task(Explore)` subagents for parallel exploration across dimensions
 
 ## MANDATORY FIRST ACTION
@@ -70,6 +70,42 @@ Top-level dirs:   {list of top-level directories}
 ```
 
 If no manifest files are detected, proceed with a general exploration -- the codebase may use a non-standard structure or be a polyglot project.
+
+### LSP Availability Check
+
+After detecting project context, probe whether an LSP server is available for the project's primary language. This determines whether subagents can use LSP tools for richer analysis during exploration.
+
+**Probe with a representative file:**
+
+Pick a source file detected during project context (e.g., the main entry point or a prominent module) and attempt a single `documentSymbol` operation:
+
+```
+LSP({
+  operation: "documentSymbol",
+  filePath: "{representative source file}",
+  line: 1,
+  character: 1
+})
+```
+
+**Record the result:**
+
+- **LSP available**: The operation returned symbols. Set `lsp_available = true` and note the file types that have LSP support.
+- **LSP unavailable**: The operation returned an error (e.g., "no LSP server configured"). Set `lsp_available = false`.
+
+Include the LSP availability in the project context output:
+
+```
+PROJECT CONTEXT
+===============
+Working directory: {cwd}
+Project type:     {detected type(s)}
+Monorepo:         {yes/no}
+Top-level dirs:   {list}
+LSP available:    {yes/no}
+```
+
+When `lsp_available = true`, pass this flag to subagent prompts so they use LSP operations (documentSymbol, goToDefinition, findReferences, hover, goToImplementation, incomingCalls, outgoingCalls) alongside Glob, Grep, and Read. When `lsp_available = false`, subagents use only Glob, Grep, and Read as before.
 
 ## Process
 
@@ -214,8 +250,14 @@ For each focus area selected by the user (or all five dimensions if the user con
 Task({
   subagent_type: "Explore",
   description: "Deep-Dive: {dimension name}",
-  prompt: "Perform a deep-dive exploration of {dimension name} in this codebase. Initial findings from auto-explore: {summary of initial findings for this dimension}. Go deeper: {specific questions or areas to investigate based on initial findings and user direction}. Topic filter: {topic or 'none'}. Return detailed markdown findings with specific file references, code pattern examples, and actionable insights. Use Glob, Grep, and Read tools."
+  prompt: "Perform a deep-dive exploration of {dimension name} in this codebase. Initial findings from auto-explore: {summary of initial findings for this dimension}. Go deeper: {specific questions or areas to investigate based on initial findings and user direction}. Topic filter: {topic or 'none'}. Return detailed markdown findings with specific file references, code pattern examples, and actionable insights. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}"
 })
+```
+
+Where `{LSP_INSTRUCTIONS}` is included only when `lsp_available = true`:
+
+```
+Also use the LSP tool for deeper analysis: use documentSymbol to enumerate symbols in key files, goToDefinition to trace where important types and functions are defined, findReferences to understand usage patterns, goToImplementation to discover interface implementations, and incomingCalls/outgoingCalls to map call hierarchies. LSP provides more precise results than text search for understanding type relationships and call graphs.
 ```
 
 **6b. Launch subagents concurrently:**
@@ -230,7 +272,7 @@ When the user provided custom exploration directions, formulate subagent prompts
 Task({
   subagent_type: "Explore",
   description: "Deep-Dive: {user-described focus area}",
-  prompt: "Explore this codebase focusing on: {user's description}. Find relevant files, patterns, configurations, and conventions. Return detailed markdown findings with specific file references. Use Glob, Grep, and Read tools."
+  prompt: "Explore this codebase focusing on: {user's description}. Find relevant files, patterns, configurations, and conventions. Return detailed markdown findings with specific file references. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}"
 })
 ```
 
@@ -269,19 +311,19 @@ Revise the Summary section at the top of the report to incorporate key insights 
 Save the final enriched report to the output path:
 
 ```
-docs/specs/research-{topic_slug}.md
+docs/specs/research-{topic_slug}/research-{topic_slug}.md
 ```
 
-Create the `docs/specs/` directory if it does not exist:
+Create the research directory if it does not exist:
 
 ```bash
-mkdir -p docs/specs
+mkdir -p docs/specs/research-{topic_slug}
 ```
 
 Write the report file:
 
 ```
-Write({ file_path: "docs/specs/research-{topic_slug}.md", content: "{compiled report}" })
+Write({ file_path: "docs/specs/research-{topic_slug}/research-{topic_slug}.md", content: "{compiled report}" })
 ```
 
 ### Step 9: Generate Meta-Prompt
@@ -308,7 +350,7 @@ After saving the report with the meta-prompt, present a summary and offer next-s
 CW-RESEARCH COMPLETE
 =====================
 Topic: {topic}
-Report: docs/specs/research-{topic_slug}.md
+Report: docs/specs/research-{topic_slug}/research-{topic_slug}.md
 Dimensions explored: 5/5
 Deep-dives completed: {N}
 External sources incorporated: {N} ({M} inaccessible)
@@ -348,7 +390,7 @@ AskUserQuestion({
 
 - **Review report first**: Display the report path and let the user review or edit the report. After they confirm, re-offer the choice between running cw-spec or exiting:
   ```
-  The report is saved at: docs/specs/research-{topic_slug}.md
+  The report is saved at: docs/specs/research-{topic_slug}/research-{topic_slug}.md
 
   Review the report and let me know when you are ready to proceed.
   After review, you can run /cw-spec manually with the meta-prompt, or
@@ -357,7 +399,7 @@ AskUserQuestion({
 
 - **Done for now**: Confirm the report is saved and exit:
   ```
-  Report saved: docs/specs/research-{topic_slug}.md
+  Report saved: docs/specs/research-{topic_slug}/research-{topic_slug}.md
 
   To use this research later:
   - Run /cw-spec and paste the meta-prompt from the report
@@ -385,4 +427,4 @@ After the research report is saved, the typical workflow continues:
 2. `/cw-plan` -- transform the spec into a task graph
 3. `/cw-dispatch` -- execute tasks in parallel
 
-The research report at `docs/specs/research-{topic_slug}.md` serves as enriched context that accelerates cw-spec's Context Assessment step (Step 2), producing more detailed and accurate specifications.
+The research report at `docs/specs/research-{topic_slug}/research-{topic_slug}.md` serves as enriched context that accelerates cw-spec's Context Assessment step (Step 2), producing more detailed and accurate specifications.

@@ -2,7 +2,7 @@
 name: cw-spec
 description: "Generate a structured specification with demoable units, functional requirements, and proof artifact definitions. Use when starting a new feature to define what will be built before any code is written."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Write, WebFetch, WebSearch, AskUserQuestion, Skill
+allowed-tools: Glob, Grep, Read, Write, WebFetch, WebSearch, AskUserQuestion, Skill, LSP
 ---
 
 # CW-Spec: Specification Generator
@@ -45,6 +45,20 @@ Create the directory structure before anything else:
 
 Check existing specs to determine the next sequence number.
 
+**Reuse research directory when available:**
+
+If the invocation args contain a `**Research:**` field with a directory path (e.g., `docs/specs/research-{slug}/`):
+1. Check if that directory exists
+2. If it exists, rename it to become the spec directory:
+   ```bash
+   mv docs/specs/research-{slug}/ docs/specs/[NN]-spec-[feature-name]/
+   ```
+   This keeps the research report co-located with the spec.
+3. If the directory does not exist (or no `**Research:**` path was provided), create the directory as normal:
+   ```bash
+   mkdir -p docs/specs/[NN]-spec-[feature-name]/
+   ```
+
 ### Step 2: Context Assessment
 
 If working in a pre-existing project, review:
@@ -55,6 +69,26 @@ If working in a pre-existing project, review:
 - Repository standards from: README.md, CONTRIBUTING.md, CLAUDE.md, package.json, config files
 - Testing patterns and quality practices
 - Commit message conventions
+
+#### LSP Availability Check
+
+At the start of context assessment, probe whether an LSP server is available. Pick a prominent source file from the project (e.g., the main entry point or a key module) and attempt a single `documentSymbol` operation:
+
+```
+LSP({
+  operation: "documentSymbol",
+  filePath: "{prominent source file}",
+  line: 1,
+  character: 1
+})
+```
+
+- **LSP available**: The operation returned symbols. Set `lsp_available = true`.
+- **LSP unavailable**: The operation returned an error. Set `lsp_available = false`.
+
+When `lsp_available = true`, use LSP to accelerate context assessment:
+- `documentSymbol` and `workspaceSymbol` to quickly map module shapes and exported APIs
+- `goToDefinition` to understand type hierarchies and base classes relevant to the feature being specified
 
 Use this context to inform scope validation and requirements.
 

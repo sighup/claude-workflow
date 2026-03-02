@@ -42,7 +42,11 @@ For each file in assigned_files:
      Read({ file_path: "<spec_path>" })
      (Only read spec once, on first file)
 
-  4. Evaluate against all four categories (see below)
+  4. Evaluate against all four categories (see below).
+     When LSP is available (check by probing `documentSymbol` on the first file — if it returns symbols, `lsp_available = true`):
+     - `findReferences` to trace call sites of changed functions and detect ripple effects
+     - `goToImplementation` to verify interface contracts are maintained after changes
+     - `incomingCalls` to map consumers of modified functions
 
   5. Record any findings
 ```

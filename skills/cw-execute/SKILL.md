@@ -2,7 +2,7 @@
 name: cw-execute
 description: "Execute a single task from the task board using the 11-phase implementation protocol. Use after cw-plan or cw-dispatch assigns a task, or when manually implementing a specific task by ID."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion
+allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, LSP
 ---
 
 # CW-Execute: Single Task Execution
@@ -97,6 +97,27 @@ Load patterns and understand conventions.
 3. Read files in `metadata.scope.files_to_modify`
 4. Verify parent directories exist for `metadata.scope.files_to_create`
 
+#### LSP Availability Check
+
+After loading patterns, probe whether an LSP server is available. Pick a file from `metadata.scope.files_to_modify` or `metadata.scope.patterns_to_follow` and attempt a single `documentSymbol` operation:
+
+```
+LSP({
+  operation: "documentSymbol",
+  filePath: "{file from scope}",
+  line: 1,
+  character: 1
+})
+```
+
+- **LSP available**: The operation returned symbols. Set `lsp_available = true`.
+- **LSP unavailable**: The operation returned an error. Set `lsp_available = false`.
+
+When `lsp_available = true`, use LSP alongside Glob/Grep/Read in this phase and Phase 4:
+- `documentSymbol` on pattern files to understand their structure and exported symbols
+- `goToDefinition` to trace types and interfaces referenced in files being modified
+- `findReferences` to understand how modified functions/exports are consumed elsewhere
+
 ### Phase 4: IMPLEMENT
 
 Create/modify files to satisfy requirements.
@@ -105,6 +126,11 @@ For each requirement in `metadata.requirements`:
 1. Implement the requirement following extracted patterns
 2. Write corresponding tests alongside implementation
 3. Run linter incrementally if available
+
+When `lsp_available = true`, use LSP to guide implementation:
+- `hover` to check type signatures before modifying function parameters or return types
+- `goToImplementation` to find all implementations of interfaces being extended
+- `findReferences` before renaming or changing function signatures to understand impact
 
 Rules:
 - Follow patterns exactly - don't introduce new conventions
