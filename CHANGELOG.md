@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.9.1 (2026-03-04)
+
+### Bug Fixes
+
+- **cw-worktree**: Prevent duplicate .worktrees entry in .gitignore
+  ([#11](https://github.com/liatrio-labs/claude-workflow/pull/11),
+  [`13e5d31`](https://github.com/liatrio-labs/claude-workflow/commit/13e5d3184906dfc9f56fb6b8e6fcdee6a79c9d1d))
+
+
 ## v2.9.0 (2026-03-02)
 
 ### Features
