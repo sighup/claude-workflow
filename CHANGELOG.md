@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.7.1 (2026-03-04)
+
+### Bug Fixes
+
+- Prevent duplicate .worktrees entry in .gitignore
+  ([#20](https://github.com/sighup/claude-workflow/pull/20),
+  [`947b238`](https://github.com/sighup/claude-workflow/commit/947b23853ab0556c36f11a7ac7dc7223c61f3307))
+
+
 ## v2.7.0 (2026-03-03)
 
 ### Bug Fixes
