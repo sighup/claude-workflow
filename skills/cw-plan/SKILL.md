@@ -161,6 +161,8 @@ TaskCreate({
   activeForm: "[Present continuous: Implementing X]",
   metadata: {
     task_id: "T01",
+    demoable_unit: 1,
+    demoable_unit_title: "[Title of the demoable unit from the spec]",
     spec_path: "[path to spec]",
     parent_task: null,
     scope: {
@@ -230,6 +232,7 @@ Reason: [one sentence — e.g. "T01 and T03 are complex and can run in parallel 
 For each parent task, create sub-tasks that:
 - Break implementation into logical steps
 - Use `parent_task` metadata pointing to the parent's task_id
+- Inherit `demoable_unit` and `demoable_unit_title` from the parent task
 - Use `addBlocks: [parent-native-id]` so parent can't complete until sub-tasks finish
 - Have their own scoped requirements and proof artifacts
 - Are sized for a single implementation session
@@ -274,6 +277,8 @@ Before presenting to user:
 - [ ] Requirements are testable and atomic
 - [ ] Commit templates follow project conventions
 - [ ] Every task has `metadata` with `complexity` and `model` fields set
+- [ ] Every task has `demoable_unit` and `demoable_unit_title` in metadata
+- [ ] Sub-tasks inherit `demoable_unit` and `demoable_unit_title` from their parent
 - [ ] Model assignments match complexity (`trivial`→haiku, `standard`→sonnet, `complex`→opus)
 
 ## What Comes Next
