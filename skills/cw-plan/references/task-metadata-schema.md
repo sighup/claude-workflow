@@ -8,6 +8,8 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
 {
   // Identity
   "task_id": "T01",                      // Sequential ID (T01, T02, T03...)
+  "demoable_unit": 1,                    // Which demoable unit from the spec (integer)
+  "demoable_unit_title": "User Registration",  // Human-readable unit title
   "spec_path": "docs/specs/01-spec-auth/01-spec-auth.md",  // Path to source spec
   "parent_task": null,                   // null = top-level demoable unit; "T01" = sub-task of T01
 
@@ -66,6 +68,8 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `task_id` | string | Yes | Format `T##` (T01, T02...). Sub-tasks use `T01.1`, `T01.2` |
+| `demoable_unit` | integer | Yes | Which demoable unit from the spec this task belongs to (1-indexed). Sub-tasks inherit the parent's value. |
+| `demoable_unit_title` | string | Yes | Human-readable title of the demoable unit from the spec |
 | `spec_path` | string | Yes | Relative path to the specification file |
 | `parent_task` | string\|null | Yes | null for top-level tasks, parent task_id for sub-tasks |
 
