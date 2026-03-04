@@ -528,7 +528,7 @@ create_worktree() {
 
     # Ensure .worktrees is gitignored (with lock to prevent races)
     local lockfile=".git/cw-gitignore.lock"
-    if ! git check-ignore -q .worktrees 2>/dev/null; then
+    if ! git check-ignore -q .worktrees/ 2>/dev/null && ! grep -qx '.worktrees/' .gitignore 2>/dev/null; then
         # Simple lock: try to create atomically
         if (set -o noclobber; echo $$ > "$lockfile") 2>/dev/null; then
             echo ".worktrees/" >> .gitignore
