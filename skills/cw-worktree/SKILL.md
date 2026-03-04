@@ -188,7 +188,7 @@ Open new terminals to start development:
 
 2. **Ensure .worktrees is gitignored:**
    ```bash
-   if ! git check-ignore -q .worktrees 2>/dev/null; then
+   if ! git check-ignore -q .worktrees/ 2>/dev/null && ! grep -qx '\.worktrees/' .gitignore 2>/dev/null; then
      echo ".worktrees/" >> .gitignore
      git add .gitignore
      git commit -m "chore: add .worktrees to gitignore"
