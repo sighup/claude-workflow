@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.10.0 (2026-03-04)
+
+### Features
+
+- **cw-plan**: Add demoable_unit metadata to task schema
+  ([#12](https://github.com/liatrio-labs/claude-workflow/pull/12),
+  [`a561a7b`](https://github.com/liatrio-labs/claude-workflow/commit/a561a7bb965972e00b10a522c637420eeba5ba62))
+
+
 ## v2.9.1 (2026-03-04)
 
 ### Bug Fixes
