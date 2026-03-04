@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.8.0 (2026-03-04)
+
+### Features
+
+- **cw-plan**: Add demoable_unit metadata to task schema
+  ([#21](https://github.com/sighup/claude-workflow/pull/21),
+  [`f3d2726`](https://github.com/sighup/claude-workflow/commit/f3d2726755f27359deae41a545d48231892d3fbf))
+
+
 ## v2.7.1 (2026-03-04)
 
 ### Bug Fixes
