@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v2.10.1 (2026-03-05)
+
+### Bug Fixes
+
+- **skills**: Remove orphaned review-categories references
+  ([#13](https://github.com/liatrio-labs/claude-workflow/pull/13),
+  [`44f7424`](https://github.com/liatrio-labs/claude-workflow/commit/44f7424151b24820ce91c5ad7b29316dcdb98c13))
+
+- **skills**: Revert cw-review-team to TeamCreate/TeamDelete (confirmed real tools)
+  ([#13](https://github.com/liatrio-labs/claude-workflow/pull/13),
+  [`44f7424`](https://github.com/liatrio-labs/claude-workflow/commit/44f7424151b24820ce91c5ad7b29316dcdb98c13))
+
+### Chores
+
+- **skills**: Remove CONVENTIONS.md ([#13](https://github.com/liatrio-labs/claude-workflow/pull/13),
+  [`44f7424`](https://github.com/liatrio-labs/claude-workflow/commit/44f7424151b24820ce91c5ad7b29316dcdb98c13))
+
+### Refactoring
+
+- **skills**: Deduplicate shared content, fix inconsistencies, improve conventions
+  ([#13](https://github.com/liatrio-labs/claude-workflow/pull/13),
+  [`44f7424`](https://github.com/liatrio-labs/claude-workflow/commit/44f7424151b24820ce91c5ad7b29316dcdb98c13))
+
+
 ## v2.10.0 (2026-03-04)
 
 ### Features
