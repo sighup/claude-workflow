@@ -1,6 +1,6 @@
 ---
 name: cw-gherkin
-description: "Internal subagent: generate Gherkin BDD scenarios from spec acceptance criteria. Produces one .feature file per demoable unit in the spec directory and optionally creates cw-testing task stubs on the task board. Called automatically by cw-spec."
+description: "Internal subagent that generates Gherkin BDD scenarios from spec acceptance criteria. Produces one .feature file per demoable unit in the spec directory and optionally creates cw-testing task stubs on the task board. Called automatically by cw-spec."
 user-invocable: false
 allowed-tools: Glob, Grep, Read, Write, Bash, TaskCreate, TaskUpdate, TaskList, AskUserQuestion
 ---

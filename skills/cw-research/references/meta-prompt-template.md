@@ -15,6 +15,7 @@ Derive each field from the research findings:
 | Relevant patterns to follow | Naming conventions, error handling, test patterns from the codebase |
 | Suggested demoable unit themes | Logical groupings of work based on module boundaries and data flow |
 | Specific code location references | File paths and line references for entry points, models, routes, configs |
+| Research directory | `docs/specs/research-{topic_slug}/` — passed to cw-spec so it can co-locate the spec with the research |
 
 ## Template
 
@@ -25,6 +26,8 @@ Derive each field from the research findings:
 > "Run /cw-spec with context" when prompted.
 
 ---
+
+**Research:** `docs/specs/research-{topic_slug}/`
 
 Build **{feature name}**.
 

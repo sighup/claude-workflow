@@ -7,7 +7,7 @@ capabilities:
   - Assess scope and flag concerns
 color: blue
 model: inherit
-tools: Glob, Grep, Read, Write, AskUserQuestion, WebFetch, WebSearch
+tools: Glob, Grep, Read, Write, AskUserQuestion, WebFetch, WebSearch, LSP
 skills:
   - cw-spec
 ---
