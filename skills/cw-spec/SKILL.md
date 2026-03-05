@@ -63,7 +63,7 @@ If the invocation args contain a `**Research:**` field with a directory path (e.
 
 If working in a pre-existing project, review:
 
-- Current architecture patterns and conventions
+- Current plannerure patterns and conventions
 - Relevant existing components or features
 - Integration constraints or dependencies
 - Repository standards from: README.md, CONTRIBUTING.md, CLAUDE.md, package.json, config files
@@ -97,7 +97,7 @@ Use this context to inform scope validation and requirements.
 Evaluate whether the feature is appropriately sized.
 
 **Too Large (split into multiple specs):**
-- Rewriting entire application architecture
+- Rewriting entire application plannerure
 - Migrating complete database systems
 - Implementing full authentication from scratch
 - Building complete admin dashboards

@@ -122,7 +122,7 @@ Send a **single message** with multiple Task tool calls for parallel launch. Spa
 ```
 Task({
   subagent_type: "claude-workflow:implementer",
-  model: task.metadata.model || undefined,  // omit if null to inherit
+  model: "sonnet",  // from task metadata: "haiku" | "sonnet" | "opus"
   team_name: "{task-list-id}-team",
   name: "worker-1",
   description: "Execute task T01",

@@ -74,7 +74,7 @@ Send a **single message** with multiple Task tool calls for parallel execution.
 ```
 Task({
   subagent_type: "claude-workflow:implementer",
-  model: task.metadata.model || undefined,  // omit if null to inherit
+  model: "sonnet",  // from task metadata: "haiku" | "sonnet" | "opus"
   description: "Execute task T01",
   prompt: "You are worker-1. Your assigned task is T01. Run cw-execute to implement it.
 
