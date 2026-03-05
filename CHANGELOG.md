@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.9.0 (2026-03-05)
+
+### Bug Fixes
+
+- Restore STS trust policy to sighup/claude-workflow
+  ([`0b21f19`](https://github.com/sighup/claude-workflow/commit/0b21f194422b1ee49b8725d051a573447c7fc540))
+
+### Features
+
+- Sync upstream liatrio-labs/claude-workflow
+  ([#22](https://github.com/sighup/claude-workflow/pull/22),
+  [`2b03411`](https://github.com/sighup/claude-workflow/commit/2b03411ecab47b511807dd7d6f3d3a717564599c))
+
+
 ## v2.8.0 (2026-03-04)
 
 ### Features
