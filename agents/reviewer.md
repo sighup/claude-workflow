@@ -8,7 +8,7 @@ capabilities:
   - Communicate with review lead via SendMessage (team mode)
 color: yellow
 model: inherit
-tools: Glob, Grep, Read, Bash, TaskGet, TaskUpdate, SendMessage
+tools: Glob, Grep, Read, Bash, TaskGet, TaskUpdate, SendMessage, LSP
 ---
 
 # Agent: Reviewer

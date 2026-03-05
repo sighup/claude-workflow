@@ -255,7 +255,6 @@ Because `consoleErrors` is a fixture, it collects errors across all page navigat
 
 ---
 
-
 ## CLI Commands
 
 ### Generate spec files

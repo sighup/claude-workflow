@@ -1,6 +1,6 @@
 ---
 name: cw-review-team
-description: "Team-based concern-partitioned code review. Each reviewer sees ALL files through a specialized lens (security, correctness, spec compliance). Use after cw-validate for thorough cross-file review (requires CLAUDE_CODE_TASK_LIST_ID)."
+description: "Team-based concern-partitioned code review. Each reviewer sees ALL files through a specialized lens (security, correctness, spec compliance). This skill should be used after cw-validate for thorough cross-file review (requires CLAUDE_CODE_TASK_LIST_ID)."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, Task, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, TeamCreate, TeamDelete, SendMessage
 ---
@@ -125,7 +125,7 @@ Review all changed non-test files directly. For each file:
 
 1. Read the full file: `Read({ file_path: "<path>" })`
 2. Get its diff: `git diff main...HEAD -- <path>`
-3. Evaluate against categories A-D (see Review Categories below)
+3. Evaluate against categories A-D (see [review-categories.md](../cw-review/references/review-categories.md))
 4. Record findings
 
 After reviewing all files, skip to **Step 10: Create FIX Tasks**.
@@ -442,55 +442,6 @@ Based on user selection:
 - **Run /cw-validate**: Invoke the skill directly: `Skill({ skill: "cw-validate" })`
 - **Create PR**: Summarize changes and suggest PR title/body
 - **Done for now**: Summarize what was found and exit
-
-## Review Categories
-
-#### Category A: Correctness (Blocking)
-
-- Logic errors, off-by-one, wrong conditions
-- Missing error handling at system boundaries (user input, external APIs)
-- Race conditions or concurrency issues
-- Incorrect data transformations
-- Missing null/undefined checks where data could be absent
-
-#### Category B: Security (Blocking)
-
-- SQL injection, XSS, command injection
-- Hardcoded credentials, API keys, secrets
-- Missing authentication or authorization checks
-- Insecure data handling (logging PII, exposing internals)
-- Path traversal or file inclusion vulnerabilities
-- Unsafe deserialization
-
-#### Category C: Spec Compliance (Blocking)
-
-- Requirements from the spec that were missed or incorrectly implemented
-- Behavior that contradicts spec intent
-- Missing functionality described in demoable units
-
-#### Category D: Quality (Advisory)
-
-- Dead code or unreachable branches
-- Overly complex logic that could be simplified
-- Missing edge case handling
-- Performance concerns (N+1 queries, unnecessary loops)
-- Inconsistency with repository patterns
-
-## Severity Guidelines
-
-| Category | Creates FIX Task | Blocks Merge |
-|----------|-----------------|--------------|
-| A: Correctness bug | Yes | Yes |
-| B: Security vulnerability | Yes | Yes |
-| C: Missing spec requirement | Yes | Yes |
-| D: Quality/style note | No | No |
-
-**Do NOT create FIX tasks for:**
-- Code style preferences already handled by linters
-- Minor naming disagreements
-- "I would have done it differently" observations
-- Test code (tests are the oracle)
-- Documentation gaps (unless spec requires it)
 
 ## Error Handling
 

@@ -7,7 +7,7 @@ capabilities:
   - Generate meta-prompts for downstream specification work
 color: green
 model: inherit
-tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task
+tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task, LSP
 skills:
   - cw-research
 ---
@@ -21,7 +21,7 @@ skills:
 ## Coordination
 
 - Receives work from: Team Lead
-- Produces: Research report at `docs/specs/research-{topic}.md`
+- Produces: Research report at `docs/specs/research-{topic}/research-{topic}.md`
 - Hands off to: Spec Writer (who runs `/cw-spec` with the generated meta-prompt)
 - Never modifies source code - only produces research reports
 - Communicates findings and blockers to lead immediately

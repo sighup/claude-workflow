@@ -8,7 +8,7 @@ capabilities:
   - Report results via TaskUpdate
 color: red
 model: inherit
-tools: Bash, Read, Edit, Write, Glob, Grep, TaskGet, TaskUpdate
+tools: Bash, Read, Edit, Write, Glob, Grep, TaskGet, TaskUpdate, LSP
 skills:
   - cw-testing
 ---
