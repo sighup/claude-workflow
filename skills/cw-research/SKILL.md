@@ -1,6 +1,6 @@
 ---
 name: cw-research
-description: "Perform preliminary codebase fact-finding and produce a structured research report. Use before cw-spec to understand an unfamiliar or complex codebase and generate enriched context for specification writing."
+description: "Performs preliminary codebase fact-finding and produces a structured research report. This skill should be used before cw-spec to understand an unfamiliar or complex codebase and generate enriched context for specification writing."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task, LSP
 ---

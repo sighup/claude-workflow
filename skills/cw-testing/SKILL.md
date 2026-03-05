@@ -1,6 +1,6 @@
 ---
 name: cw-testing
-description: "E2E testing with auto-fix. Generate tests from specs, execute in isolated sub-agents, and auto-fix application bugs. Use after implementation to verify end-to-end behavior."
+description: "E2E testing with auto-fix. Generates tests from specs, executes in isolated sub-agents, and auto-fixes application bugs. This skill should be used after implementation to verify end-to-end behavior."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, Task, AskUserQuestion
 ---

@@ -1,6 +1,6 @@
 ---
 name: cw-review
-description: "Review implementation code for bugs, security issues, and quality problems. Creates FIX tasks for issues found. Use after cw-validate to catch issues before merge."
+description: "Reviews implementation code for bugs, security issues, and quality problems. Creates FIX tasks for issues found. This skill should be used after cw-validate to catch issues before merge."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, Task, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, LSP
 ---
@@ -103,7 +103,7 @@ Review all changed non-test files directly. For each file:
 
 1. Read the full file: `Read({ file_path: "<path>" })`
 2. Get its diff: `git diff main...HEAD -- <path>`
-3. Evaluate against categories A–D (see Review Categories below)
+3. Evaluate against categories A–D (see [review-categories.md](references/review-categories.md))
 4. When `lsp_available = true`, use LSP to deepen the review:
    - `findReferences` to check if changes have ripple effects beyond the diff (e.g., callers of a modified function that now need updating)
    - `incomingCalls` to understand the impact of modified functions on their consumers
@@ -296,55 +296,6 @@ FIX Tasks Created: [task IDs or "none"]
 
 Report saved: [path to review report]
 ```
-
-## Review Categories
-
-#### Category A: Correctness (Blocking)
-
-- Logic errors, off-by-one, wrong conditions
-- Missing error handling at system boundaries (user input, external APIs)
-- Race conditions or concurrency issues
-- Incorrect data transformations
-- Missing null/undefined checks where data could be absent
-
-#### Category B: Security (Blocking)
-
-- SQL injection, XSS, command injection
-- Hardcoded credentials, API keys, secrets
-- Missing authentication or authorization checks
-- Insecure data handling (logging PII, exposing internals)
-- Path traversal or file inclusion vulnerabilities
-- Unsafe deserialization
-
-#### Category C: Spec Compliance (Blocking)
-
-- Requirements from the spec that were missed or incorrectly implemented
-- Behavior that contradicts spec intent
-- Missing functionality described in demoable units
-
-#### Category D: Quality (Advisory)
-
-- Dead code or unreachable branches
-- Overly complex logic that could be simplified
-- Missing edge case handling
-- Performance concerns (N+1 queries, unnecessary loops)
-- Inconsistency with repository patterns
-
-## Severity Guidelines
-
-| Category | Creates FIX Task | Blocks Merge |
-|----------|-----------------|--------------|
-| A: Correctness bug | Yes | Yes |
-| B: Security vulnerability | Yes | Yes |
-| C: Missing spec requirement | Yes | Yes |
-| D: Quality/style note | No | No |
-
-**Do NOT create FIX tasks for:**
-- Code style preferences already handled by linters
-- Minor naming disagreements
-- "I would have done it differently" observations
-- Test code (tests are the oracle)
-- Documentation gaps (unless spec requires it)
 
 ## Error Handling
 

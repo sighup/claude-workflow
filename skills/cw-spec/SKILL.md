@@ -1,6 +1,6 @@
 ---
 name: cw-spec
-description: "Generate a structured specification with demoable units, functional requirements, and proof artifact definitions. Use when starting a new feature to define what will be built before any code is written."
+description: "Generates a structured specification with demoable units, functional requirements, and proof artifact definitions. This skill should be used when starting a new feature to define what will be built before any code is written."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, WebFetch, WebSearch, AskUserQuestion, Skill, LSP
 ---
@@ -63,7 +63,7 @@ If the invocation args contain a `**Research:**` field with a directory path (e.
 
 If working in a pre-existing project, review:
 
-- Current plannerure patterns and conventions
+- Current architecture patterns and conventions
 - Relevant existing components or features
 - Integration constraints or dependencies
 - Repository standards from: README.md, CONTRIBUTING.md, CLAUDE.md, package.json, config files
@@ -97,7 +97,7 @@ Use this context to inform scope validation and requirements.
 Evaluate whether the feature is appropriately sized.
 
 **Too Large (split into multiple specs):**
-- Rewriting entire application plannerure
+- Rewriting entire application architecture
 - Migrating complete database systems
 - Implementing full authentication from scratch
 - Building complete admin dashboards
