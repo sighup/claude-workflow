@@ -1,367 +1,606 @@
-# Plan: Incorporate Overnight Execution into claude-workflow
+# Plan: Unified TypeScript CLI for claude-workflow
+
+## Overview
+
+Replace all existing bash scripts (`bin/cw-loop`, `cw-pipeline`, `cw-status`, etc.) with a **single TypeScript CLI** (`cw`) that combines existing functionality with new overnight execution features. Built with Commander.js, bundled with esbuild into a single executable.
 
 ## Background
 
 ### Night Watch CLI — Key Concepts to Adopt
-[night-watch-cli](https://github.com/jonit-dev/night-watch-cli) is an async execution platform that queues scoped engineering work (PRDs or GitHub issues), executes them via AI agents overnight in isolated git worktrees, and opens PRs automatically. Key architectural ideas:
+[night-watch-cli](https://github.com/jonit-dev/night-watch-cli) is an async execution platform that queues scoped engineering work (PRDs or GitHub issues), executes them via AI agents overnight in isolated git worktrees, and opens PRs automatically. Key ideas we're adopting:
 
-1. **Task Queue with Lifecycle States**: Draft → Ready → In Progress → Review → Done
-2. **Cron-Based Scheduling**: `night-watch install` writes crontab entries; `night-watch run` executes one cycle
-3. **Worktree Isolation**: Each task runs in its own git worktree to prevent conflicts
-4. **Claim Files / Locking**: Prevents concurrent execution of the same PRD
-5. **Provider Abstraction**: Supports Claude CLI and Codex with configurable env vars and fallback on rate limits
-6. **Multi-Project Support**: Global job queue balances work across repos
-7. **Notification System**: Webhooks (Telegram, etc.) for completion/failure events
-8. **Execution Timeouts**: `NW_MAX_RUNTIME` / `NW_SESSION_MAX_RUNTIME` caps
-9. **Dry-Run Mode**: Preview what would execute without doing it
-10. **Auto-PR Creation**: Opens pull requests with generated code
-11. **Doctor Command**: Validates provider detection and environment health
-12. **Log Rotation & History**: Archived logs, execution history tracking
+1. **Task Queue with Lifecycle States**: pending → running → done/failed
+2. **Cron-Based Scheduling**: install crontab entries; run executes one cycle
+3. **Worktree Isolation**: each task in its own git worktree
+4. **File Locking**: prevents concurrent execution of same work item
+5. **Multi-Project Support**: global job queue across repos
+6. **Execution Timeouts**: per-task and per-session caps
+7. **Dry-Run Mode**: preview without executing
+8. **Auto-PR Creation**: opens PRs with generated code
+9. **Doctor Command**: validates environment health
+10. **GitHub Issue Intake**: auto-queue labeled issues
+11. **Execution History**: structured logs with retention
 
-### claude-workflow — Current State
-claude-workflow already has strong foundations that overlap with night-watch:
-- **Worktree management** (`cw-worktree` skill, `bin/` scripts)
-- **Task board** (native Claude Code task system with JSON persistence)
-- **Autonomous execution loop** (`cw-loop`, `cw-pipeline`)
-- **Parallel dispatch** (`cw-dispatch`, `cw-dispatch-team`)
-- **Spec-driven workflow** (research → spec → plan → execute → validate → review → test)
-- **Agent roles** (implementer, reviewer, bug-fixer, etc.)
-- **Resumable pipeline** (checkpoint state in `.claude/pipeline-state.json`)
+### What Exists Today (Bash)
+- `bin/cw-loop` — autonomous sequential/dispatch execution loop
+- `bin/cw-init` — spec + plan generation
+- `bin/cw-pipeline` — 9-stage end-to-end orchestrator (worktree → spec → plan → execute → validate → review → test → revalidate → PR)
+- `bin/cw-status` — task board display
+- `bin/cw-test-loop` — test execution with auto-fix cycles
+- `bin/cw-test-init` — test scenario generation
+- `bin/cw-loop-interactive` — human-in-the-loop execution
+- `bin/lib/cw-common.sh` — shared utilities (~1000 lines)
 
-### What's Missing
-claude-workflow currently requires a human to **start** execution (interactive or shell). It lacks:
-1. **Scheduled/unattended triggering** (cron, systemd timer, or similar)
-2. **Task queue intake** from external sources (GitHub issues, file drops)
-3. **Execution locking** to prevent concurrent runs on the same feature
-4. **Timeout enforcement** at the session/task level
-5. **Health checks / doctor command** to verify environment readiness
-6. **Execution history & log management**
-7. **Rate-limit detection and provider fallback**
-8. **Multi-project orchestration**
+### Why TypeScript
+
+| Concern | Bash (today) | TypeScript (proposed) |
+|---------|-------------|----------------------|
+| JSON handling | Shell out to `jq` for every operation | Native `JSON.parse/stringify`, typed interfaces |
+| Error handling | Exit codes + string matching on stderr | try/catch, typed errors, structured results |
+| Concurrency | Background processes + PID files + polling | `Promise.all`, `child_process` with streams |
+| Code reuse | `source` scripts, global functions | Imports, classes, dependency injection |
+| Testing | None | Vitest with mocks for Claude CLI + filesystem |
+| Type safety | None | Full TypeScript interfaces for task schema, queue items, config |
+| Single binary | 8 separate scripts + shared lib | One `cw` command with subcommands |
+| Maintainability | Complex quoting, indirect expansion | Standard programming patterns |
 
 ---
 
-## Implementation Plan
+## Architecture
 
-### Phase 1: Queue System & Overnight Core
+### Single CLI: `cw`
 
-#### `bin/cw-queue` — Queue Management CLI
-Manages a file-based queue supporting both prompt and spec intake.
-
-```bash
-# Add work items (both intake methods)
-cw-queue add --prompt "Add JWT authentication" --name jwt-auth --priority 1
-cw-queue add --spec docs/specs/03-spec-billing/03-spec-billing.md --priority 2
-cw-queue add --github-issue 42                    # GitHub Issue intake
-cw-queue add --github-label "overnight"           # Batch-queue all issues with label
-
-# Manage queue
-cw-queue list [--status pending|running|done|failed]
-cw-queue cancel <id>
-cw-queue retry <id>
-cw-queue import-issues [--label overnight] [--repo owner/repo]  # Poll & queue labeled issues
+```
+cw <command> [subcommand] [options]
 ```
 
-- Queue items stored as individual JSON files in `docs/queue/` (configurable via `CW_OVERNIGHT_QUEUE_DIR`)
-- Each item has: id, status, priority, type (prompt|spec|github-issue), source metadata
-- GitHub Issue intake fetches issue title + body as the prompt, links back to issue number
-- `import-issues` can be called standalone or as part of `cw-overnight` pre-flight
+All existing bash scripts become subcommands of a unified `cw` CLI:
 
-#### `bin/cw-overnight` — Main Overnight Runner
-Wraps `cw-pipeline` with overnight-specific orchestration.
+```
+cw loop          # was: cw-loop
+cw init          # was: cw-init
+cw pipeline      # was: cw-pipeline
+cw status        # was: cw-status
+cw test-loop     # was: cw-test-loop
+cw test-init     # was: cw-test-init
+cw interactive   # was: cw-loop-interactive
 
-```bash
-cw-overnight                        # Process queue for current project
-cw-overnight --dry-run              # Preview what would execute
-cw-overnight --projects ~/proj1 ~/proj2 ~/proj3   # Multi-project mode
-cw-overnight --max-items 3          # Limit items per run
+# New overnight commands
+cw queue add     # queue work items
+cw queue list    # view queue
+cw queue cancel  # cancel item
+cw queue retry   # retry failed item
+cw queue import  # import GitHub issues
+cw overnight     # run overnight execution cycle
+cw install       # set up cron/systemd
+cw doctor        # environment health check
+cw history       # execution history viewer
+```
+
+### Project Structure
+
+```
+cli/
+├── package.json
+├── tsconfig.json
+├── esbuild.config.ts              # Bundle to single file
+├── vitest.config.ts
+├── src/
+│   ├── index.ts                   # Entry point, Commander program setup
+│   ├── commands/
+│   │   ├── loop.ts                # Port of cw-loop
+│   │   ├── init.ts                # Port of cw-init
+│   │   ├── pipeline.ts            # Port of cw-pipeline
+│   │   ├── status.ts              # Port of cw-status (+ overnight status)
+│   │   ├── test-loop.ts           # Port of cw-test-loop
+│   │   ├── test-init.ts           # Port of cw-test-init
+│   │   ├── interactive.ts         # Port of cw-loop-interactive
+│   │   ├── queue.ts               # NEW: queue management
+│   │   ├── overnight.ts           # NEW: overnight runner
+│   │   ├── install.ts             # NEW: cron/systemd setup
+│   │   ├── doctor.ts              # NEW: health checks
+│   │   └── history.ts             # NEW: execution history
+│   ├── core/
+│   │   ├── claude.ts              # Claude CLI invocation (spawn, retry, error detection)
+│   │   ├── tasks.ts               # Task file read/write/query (replaces jq operations)
+│   │   ├── session.ts             # Session/task-list discovery
+│   │   ├── worktree.ts            # Git worktree management
+│   │   ├── pipeline-state.ts      # Pipeline checkpoint/resume
+│   │   ├── lock.ts                # File locking (flock wrapper)
+│   │   ├── timeout.ts             # Timeout enforcement with signal escalation
+│   │   ├── rate-limit.ts          # Rate-limit detection & backoff
+│   │   ├── queue-store.ts         # Queue item CRUD (JSON files)
+│   │   ├── history-store.ts       # Execution history log management
+│   │   └── github.ts              # GitHub issue intake (via gh CLI)
+│   ├── util/
+│   │   ├── logger.ts              # Color logging (chalk)
+│   │   ├── config.ts              # Env var loading with defaults
+│   │   ├── process.ts             # Child process helpers
+│   │   └── fs.ts                  # File system helpers
+│   └── types/
+│       ├── task.ts                # Task schema interfaces
+│       ├── queue.ts               # Queue item interfaces
+│       ├── config.ts              # Configuration interfaces
+│       └── pipeline.ts            # Pipeline state interfaces
+├── tests/
+│   ├── commands/                  # Command-level integration tests
+│   ├── core/                      # Core module unit tests
+│   └── fixtures/                  # Test data (task files, queue items)
+└── dist/
+    └── cw.js                      # Single bundled output (esbuild)
+```
+
+### Tech Stack
+
+| Layer | Choice |
+|-------|--------|
+| Language | TypeScript (strict mode) |
+| CLI Framework | Commander.js |
+| Build | esbuild (single-file bundle) |
+| Test | Vitest |
+| Process spawning | `child_process.spawn` (for `claude` CLI) |
+| Terminal colors | chalk |
+| Node version | >= 20 |
+
+### How Claude CLI is Invoked
+
+Same pattern as today's bash scripts — spawn the `claude` CLI process:
+
+```typescript
+// core/claude.ts
+export async function invokeClaude(opts: {
+  prompt: string;
+  model?: string;
+  sessionId?: string;
+  verbose?: boolean;
+  timeout?: number;
+  cwd?: string;
+}): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const args = ['--print', '--model', opts.model ?? 'sonnet',
+                '--dangerously-skip-permissions'];
+  if (opts.sessionId) args.push('--resume', opts.sessionId);
+  if (opts.verbose) args.push('--verbose', '--output-format', 'stream-json');
+
+  // Retry with exponential backoff
+  for (let attempt = 1; attempt <= config.invokeRetries; attempt++) {
+    const result = await spawnWithTimeout('claude', args, {
+      stdin: opts.prompt,
+      timeout: opts.timeout,
+      cwd: opts.cwd,
+    });
+    if (result.exitCode === 0) return result;
+    if (isRateLimited(result.stderr)) throw new RateLimitError(result.stderr);
+    if (attempt < config.invokeRetries) {
+      await sleep(config.retryDelay * attempt * 1000);
+    }
+  }
+  throw new MaxRetriesError();
+}
+```
+
+---
+
+## Command Specifications
+
+### Ported Commands (1:1 behavior parity with bash)
+
+#### `cw loop [project-path]`
+Port of `cw-loop`. Reads task board, executes pending tasks in a loop.
+
+```
+Options:
+  -m, --model <model>      Claude model (default: CW_MODEL or "sonnet")
+  -n, --max-iter <n>       Max iterations (default: 50)
+  -s, --sleep <n>          Seconds between iterations (default: 5)
+  -d, --dispatch           Use parallel dispatch (cw-dispatch skill)
+  -v, --verbose            Stream JSON output
+```
+
+#### `cw init`
+Port of `cw-init`. Two-phase: spec generation → plan generation.
+
+```
+Options:
+  --prompt <text>          Generate spec from prompt
+  --spec <path>            Use existing spec file
+  -m, --model <model>      Claude model
+  -v, --verbose            Stream JSON output
+```
+
+#### `cw pipeline`
+Port of `cw-pipeline`. 9-stage orchestrator.
+
+```
+Options:
+  --prompt <text>          Feature description
+  --spec <path>            Use existing spec
+  --name <name>            Feature name (for worktree/branch)
+  --feature <spec>         Multi-feature mode (repeatable)
+  --resume                 Resume from checkpoint
+  --from <n>               Force resume from stage N
+  --no-worktree            Skip worktree creation
+  --no-test                Skip test phases
+  --no-review              Skip code review
+  --no-pr                  Skip PR creation
+  --auto-pr                Create PR without pause
+  -m, --model <model>      Claude model
+  -v, --verbose            Stream JSON output
+```
+
+#### `cw status [project-path]`
+Port of `cw-status` plus overnight queue context.
+
+```
+Options:
+  -l, --list               Show full task list
+  -f, --failed             Show only failed tasks
+  -p, --pending            Show only pending tasks
+  -j, --json               Output JSON
+  -q, --queue              Show overnight queue status
+```
+
+#### `cw test-loop [project-path]`
+Port of `cw-test-loop`. Dual-loop test execution with auto-fix.
+
+```
+Options:
+  -c, --max-cycles <n>     Max fix cycles (default: 3)
+  -n, --max-iter <n>       Max iterations per cycle
+  -m, --model <model>      Claude model
+  -s, --sleep <n>          Sleep between iterations
+  -v, --verbose            Stream JSON output
+```
+
+#### `cw test-init`
+Port of `cw-test-init`. Generate test scenarios.
+
+```
+Options:
+  --prompt <text>          Generate from description
+  --spec <path>            Generate from spec
+  -m, --model <model>      Claude model
+  -v, --verbose            Stream JSON output
+```
+
+#### `cw interactive [project-path]`
+Port of `cw-loop-interactive`. Human-in-the-loop with menu after each task.
+
+```
+Options:
+  -m, --model <model>      Claude model
+```
+
+### New Commands
+
+#### `cw queue add`
+Add work items to the overnight queue.
+
+```
+Options:
+  --prompt <text>          Free-text prompt to spec + implement
+  --spec <path>            Pre-existing spec file
+  --github-issue <number>  GitHub issue number
+  --github-label <label>   Batch-queue all open issues with label
+  --name <name>            Feature name (auto-generated if omitted)
+  --priority <n>           Priority 1-10 (default: 5, lower = higher priority)
+  --project <dir>          Project directory (default: cwd)
+```
+
+#### `cw queue list`
+```
+Options:
+  --status <s>             Filter: pending|running|done|failed|rate_limited
+  -j, --json               Output JSON
+```
+
+#### `cw queue cancel <id>`
+Remove item from queue (only if pending).
+
+#### `cw queue retry <id>`
+Reset a failed/rate_limited item to pending.
+
+#### `cw queue import`
+Import GitHub issues into the queue.
+
+```
+Options:
+  --label <label>          Required. GitHub label to filter by.
+  --repo <owner/repo>      Repository (default: current repo from git remote)
+```
+
+**Issue body parsing:**
+- `## Spec` section → extract as spec input
+- `## Prompt` section → extract as prompt
+- Otherwise → full body as prompt
+
+**Post-PR actions (configurable):**
+- Comment on issue with PR link
+- Remove label (`CW_GITHUB_INTAKE_REMOVE_LABEL_ON_PR`)
+- Close issue (`CW_GITHUB_INTAKE_CLOSE_ON_PR`)
+
+#### `cw overnight`
+Main overnight execution runner.
+
+```
+Options:
+  --dry-run                Preview what would execute
+  --max-items <n>          Max items per run (default: 5)
+  --projects <dirs...>     Multi-project mode (space-separated dirs)
+  --strategy <s>           Multi-project strategy: "priority" | "round-robin"
 ```
 
 **Execution flow:**
-1. Run `cw-doctor` pre-flight check (fail fast if environment is broken)
+1. `cw doctor --quick` pre-flight
 2. Import GitHub issues if `CW_GITHUB_INTAKE_LABEL` is set
-3. Read queue directory, sort by priority
-4. For each pending item (up to `CW_OVERNIGHT_MAX_ITEMS`):
-   a. Acquire file lock (flock) for the item
-   b. Update item status → `running`, record `started_at`
-   c. Wrap execution in `timeout` (per `CW_SESSION_TIMEOUT`)
-   d. Invoke `cw-pipeline --prompt "..." --name "..."` or `cw-pipeline --spec "..."`
-   e. Capture exit code, stdout/stderr → structured JSON log
-   f. Update item status → `done` or `failed`, record `completed_at`, `exit_code`, `pr_url`
-   g. Release lock
-5. Write summary to execution history log
-6. In multi-project mode: iterate through `--projects` list, running steps 1-5 for each
+3. Load queue, sort by priority
+4. For each pending item (up to max):
+   a. Acquire file lock
+   b. Status → `running`
+   c. Spawn `cw pipeline` with timeout
+   d. Capture result → structured JSON log
+   e. Status → `done` or `failed`
+   f. Release lock
+5. Write execution summary to history
+6. Multi-project: iterate `--projects`, run steps 1-5 per project
 
 **Multi-project mode:**
-- Accepts `--projects <dir1> <dir2> ...` or reads from `CW_OVERNIGHT_PROJECTS` env var
-- Changes working directory to each project, loads its queue, runs items
-- Global execution timeout (`CW_OVERNIGHT_GLOBAL_TIMEOUT`) caps total runtime across all projects
-- Round-robin or priority-based cross-project scheduling (configurable)
+- Reads `--projects` or `CW_OVERNIGHT_PROJECTS` env var
+- Global timeout (`CW_OVERNIGHT_GLOBAL_TIMEOUT`, default 8hr) caps total runtime
+- `priority`: process all items across projects sorted by priority
+- `round-robin`: one item from each project in rotation
 
-#### `bin/cw-install` — Cron/systemd Setup
-```bash
-cw-install cron [--schedule "0 2 * * *"]   # Install crontab entry
-cw-install systemd                          # Generate systemd timer unit
-cw-install uninstall                        # Remove scheduled entries
+#### `cw install`
+Set up scheduled execution.
+
+```
+Subcommands:
+  cw install cron [--schedule "0 2 * * *"]
+  cw install systemd
+  cw install uninstall
 ```
 
-- Resolves full PATH for `claude`, `node`, `git`, `jq` in cron environment
-- For multi-project: single cron entry with `--projects` flag
-- Exports necessary env vars (`ANTHROPIC_API_KEY`, etc.) in crontab preamble
+- Resolves full PATH for `claude`, `node`, `git` in cron environment
+- Multi-project: single cron entry with `--projects`
+- Exports required env vars in crontab preamble
 
-### Phase 2: Execution Safety & Reliability
+#### `cw doctor`
+Environment health check.
 
-#### `bin/lib/cw-lock.sh` — Locking Primitives
-- File-based locking per queue item and per worktree
-- Uses `flock` for atomic lock acquisition
-- Stale lock detection: if lock holder PID is dead, auto-cleanup
-- Prevents concurrent overnight + interactive conflicts on same feature
-
-#### `bin/lib/cw-timeout.sh` — Timeout Enforcement
-- Per-task timeout (default: 30min, configurable via `CW_TASK_TIMEOUT`)
-- Per-session timeout (default: 4hr, configurable via `CW_SESSION_TIMEOUT`)
-- Global overnight timeout (default: 8hr, configurable via `CW_OVERNIGHT_GLOBAL_TIMEOUT`)
-- Graceful SIGTERM → 30s grace → SIGKILL escalation
-- Timeout events logged with partial progress captured
-
-#### `bin/lib/cw-ratelimit.sh` — Rate-Limit Detection
-- Parse Claude CLI stderr for HTTP 429 / rate-limit patterns
-- On detection: exponential backoff (30s, 60s, 120s, 240s)
-- After max retries: mark item as `rate_limited`, move to next item
-- Log rate-limit events for capacity planning
-
-### Phase 3: Observability & Health
-
-#### `bin/cw-doctor` — Environment Health Check
-```bash
-cw-doctor              # Full check
-cw-doctor --quick      # Essential checks only
+```
+Options:
+  --quick                  Essential checks only
+  --fix                    Auto-fix what can be fixed (create dirs, etc.)
 ```
 
-Checks:
-- Claude CLI installed and authenticated (`claude --version`, test API call)
-- Required tools present (`git`, `jq`, `flock`, `timeout`)
-- Git repo is clean (no uncommitted changes that would block worktree creation)
-- Disk space adequate (configurable threshold)
+**Checks:**
+- `claude` CLI installed and authenticated
+- `git` available, repo is clean
+- `gh` CLI available (if GitHub intake configured)
+- Node.js version >= 20
 - Queue directory exists and is writable
-- GitHub CLI (`gh`) available if GitHub intake is configured
-- Network connectivity to GitHub API (if issue intake is enabled)
+- Disk space above threshold
+- GitHub API reachable (if intake enabled)
 
-#### `bin/cw-history` — Execution History
-```bash
-cw-history list [--last N]              # Recent runs
-cw-history show <run-id>                # Detailed run report
-cw-history clean [--older-than 30d]     # Prune old logs
+#### `cw history`
+Execution history viewer.
+
+```
+Subcommands:
+  cw history list [--last N]
+  cw history show <run-id>
+  cw history clean [--older-than 30d]
 ```
 
-- Structured JSON log entries per execution run in `logs/overnight/`
-- Each run gets a directory: `logs/overnight/YYYYMMDD-HHMMSS-<name>/`
-  - `run.json` — metadata (items processed, timing, exit codes, PR URLs)
-  - `stdout.log` — captured output
-  - `stderr.log` — captured errors
-- Log rotation: archive runs older than `CW_HISTORY_RETENTION_DAYS` (default: 30)
-- Summary view shows: date, items processed, success/fail count, total duration, PR links
-
-#### `bin/cw-status` Enhancement
-Add overnight context to the existing status command:
-- Show pending queue items count and next scheduled run
-- Show active locks and running overnight sessions
-- Show last execution result summary (pass/fail, duration, PRs created)
-
-### Phase 4: GitHub Issue Intake
-
-#### Issue Polling & Auto-Queue
-```bash
-# One-shot import
-cw-queue import-issues --label overnight --repo owner/repo
-
-# Auto-import as part of overnight run (configured via env)
-CW_GITHUB_INTAKE_LABEL="overnight"
-CW_GITHUB_INTAKE_REPO="owner/repo"    # defaults to current repo
-```
-
-**Flow:**
-1. `gh issue list --label overnight --state open --json number,title,body`
-2. For each issue not already in queue:
-   - Create queue item with `type: "github-issue"`, `source: "github#42"`
-   - Use issue title as `name`, issue body as `prompt`
-3. On successful PR creation:
-   - Comment on the issue with link to PR
-   - Optionally close the issue or remove the label (configurable)
-
-**Issue body conventions:**
-- If issue body contains `## Spec` section → extract and use as spec input
-- If issue body contains `## Prompt` section → extract and use as prompt
-- Otherwise → use full body as prompt
+- Structured JSON logs in `logs/overnight/YYYYMMDD-HHMMSS-<name>/`
+- Each run: `run.json` (metadata), `stdout.log`, `stderr.log`
+- Auto-prune based on `CW_HISTORY_RETENTION_DAYS` (default: 30)
 
 ---
 
-## File Structure (New/Modified)
+## Core Module Details
 
-```
-bin/
-├── cw-overnight          # NEW — Main overnight execution runner
-├── cw-queue              # NEW — Queue management CLI
-├── cw-install            # NEW — Cron/systemd installer
-├── cw-doctor             # NEW — Environment health checker
-├── cw-history            # NEW — Execution history viewer
-├── cw-status             # MODIFY — Add queue/overnight status
-├── lib/
-│   ├── cw-common.sh      # MODIFY — Add shared queue/lock helpers
-│   ├── cw-lock.sh        # NEW — Locking primitives
-│   ├── cw-timeout.sh     # NEW — Timeout enforcement
-│   └── cw-ratelimit.sh   # NEW — Rate-limit detection & backoff
-docs/
-├── queue/                # NEW — Queue directory for pending work items
-│   └── .gitkeep
-logs/
-├── overnight/            # NEW — Overnight execution logs
-│   └── .gitkeep
+### `core/tasks.ts` — Task File Operations
+Replaces all `jq` operations with native TypeScript:
+
+```typescript
+interface Task {
+  id: string;
+  subject: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  blocks?: string[];
+  metadata?: {
+    failure_count?: number;
+    fix_task_id?: string;
+    test_status?: string;
+    test_type?: string;
+    test_suite?: boolean;
+  };
+}
+
+class TaskStore {
+  constructor(private tasksDir: string) {}
+
+  getAll(): Task[]
+  getPendingUnblocked(): Task[]
+  getNextTaskId(): string | null
+  isComplete(): boolean
+  getCounts(): { total: number; completed: number; pending: number; in_progress: number; failed: number }
+  getTestTasks(): Task[]
+  getPendingFixTasks(): Task[]
+}
 ```
 
-## Configuration (Environment Variables)
+### `core/queue-store.ts` — Queue Item CRUD
+
+```typescript
+interface QueueItem {
+  id: string;
+  created_at: string;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'rate_limited' | 'cancelled';
+  priority: number;
+  type: 'prompt' | 'spec' | 'github-issue';
+  source: string;
+  prompt?: string;
+  name: string;
+  spec_path?: string;
+  github_issue?: { number: number; repo: string; title: string; url: string };
+  project_dir: string;
+  worktree?: string;
+  started_at?: string;
+  completed_at?: string;
+  exit_code?: number;
+  pr_url?: string;
+  log_dir?: string;
+  rate_limit_retries: number;
+}
+
+class QueueStore {
+  constructor(private queueDir: string) {}
+
+  add(item: Omit<QueueItem, 'id' | 'created_at'>): QueueItem
+  list(filter?: { status?: string }): QueueItem[]
+  get(id: string): QueueItem | null
+  update(id: string, patch: Partial<QueueItem>): void
+  cancel(id: string): void
+  retry(id: string): void
+  getNextPending(): QueueItem | null
+}
+```
+
+### `core/lock.ts` — File Locking
+
+```typescript
+class FileLock {
+  acquire(lockPath: string, opts?: { timeout?: number }): Promise<LockHandle>
+  release(handle: LockHandle): void
+  isStale(lockPath: string): boolean  // Check if holder PID is alive
+  cleanup(lockPath: string): void
+}
+```
+
+### `core/session.ts` — Session Discovery
+Port of `discover_session()`:
+1. Check `CLAUDE_CODE_TASK_LIST_ID` env → `~/.claude/tasks/$ID/`
+2. Fallback: `~/.claude/projects/ENCODED_PATH/sessions-index.json`
+3. Returns: `{ sessionId, taskListId, tasksDir }`
+
+### `core/pipeline-state.ts` — Pipeline Checkpoint/Resume
+Port of pipeline state management:
+
+```typescript
+interface PipelineState {
+  feature_name: string;
+  mode: 'prompt' | 'spec' | 'auto';
+  value: string;
+  flags: { noWorktree?: boolean; noTest?: boolean; noReview?: boolean; noPr?: boolean; autoPr?: boolean };
+  stages: Record<string, { status: 'pending' | 'completed' | 'skipped' | 'failed'; timestamp?: string }>;
+}
+
+class PipelineStateManager {
+  init(workDir: string, state: PipelineState): void
+  checkpoint(workDir: string, stage: number, status: string): void
+  getResumeStage(workDir: string): number | 'done'
+  exists(workDir: string): boolean
+  readFlags(workDir: string): PipelineState['flags']
+}
+```
+
+---
+
+## Configuration
+
+All existing env vars remain supported for backward compatibility. New env vars added:
 
 ```bash
-# Overnight execution
-CW_OVERNIGHT_QUEUE_DIR="docs/queue"           # Queue directory path
+# Existing (unchanged)
+CW_MODEL="sonnet"                             # Claude model
+CW_TIMEOUT=0                                  # Claude invocation timeout
+CW_SLEEP=5                                    # Sleep between iterations
+CW_MAX_ITERATIONS=50                          # Max loop iterations
+CW_MAX_FAILURES=3                             # Max consecutive failures
+CW_INVOKE_RETRIES=3                           # Retry attempts per invocation
+CW_RETRY_DELAY=10                             # Base retry delay (seconds)
+CW_VERBOSE=false                              # Stream JSON output
+CW_NON_INTERACTIVE=false                      # Skip confirmation prompts
+
+# New: Overnight execution
+CW_OVERNIGHT_QUEUE_DIR="docs/queue"           # Queue directory
 CW_OVERNIGHT_LOG_DIR="logs/overnight"         # Log output directory
-CW_OVERNIGHT_SCHEDULE="0 2 * * *"             # Default cron schedule (2 AM daily)
-CW_OVERNIGHT_DRY_RUN=false                    # Preview mode
-CW_OVERNIGHT_MAX_ITEMS=5                      # Max queue items per run
+CW_OVERNIGHT_SCHEDULE="0 2 * * *"             # Default cron schedule
+CW_OVERNIGHT_MAX_ITEMS=5                      # Max items per run
 CW_OVERNIGHT_LOCK_DIR="/tmp/cw-locks"         # Lock file directory
 
-# Multi-project
+# New: Multi-project
 CW_OVERNIGHT_PROJECTS=""                      # Space-separated project dirs
-CW_OVERNIGHT_GLOBAL_TIMEOUT=28800             # Global timeout (seconds, default 8hr)
+CW_OVERNIGHT_GLOBAL_TIMEOUT=28800             # Global timeout (8hr)
 CW_OVERNIGHT_PROJECT_STRATEGY="priority"      # "priority" or "round-robin"
 
-# Timeouts
-CW_TASK_TIMEOUT=1800                          # Per-task timeout (seconds, default 30min)
-CW_SESSION_TIMEOUT=14400                      # Per-session timeout (seconds, default 4hr)
+# New: Timeouts
+CW_TASK_TIMEOUT=1800                          # Per-task timeout (30min)
+CW_SESSION_TIMEOUT=14400                      # Per-session timeout (4hr)
 
-# GitHub Issue intake
-CW_GITHUB_INTAKE_LABEL="overnight"            # Label to watch (empty = disabled)
+# New: GitHub Issue intake
+CW_GITHUB_INTAKE_LABEL=""                     # Label to watch (empty = disabled)
 CW_GITHUB_INTAKE_REPO=""                      # owner/repo (empty = current repo)
-CW_GITHUB_INTAKE_CLOSE_ON_PR=false            # Close issue when PR is created
-CW_GITHUB_INTAKE_REMOVE_LABEL_ON_PR=true      # Remove label when PR is created
+CW_GITHUB_INTAKE_CLOSE_ON_PR=false            # Close issue when PR created
+CW_GITHUB_INTAKE_REMOVE_LABEL_ON_PR=true      # Remove label when PR created
 
-# History
-CW_HISTORY_RETENTION_DAYS=30                  # Auto-prune logs older than this
+# New: Rate limiting
+CW_RATELIMIT_MAX_RETRIES=4                    # Max retries on rate limit
+CW_RATELIMIT_BASE_DELAY=30                    # Base backoff (seconds)
 
-# Execution
-CW_OVERNIGHT_RATELIMIT_MAX_RETRIES=4          # Max retries on rate limit
-CW_OVERNIGHT_RATELIMIT_BASE_DELAY=30          # Base backoff delay (seconds)
-```
-
-## Queue Item Format
-
-```json
-{
-  "id": "20260312-001",
-  "created_at": "2026-03-12T22:00:00Z",
-  "status": "pending",
-  "priority": 5,
-  "type": "prompt",
-  "source": "manual",
-  "prompt": "Add JWT authentication with refresh tokens",
-  "name": "jwt-auth",
-  "spec_path": null,
-  "github_issue": null,
-  "project_dir": "/home/user/my-project",
-  "worktree": null,
-  "started_at": null,
-  "completed_at": null,
-  "exit_code": null,
-  "pr_url": null,
-  "log_dir": null,
-  "rate_limit_retries": 0
-}
-```
-
-For GitHub Issue intake:
-```json
-{
-  "id": "20260312-002",
-  "type": "github-issue",
-  "source": "github#42",
-  "prompt": "Full issue body extracted here...",
-  "name": "issue-42-add-dark-mode",
-  "github_issue": {
-    "number": 42,
-    "repo": "owner/repo",
-    "title": "Add dark mode toggle",
-    "url": "https://github.com/owner/repo/issues/42"
-  }
-}
-```
-
-## Typical Workflows
-
-### Basic Overnight Run
-```bash
-# During the day — queue work
-cw-queue add --prompt "Add JWT authentication" --name jwt-auth --priority 1
-cw-queue add --spec docs/specs/03-spec-billing/03-spec-billing.md --priority 2
-
-# Install cron (one-time)
-cw-install cron --schedule "0 2 * * *"
-
-# At 2 AM — cw-overnight runs automatically
-# Next morning — review results
-cw-history list --last 3
-cw-queue list --status done
-```
-
-### GitHub Issue-Driven
-```bash
-# Label issues "overnight" in your GitHub repo
-# Configure intake
-export CW_GITHUB_INTAKE_LABEL="overnight"
-
-# cw-overnight auto-imports labeled issues, processes them, opens PRs,
-# and comments on the original issues with PR links
-```
-
-### Multi-Project Overnight
-```bash
-# Single cron entry covers all projects
-cw-install cron --schedule "0 1 * * *" \
-  --projects ~/work/api ~/work/frontend ~/work/infra
-
-# Or via env var
-export CW_OVERNIGHT_PROJECTS="~/work/api ~/work/frontend ~/work/infra"
-cw-overnight  # processes queues across all three repos
-```
-
-### Manual Test Run
-```bash
-cw-doctor                    # Verify environment
-cw-overnight --dry-run       # Preview what would run
-cw-overnight --max-items 1   # Run just one item to test
+# New: History
+CW_HISTORY_RETENTION_DAYS=30                  # Auto-prune threshold
 ```
 
 ---
 
-## Design Principles
+## Migration Strategy
 
-1. **Bash-native**: Consistent with existing claude-workflow architecture (pure shell scripts)
-2. **Composable**: Each script is independently useful; `cw-overnight` composes them
-3. **Non-destructive**: Dry-run support everywhere; worktree isolation prevents main branch conflicts
-4. **Minimal dependencies**: Only requires what claude-workflow already needs (bash, jq, git, claude) plus `gh` for GitHub intake
-5. **Backward-compatible**: All existing workflows continue to work unchanged
-6. **Night-watch-inspired, not copied**: Adapts the best ideas (queue, cron, locking, multi-project, issue intake) to claude-workflow's existing architecture rather than porting TypeScript code
-7. **Log-based observability**: Structured JSON logs and `cw-history` for reviewing results — no external notification dependencies
-8. **Multi-project from day one**: Global orchestration across repos via a single cron entry
+The bash scripts and TypeScript CLI will coexist during migration:
+
+1. **Phase 0**: Scaffold the TS project, set up build pipeline
+2. **Phase 1**: Port `core/` modules (tasks, session, claude invocation, worktree, pipeline-state)
+3. **Phase 2**: Port existing commands (loop, init, pipeline, status, test-loop, test-init, interactive)
+4. **Phase 3**: Add new commands (queue, overnight, doctor, history, install)
+5. **Phase 4**: Add GitHub issue intake
+6. **Phase 5**: Add multi-project support
+7. **Phase 6**: Tests, docs, deprecate bash scripts
+
+The old bash scripts remain functional throughout. The `cw` binary is added alongside them. Once parity is confirmed, a deprecation notice is added to the bash scripts pointing users to `cw`.
+
+---
 
 ## Implementation Order
 
-1. `bin/lib/cw-lock.sh` + `bin/lib/cw-timeout.sh` — Foundation primitives
-2. `bin/cw-queue` — Queue management (add, list, cancel, retry)
-3. `bin/cw-overnight` — Core overnight runner (single-project first)
-4. `bin/cw-doctor` — Health checks
-5. `bin/cw-history` + logging infrastructure — Observability
-6. `bin/cw-install` — Cron/systemd setup
-7. Multi-project support in `cw-overnight`
-8. `bin/lib/cw-ratelimit.sh` — Rate-limit detection
-9. GitHub Issue intake (`cw-queue import-issues`, auto-import in `cw-overnight`)
-10. `bin/cw-status` enhancement — Unified status view
+1. **Scaffold**: `package.json`, `tsconfig.json`, esbuild config, Commander entry point
+2. **Core utilities**: `logger.ts`, `config.ts`, `process.ts`, `fs.ts`
+3. **Core modules**: `claude.ts`, `tasks.ts`, `session.ts`, `worktree.ts`
+4. **`cw status`**: Simplest command, validates core modules work
+5. **`cw loop`**: Main execution loop
+6. **`cw init`**: Spec + plan generation
+7. **`cw pipeline`** + `pipeline-state.ts`: Full orchestrator with resume
+8. **`cw test-init`** + **`cw test-loop`**: Test commands
+9. **`cw interactive`**: Human-in-the-loop
+10. **`cw doctor`**: Health checks
+11. **`core/lock.ts`** + **`core/timeout.ts`** + **`core/rate-limit.ts`**: Safety primitives
+12. **`core/queue-store.ts`** + **`cw queue`**: Queue management
+13. **`core/history-store.ts`** + **`cw history`**: Execution history
+14. **`cw overnight`**: Overnight runner
+15. **`core/github.ts`** + **`cw queue import`**: GitHub issue intake
+16. **`cw install`**: Cron/systemd setup
+17. **Multi-project support** in `cw overnight`
+18. **Tests**: Unit tests for core, integration tests for commands
+
+## Design Principles
+
+1. **Single binary**: One `cw` command replaces 8 scripts
+2. **Type-safe**: Full TypeScript interfaces for tasks, queue items, config, pipeline state
+3. **Native JSON**: No `jq` dependency — direct `JSON.parse/stringify`
+4. **Same invocation model**: Still spawns `claude` CLI (no SDK dependency)
+5. **Env var compatible**: All existing `CW_*` env vars work unchanged
+6. **Flag compatible**: Same CLI flags as bash scripts for drop-in replacement
+7. **Non-destructive**: Dry-run everywhere, worktree isolation, file locking
+8. **Testable**: Core modules are pure functions/classes, mockable CLI invocations
+9. **Log-based observability**: Structured JSON logs, `cw history` for review
+10. **Multi-project from day one**: Cross-repo orchestration via single cron entry
