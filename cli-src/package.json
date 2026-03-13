@@ -1,0 +1,28 @@
+{
+  "name": "claude-workflow-cli",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Unified CLI for claude-workflow: spec-driven development with autonomous execution",
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

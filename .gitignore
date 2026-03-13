@@ -1,2 +1,3 @@
 .worktrees/
-.worktrees/
+cli-src/node_modules/
+cli-src/dist/
