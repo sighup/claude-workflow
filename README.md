@@ -62,11 +62,23 @@ Shell scripts require `jq`. The `gh` CLI is needed for PR creation in `cw-pipeli
 
 Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) which requires two env vars:
 
+1. Enable the experimental feature flag (user-level, applies to all projects):
+
 ```json
-// ~/.claude/settings.json (user-level) or .claude/settings.json (project-level)
+// ~/.claude/settings.json
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+2. Set the task list ID (project-level, unique per project):
+
+```json
+// .claude/settings.json
+{
+  "env": {
     "CLAUDE_CODE_TASK_LIST_ID": "your-project-name"
   }
 }
