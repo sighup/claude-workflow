@@ -34,11 +34,11 @@ When operating as a teammate on a team (spawned with `team_name`):
 1. **After completing a task**: Run `TaskList()` to check for unblocked pending tasks
 2. **If unblocked task found**: Message the lead requesting next assignment — do NOT self-claim
    ```
-   SendMessage({ type: "message", recipient: "lead-name", content: "Completed T{id}. Found T{next} unblocked. Requesting assignment.", summary: "Completed T{id}, requesting next" })
+   SendMessage({ to: "lead-name", message: "Completed T{id}. Found T{next} unblocked. Requesting assignment.", summary: "Completed T{id}, requesting next" })
    ```
 3. **If no tasks available**: Message the lead that you're done
    ```
-   SendMessage({ type: "message", recipient: "lead-name", content: "Completed T{id}. No unblocked tasks remaining.", summary: "Completed T{id}, no more tasks" })
+   SendMessage({ to: "lead-name", message: "Completed T{id}. No unblocked tasks remaining.", summary: "Completed T{id}, no more tasks" })
    ```
 4. **Wait for lead confirmation** before starting any new task
 5. **Report blockers immediately** via SendMessage — don't silently retry forever

@@ -139,9 +139,8 @@ TaskUpdate({
 
 ```
 SendMessage({
-  type: "message",
-  recipient: "lead",
-  content: "Review complete for [concern] concern. Found [N] findings ([M] blocking, [K] advisory). Results in task metadata.",
+  to: "lead",
+  message: "Review complete for [concern] concern. Found [N] findings ([M] blocking, [K] advisory). Results in task metadata.",
   summary: "[concern] review done, [N] findings"
 })
 ```
@@ -153,9 +152,8 @@ When the lead broadcasts a findings digest for the challenge round, respond with
 **AGREE** — Finding is valid:
 ```
 SendMessage({
-  type: "message",
-  recipient: "lead",
-  content: "AGREE with [finding title]. [Optional corroborating evidence from my review.]",
+  to: "lead",
+  message: "AGREE with [finding title]. [Optional corroborating evidence from my review.]",
   summary: "Agree with [finding]"
 })
 ```
@@ -163,9 +161,8 @@ SendMessage({
 **CHALLENGE** — Finding is incorrect or overstated:
 ```
 SendMessage({
-  type: "message",
-  recipient: "lead",
-  content: "CHALLENGE [finding title]. Reason: [why the finding is incorrect or overstated]. Evidence: [specific code reference].",
+  to: "lead",
+  message: "CHALLENGE [finding title]. Reason: [why the finding is incorrect or overstated]. Evidence: [specific code reference].",
   summary: "Challenge [finding]"
 })
 ```
@@ -173,9 +170,8 @@ SendMessage({
 **ADD** — Related finding discovered during challenge review:
 ```
 SendMessage({
-  type: "message",
-  recipient: "lead",
-  content: "ADD related to [finding title]. Found: [new finding description]. File: [path], Lines: [range].",
+  to: "lead",
+  message: "ADD related to [finding title]. Found: [new finding description]. File: [path], Lines: [range].",
   summary: "Add related finding"
 })
 ```
@@ -183,9 +179,8 @@ SendMessage({
 After responding to all findings in the digest, message the lead:
 ```
 SendMessage({
-  type: "message",
-  recipient: "lead",
-  content: "Challenge round complete. [N] AGREE, [M] CHALLENGE, [K] ADD.",
+  to: "lead",
+  message: "Challenge round complete. [N] AGREE, [M] CHALLENGE, [K] ADD.",
   summary: "Challenge round done"
 })
 ```

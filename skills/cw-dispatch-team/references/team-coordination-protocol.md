@@ -11,7 +11,7 @@ CREATE  →  SPAWN  →  MONITOR  →  SHUTDOWN  →  CLEANUP
 1. **CREATE**: `Teammate({ operation: "spawnTeam", team_name: "{task-list-id}-team" })`
 2. **SPAWN**: One `Task()` call per ready task, all in a single message for parallel launch
 3. **MONITOR**: Lead receives auto-delivered messages, assigns new tasks, tracks idle workers
-4. **SHUTDOWN**: `SendMessage({ type: "shutdown_request" })` to each teammate
+4. **SHUTDOWN**: `SendMessage({ to: "worker-N", message: { type: "shutdown_request" }, summary: "..." })` to each teammate
 5. **CLEANUP**: `Teammate({ operation: "cleanup" })`
 
 ## Task List Access
@@ -122,14 +122,14 @@ while true:
   1. Invoke cw-execute (handles the assigned task end-to-end)
   2. TaskList() to scan for unblocked pending tasks
   3. If unblocked task exists:
-       SendMessage to lead: "Completed T{done}. Found T{next} unblocked. Requesting assignment."
+       SendMessage({ to: "lead", message: "Completed T{done}. Found T{next} unblocked. Requesting assignment.", summary: "Completed T{done}, requesting next" })
        WAIT for lead response
        If lead assigns T{next}:
          continue loop (cw-execute will pick up the new owned task)
        If lead says "stand by":
          WAIT for further instructions or shutdown
   4. If no unblocked task:
-       SendMessage to lead: "Completed T{done}. No unblocked tasks remaining."
+       SendMessage({ to: "lead", message: "Completed T{done}. No unblocked tasks remaining.", summary: "Completed T{done}, no more tasks" })
        WAIT for shutdown
 ```
 
@@ -144,9 +144,9 @@ On "requesting assignment" from worker-N:
   3. Check file conflicts against in-progress tasks
   4. If conflict-free task found:
      - TaskUpdate({ taskId, owner: "worker-N", status: "in_progress" })
-     - SendMessage to worker-N: "Assigned T{id}. Proceed."
+     - SendMessage({ to: "worker-N", message: "Assigned T{id}. Proceed.", summary: "Assigned T{id}" })
   5. If none available:
-     - SendMessage to worker-N: "No tasks available. Standing by."
+     - SendMessage({ to: "worker-N", message: "No tasks available. Standing by.", summary: "No tasks, stand by" })
      - Track worker as idle
 
 On "no more tasks" from worker-N:
@@ -165,7 +165,7 @@ On blocker report from worker-N:
 ```
 1. All workers idle AND no unblocked tasks remaining
 2. For each worker:
-   SendMessage({ type: "shutdown_request", recipient: "worker-N" })
+   SendMessage({ to: "worker-N", message: { type: "shutdown_request" }, summary: "All tasks complete. Shutting down." })
 3. Workers approve shutdown (unless mid-commit)
 4. After all workers confirmed:
    Teammate({ operation: "cleanup" })

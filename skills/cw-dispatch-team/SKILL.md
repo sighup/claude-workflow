@@ -136,11 +136,11 @@ EXECUTION LOOP:
 3. Look for tasks: status=pending, no blockedBy, no owner
 4. If unblocked task found:
    - Message the lead: 'Completed T01. Found TXX unblocked. Requesting assignment.'
-     SendMessage({ type: 'message', recipient: 'lead', content: 'Completed T01. Found TXX unblocked. Requesting assignment.', summary: 'Completed T01, requesting next' })
+     SendMessage({ to: 'lead', message: 'Completed T01. Found TXX unblocked. Requesting assignment.', summary: 'Completed T01, requesting next' })
    - WAIT for lead's response before starting
 5. If no tasks available:
    - Message the lead: 'Completed T01. No unblocked tasks remaining.'
-     SendMessage({ type: 'message', recipient: 'lead', content: 'Completed T01. No unblocked tasks remaining.', summary: 'Completed T01, no more tasks' })
+     SendMessage({ to: 'lead', message: 'Completed T01. No unblocked tasks remaining.', summary: 'Completed T01, no more tasks' })
 
 CONSTRAINTS:
 - Always invoke cw-execute (never implement directly)
@@ -173,11 +173,11 @@ Messages from teammates are auto-delivered. Process them as they arrive:
 4. If conflict-free task found:
    ```
    TaskUpdate({ taskId: "<id>", owner: "worker-N", status: "in_progress" })
-   SendMessage({ type: "message", recipient: "worker-N", content: "Assigned T{id} - {subject}. Proceed with cw-execute.", summary: "Assigned T{id}" })
+   SendMessage({ to: "worker-N", message: "Assigned T{id} - {subject}. Proceed with cw-execute.", summary: "Assigned T{id}" })
    ```
 5. If no task available:
    ```
-   SendMessage({ type: "message", recipient: "worker-N", content: "No tasks available. Standing by.", summary: "No tasks, stand by" })
+   SendMessage({ to: "worker-N", message: "No tasks available. Standing by.", summary: "No tasks, stand by" })
    ```
    Track worker-N as idle.
 
@@ -196,8 +196,8 @@ Messages from teammates are auto-delivered. Process them as they arrive:
 When all work is complete (all workers idle, no unblocked tasks):
 
 ```
-SendMessage({ type: "shutdown_request", recipient: "worker-1", content: "All tasks complete. Shutting down." })
-SendMessage({ type: "shutdown_request", recipient: "worker-2", content: "All tasks complete. Shutting down." })
+SendMessage({ to: "worker-1", message: { type: "shutdown_request" }, summary: "All tasks complete. Shutting down." })
+SendMessage({ to: "worker-2", message: { type: "shutdown_request" }, summary: "All tasks complete. Shutting down." })
 ... (for each teammate)
 ```
 
