@@ -237,13 +237,24 @@ After all reviewers complete (or timeout):
 
 If triggered:
 
-1. Compile a findings digest — list each blocking finding with its title, file, lines, and category
-2. Broadcast the digest to all reviewers:
+1. Compile a findings digest — list each blocking finding with its title, file, lines, category, and source task ID so reviewers can `TaskGet` the original concern task for full context
+2. Send the digest individually to each reviewer:
 
+<!-- NOTE: Broadcast (to: "*") may work for string messages but individual sends are used for reliability -->
 ```
 SendMessage({
-  type: "broadcast",
-  content: "CHALLENGE ROUND: Review these [N] blocking findings and respond with AGREE, CHALLENGE, or ADD for each.\n\n[Finding 1: title - file:lines - category]\n[Finding 2: ...]\n...",
+  to: "security-reviewer",
+  message: "CHALLENGE ROUND: Review these [N] blocking findings and respond with AGREE, CHALLENGE, or ADD for each.\n\n[Finding 1: title - file:lines - category (from task T<id>)]\n[Finding 2: ...]\n...",
+  summary: "Challenge round: [N] findings"
+})
+SendMessage({
+  to: "correctness-reviewer",
+  message: "CHALLENGE ROUND: Review these [N] blocking findings and respond with AGREE, CHALLENGE, or ADD for each.\n\n[Finding 1: title - file:lines - category (from task T<id>)]\n[Finding 2: ...]\n...",
+  summary: "Challenge round: [N] findings"
+})
+SendMessage({
+  to: "spec-reviewer",
+  message: "CHALLENGE ROUND: Review these [N] blocking findings and respond with AGREE, CHALLENGE, or ADD for each.\n\n[Finding 1: title - file:lines - category (from task T<id>)]\n[Finding 2: ...]\n...",
   summary: "Challenge round: [N] findings"
 })
 ```
@@ -308,9 +319,9 @@ TaskUpdate({
 ### Step 11: Shutdown Team and Cleanup
 
 ```
-SendMessage({ type: "shutdown_request", recipient: "security-reviewer", content: "Review complete. Shutting down." })
-SendMessage({ type: "shutdown_request", recipient: "correctness-reviewer", content: "Review complete. Shutting down." })
-SendMessage({ type: "shutdown_request", recipient: "spec-reviewer", content: "Review complete. Shutting down." })
+SendMessage({ to: "security-reviewer", message: { type: "shutdown_request" }, summary: "Review complete. Shutting down." })
+SendMessage({ to: "correctness-reviewer", message: { type: "shutdown_request" }, summary: "Review complete. Shutting down." })
+SendMessage({ to: "spec-reviewer", message: { type: "shutdown_request" }, summary: "Review complete. Shutting down." })
 ```
 
 Wait for shutdown confirmations, then:
