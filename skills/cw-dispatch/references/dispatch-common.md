@@ -66,48 +66,11 @@ Group 2: T02 (blocked by T01) - must wait
 Group 3: T03 (blocked by T02) - must wait
 ```
 
-### Semantic Grouping (FIX-REVIEW tasks)
-
-When the task board contains `FIX-REVIEW` tasks (from `cw-review` or `cw-review-team`), apply semantic grouping **before** conflict detection. FIX tasks from the same review are inherently coupled — they were found against a single code snapshot, and parallel fixes can produce inconsistent results even when they touch different files.
-
-**Step 1: Group by shared file.** Tasks modifying the same file MUST be assigned to the same worker sequentially:
-
-```
-If T7.scope.files_to_modify ∩ T9.scope.files_to_modify ≠ ∅:
-  → Same-file group: [T7, T9] — assign to one worker in sequence
-```
-
-**Step 2: Group by shared fix pattern.** Tasks fixing the same class of bug should use the same approach. Detect by comparing:
-- `metadata.category` — same category (A, B, C)
-- `subject` / `description` — similar root cause (e.g., multiple tasks about "wrong binary path", "missing validation")
-- `suggested_fix` — similar fix strategy
-
-```
-If T8.subject contains "bin/cw-pipeline" AND T9.subject contains "bin/cw-* scripts":
-  → Pattern group: [T8, T9] — same root cause, need consistent fix
-```
-
-**Step 3: Merge overlapping groups.** If T7 and T9 share a file, and T8 and T9 share a pattern, merge into one group: [T7, T8, T9].
-
-**Step 4: Assign each group to one worker.** The worker executes them sequentially, carrying context from each fix into the next. Independent tasks (no file or pattern overlap) are dispatched in parallel as normal.
-
-Example with FIX-REVIEW tasks:
-```
-Semantic Group A: T7 (pipeline.ts chdir), T9 (pipeline.ts bin paths), T8 (auto.ts bin paths)
-  → Reason: T7+T9 share pipeline.ts, T8+T9 share "wrong binary path" pattern
-  → Assign all to worker-1 sequentially
-
-Semantic Group B: T4 (install.ts injection), T11 (install.ts bin path)
-  → Reason: both modify install.ts
-  → Assign all to worker-2 sequentially
-
-Independent: T5 (lock.ts), T6 (history-store.ts), T10 (queue.ts + github.ts)
-  → No overlaps — dispatch in parallel to worker-3, worker-4, worker-5
-```
-
 ## Conflict Prevention
 
-Before spawning or assigning, verify no file **or pattern** conflicts between parallel tasks.
+Before spawning or assigning, verify no file or pattern conflicts between parallel tasks.
+
+**Note:** FIX-REVIEW tasks from `cw-review-team` should already have `blockedBy` dependencies set by the review lead (Step 10b). The checks below are a safety net — if dependencies are properly set, dispatch just follows the graph.
 
 ### File Conflict Check
 

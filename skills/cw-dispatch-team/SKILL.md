@@ -162,22 +162,20 @@ Messages from teammates are auto-delivered. Process them as they arrive:
 **On "requesting assignment" from worker-N:**
 1. Run `TaskList()` to check current board state
 2. Find pending tasks with no owner and no active blockers
-3. **Prefer semantic group continuity**: If worker-N just completed a task from a semantic group (same file or same fix pattern), assign the next task from that group first. This ensures consistent approaches across related fixes.
-4. Check file and pattern conflicts against all in-progress tasks:
+3. **Prefer tasks unblocked by the worker's completed task** — if worker-N just completed T7, and T9 has `blockedBy: [T7]` and is now unblocked, assign T9 to the same worker. This keeps related work (especially chained FIX-REVIEW tasks) on the same worker for consistency.
+4. Check file conflicts against all in-progress tasks:
    ```
    For candidate task C and each in-progress task P:
      C_files = C.scope.files_to_create + C.scope.files_to_modify
      P_files = P.scope.files_to_create + P.scope.files_to_modify
      if intersection(C_files, P_files) is not empty:
        SKIP C (try next candidate)
-     if C and P are both review-fix tasks with similar root cause:
-       SKIP C (try next candidate)
    ```
 5. If conflict-free task found:
    ```
    TaskUpdate({ taskId: "<id>", owner: "worker-N", status: "in_progress" })
    ```
-   **Include context from prior work** when assigning. If the worker just completed a related task, tell them what approach was used so they maintain consistency:
+   **Include context from prior work** when the new task was blocked by or related to the worker's prior task. Tell them what approach was used so they maintain consistency:
    ```
    SendMessage({
      to: "worker-N",

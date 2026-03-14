@@ -83,14 +83,13 @@ Before spawning teammates, the lead:
 When a worker requests a new task:
 1. Lead runs `TaskList()` to get current state
 2. Finds pending tasks with no owner and no active blockers
-3. **Prefers semantic group continuity** — if the worker just completed a task from a semantic group (same file or fix pattern), assign the next task from that group first
-4. Checks file and pattern conflicts against all in-progress tasks
-5. If conflict-free task found: assigns via `TaskUpdate` and messages worker **with context from prior work** (see below)
+3. **Prefers tasks unblocked by the worker's completed task** — keeps related work (especially chained FIX-REVIEW tasks) on the same worker for consistency
+4. Checks file conflicts against all in-progress tasks
+5. If conflict-free task found: assigns via `TaskUpdate` and messages worker, **with context from prior work** if the tasks are related (see message templates above)
 6. If no task found: messages worker to stand by, tracks as idle
 
 ### Conflict Check
 
-**File conflicts:**
 ```
 For candidate task C and each in-progress task P:
   C_files = C.scope.files_to_create + C.scope.files_to_modify
@@ -99,15 +98,7 @@ For candidate task C and each in-progress task P:
     SKIP C (try next candidate)
 ```
 
-**Pattern conflicts (FIX-REVIEW tasks):**
-```
-For candidate task C and each in-progress task P:
-  if C.metadata.task_type == "review-fix" AND P.metadata.task_type == "review-fix":
-    if similar_root_cause(C.description, P.description):
-      SKIP C (assign to same worker as P when P completes)
-```
-
-See [dispatch-common.md](../../cw-dispatch/references/dispatch-common.md#conflict-prevention) for full conflict detection rules including semantic grouping.
+**Note:** FIX-REVIEW tasks from `cw-review-team` should already have `blockedBy` dependencies that prevent file and pattern conflicts. The file conflict check above is a safety net.
 
 ## Teammate Spawn Prompt Template
 
@@ -162,8 +153,8 @@ Messages from teammates are auto-delivered.
 On "requesting assignment" from worker-N:
   1. TaskList() to check current state
   2. Find unblocked pending tasks without owners
-  3. Prefer semantic group continuity (same file or fix pattern as worker's prior task)
-  4. Check file AND pattern conflicts against in-progress tasks
+  3. Prefer tasks unblocked by worker's completed task (keeps chains on same worker)
+  4. Check file conflicts against in-progress tasks
   5. If conflict-free task found:
      - TaskUpdate({ taskId, owner: "worker-N", status: "in_progress" })
      - If related to worker's prior task:

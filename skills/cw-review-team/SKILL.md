@@ -283,6 +283,8 @@ TaskUpdate({ taskId: "<concern-task-id>", status: "completed" })
 
 This step is the same for both inline and team review paths.
 
+#### 10a: Create tasks
+
 For each **blocking** finding (Categories A, B, C), create a FIX task:
 
 ```
@@ -315,6 +317,49 @@ TaskUpdate({
     commit: { template: "fix: <description>" }
   }
 })
+```
+
+#### 10b: Add dependencies between related FIX tasks
+
+After creating all FIX tasks, analyze them for relationships and add `blockedBy` dependencies so that dispatch executes them in the correct order. FIX tasks from a single review are inherently coupled — they were found against the same code snapshot, and parallel fixes to related code produce conflicts or inconsistent results.
+
+**Check 1: Same file.** If two FIX tasks modify the same file, the second must `blockedBy` the first:
+
+```
+For each pair of FIX tasks (A, B) where A was created first:
+  if A.scope.files_to_modify ∩ B.scope.files_to_modify ≠ ∅:
+    TaskUpdate({ taskId: B.id, blockedBy: [A.id] })
+```
+
+**Check 2: Same fix pattern.** If two FIX tasks address the same class of bug (e.g., "wrong binary path" in different files), the second should `blockedBy` the first so the worker carries the approach forward:
+
+```
+For each pair of FIX tasks (A, B) where A was created first:
+  if similar root cause (same bug class, same suggested fix strategy):
+    TaskUpdate({ taskId: B.id, blockedBy: [A.id] })
+```
+
+Detect similar root cause by comparing:
+- Subject keywords (e.g., both mention "binary path", "bin/cw", "shell injection")
+- Suggested fix approach (e.g., both suggest "use process.argv" or "use stdin piping")
+- Same function or module being fixed from different angles
+
+**Check 3: Chain overlapping groups.** If task A and B share a file, and B and C share a fix pattern, chain all three: C → B → A.
+
+Example dependency output:
+```
+Created FIX tasks with dependencies:
+  T4: install.ts command injection
+  T5: lock.ts TOCTOU race
+  T6: history-store.ts date parsing
+  T7: pipeline.ts process.chdir
+  T8: auto.ts bin/cw-pipeline path      → blockedBy: [T9]  (same fix pattern)
+  T9: pipeline.ts bin/cw-* paths         → blockedBy: [T7]  (same file)
+  T10: queue.ts QueueItemType
+  T11: install.ts bin/cw path            → blockedBy: [T4]  (same file)
+
+Independent: T4, T5, T6, T7, T10 (can run in parallel)
+Chained: T7 → T9 → T8, T4 → T11
 ```
 
 ### Step 11: Shutdown Team and Cleanup
