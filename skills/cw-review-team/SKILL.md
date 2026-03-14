@@ -194,8 +194,8 @@ PROTOCOL:
 2. Follow the 3-phase protocol (ORIENT, EXAMINE, REPORT)
 3. Focus primarily on security concerns (Category B) across ALL changed files
 4. Note obvious secondary findings from other categories
-5. Write findings to task metadata via TaskUpdate
-6. Message the lead via SendMessage when complete
+5. Mark task completed via TaskUpdate (status only)
+6. Send findings directly to the lead via SendMessage (include JSON findings array in message body)
 
 CONSTRAINTS:
 - Never modify implementation code
@@ -227,9 +227,10 @@ Messages from teammates are auto-delivered. Track reviewer completion:
 
 After all reviewers complete (or timeout):
 
-1. **Collect findings**: `TaskGet` each concern task to read findings from metadata
-2. **Check for failures**: If a concern task is not completed or has no `findings` in metadata, record that concern as **partially reviewed**
-3. **Count blocking findings** across all concern tasks
+1. **Parse findings from completion messages**: Each reviewer sends their findings directly in the `SendMessage` body (as a `REVIEW COMPLETE` message with JSON findings array). Extract findings from these messages — this is the **primary** data channel.
+2. **Fallback**: If a reviewer's message cannot be parsed, try `TaskGet` on the concern task to read findings from metadata as a backup.
+3. **Check for failures**: If a concern has no findings from either channel, record that concern as **partially reviewed**
+4. **Count blocking findings** across all concerns
 
 ### Step 8: Challenge Round (Conditional)
 

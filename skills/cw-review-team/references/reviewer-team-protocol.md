@@ -120,28 +120,24 @@ Fields:
 - `is_primary`: `true` if the finding falls within your assigned concern, `false` for secondary findings
 - Severity rules: Categories A, B, C are always `"blocking"`. Category D is always `"advisory"`.
 
-**Update the task with findings:**
+**Mark task completed:**
 
 ```
 TaskUpdate({
   taskId: "<task-id>",
-  status: "completed",
-  metadata: {
-    review_status: "completed",
-    findings: [ ... ],
-    files_reviewed: ["path/to/file1.ts", "path/to/file2.ts"],
-    completed_at: "<ISO timestamp>"
-  }
+  status: "completed"
 })
 ```
 
-**Message the lead:**
+**Send findings directly to the lead:**
+
+Task metadata persistence is unreliable (JSON corruption). Send findings in the message body so the lead has the data directly.
 
 ```
 SendMessage({
   to: "lead",
-  message: "Review complete for [concern] concern. Found [N] findings ([M] blocking, [K] advisory). Results in task metadata.",
-  summary: "[concern] review done, [N] findings"
+  message: "REVIEW COMPLETE\nconcern: [concern]\ntask_id: [task-id]\nfindings:\n[JSON array of all findings]\nfiles_reviewed:\n[JSON array of reviewed file paths]",
+  summary: "[concern] review done, [N] findings ([M] blocking, [K] advisory)"
 })
 ```
 
