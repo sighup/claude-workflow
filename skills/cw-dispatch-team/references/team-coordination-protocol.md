@@ -47,10 +47,19 @@ The team name is always `{CLAUDE_CODE_TASK_LIST_ID}-team` to ensure it never col
 
 ### Lead → Worker Messages
 
-**Assignment:**
+**Assignment (unrelated to prior task):**
 ```
 "Assigned T{id} - {subject}. Proceed with cw-execute."
 ```
+
+**Assignment with context (related to prior task):**
+```
+"Assigned T{id} - {subject}. Proceed with cw-execute.
+
+CONTEXT FROM PRIOR TASK: You just completed T{prev_id} which [brief description of what was done and the approach used]. Use the same pattern for consistency."
+```
+
+Use the context form when the new task shares a file, fix pattern, or root cause with the worker's prior task. This prevents inconsistent approaches across related fixes.
 
 **Stand by (no work available):**
 ```
@@ -74,12 +83,14 @@ Before spawning teammates, the lead:
 When a worker requests a new task:
 1. Lead runs `TaskList()` to get current state
 2. Finds pending tasks with no owner and no active blockers
-3. Checks file conflicts against all in-progress tasks
-4. If conflict-free task found: assigns via `TaskUpdate` and messages worker
-5. If no task found: messages worker to stand by, tracks as idle
+3. **Prefers semantic group continuity** — if the worker just completed a task from a semantic group (same file or fix pattern), assign the next task from that group first
+4. Checks file and pattern conflicts against all in-progress tasks
+5. If conflict-free task found: assigns via `TaskUpdate` and messages worker **with context from prior work** (see below)
+6. If no task found: messages worker to stand by, tracks as idle
 
 ### Conflict Check
 
+**File conflicts:**
 ```
 For candidate task C and each in-progress task P:
   C_files = C.scope.files_to_create + C.scope.files_to_modify
@@ -87,6 +98,16 @@ For candidate task C and each in-progress task P:
   if intersection(C_files, P_files) is not empty:
     SKIP C (try next candidate)
 ```
+
+**Pattern conflicts (FIX-REVIEW tasks):**
+```
+For candidate task C and each in-progress task P:
+  if C.metadata.task_type == "review-fix" AND P.metadata.task_type == "review-fix":
+    if similar_root_cause(C.description, P.description):
+      SKIP C (assign to same worker as P when P completes)
+```
+
+See [dispatch-common.md](../../cw-dispatch/references/dispatch-common.md#conflict-prevention) for full conflict detection rules including semantic grouping.
 
 ## Teammate Spawn Prompt Template
 
@@ -141,11 +162,15 @@ Messages from teammates are auto-delivered.
 On "requesting assignment" from worker-N:
   1. TaskList() to check current state
   2. Find unblocked pending tasks without owners
-  3. Check file conflicts against in-progress tasks
-  4. If conflict-free task found:
+  3. Prefer semantic group continuity (same file or fix pattern as worker's prior task)
+  4. Check file AND pattern conflicts against in-progress tasks
+  5. If conflict-free task found:
      - TaskUpdate({ taskId, owner: "worker-N", status: "in_progress" })
-     - SendMessage({ to: "worker-N", message: "Assigned T{id}. Proceed.", summary: "Assigned T{id}" })
-  5. If none available:
+     - If related to worker's prior task:
+       SendMessage({ to: "worker-N", message: "Assigned T{id}. Proceed.\n\nCONTEXT: T{prev} used [approach]. Use same pattern.", summary: "Assigned T{id} with context" })
+     - If unrelated:
+       SendMessage({ to: "worker-N", message: "Assigned T{id}. Proceed.", summary: "Assigned T{id}" })
+  6. If none available:
      - SendMessage({ to: "worker-N", message: "No tasks available. Standing by.", summary: "No tasks, stand by" })
      - Track worker as idle
 

@@ -162,20 +162,34 @@ Messages from teammates are auto-delivered. Process them as they arrive:
 **On "requesting assignment" from worker-N:**
 1. Run `TaskList()` to check current board state
 2. Find pending tasks with no owner and no active blockers
-3. Check file conflicts against all in-progress tasks:
+3. **Prefer semantic group continuity**: If worker-N just completed a task from a semantic group (same file or same fix pattern), assign the next task from that group first. This ensures consistent approaches across related fixes.
+4. Check file and pattern conflicts against all in-progress tasks:
    ```
    For candidate task C and each in-progress task P:
      C_files = C.scope.files_to_create + C.scope.files_to_modify
      P_files = P.scope.files_to_create + P.scope.files_to_modify
      if intersection(C_files, P_files) is not empty:
        SKIP C (try next candidate)
+     if C and P are both review-fix tasks with similar root cause:
+       SKIP C (try next candidate)
    ```
-4. If conflict-free task found:
+5. If conflict-free task found:
    ```
    TaskUpdate({ taskId: "<id>", owner: "worker-N", status: "in_progress" })
+   ```
+   **Include context from prior work** when assigning. If the worker just completed a related task, tell them what approach was used so they maintain consistency:
+   ```
+   SendMessage({
+     to: "worker-N",
+     message: "Assigned T{id} - {subject}. Proceed with cw-execute.\n\nCONTEXT FROM PRIOR TASK: You just completed T{prev_id} which {brief description of what was done and the approach used}. Use the same pattern for consistency.",
+     summary: "Assigned T{id} with context from T{prev_id}"
+   })
+   ```
+   If the new task is unrelated to the worker's prior task, use the simple assignment message:
+   ```
    SendMessage({ to: "worker-N", message: "Assigned T{id} - {subject}. Proceed with cw-execute.", summary: "Assigned T{id}" })
    ```
-5. If no task available:
+6. If no task available:
    ```
    SendMessage({ to: "worker-N", message: "No tasks available. Standing by.", summary: "No tasks, stand by" })
    ```
