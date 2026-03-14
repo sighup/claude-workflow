@@ -439,7 +439,7 @@ AskUserQuestion({
     question: "Code review complete. What would you like to do next?",
     header: "Next Step",
     options: [
-      { label: "Execute fixes (Recommended)", description: "Run /cw-dispatch to execute the FIX-REVIEW tasks" },
+      { label: "Execute fixes (Recommended)", description: "Run /cw-dispatch-team to execute the FIX-REVIEW tasks (teams already configured)" },
       { label: "Run /cw-validate", description: "Verify coverage against spec and run validation gates" },
       { label: "Create PR", description: "Proceed to pull request creation" },
       { label: "Done for now", description: "Review the report and decide later" }
@@ -450,7 +450,7 @@ AskUserQuestion({
 ```
 
 Based on user selection:
-- **Execute fixes**: Invoke `/cw-dispatch` to process FIX-REVIEW tasks
+- **Execute fixes**: Invoke `/cw-dispatch-team` to process FIX-REVIEW tasks (CLAUDE_CODE_TASK_LIST_ID is already configured since cw-review-team requires it)
 - **Run /cw-validate**: Invoke the skill directly: `Skill({ skill: "cw-validate" })`
 - **Create PR**: Summarize changes and suggest PR title/body
 - **Done for now**: Summarize what was found and exit
