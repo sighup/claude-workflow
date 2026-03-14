@@ -2,7 +2,7 @@
 name: cw-validate
 description: "Validates implementation against spec using 6 gates and generates a coverage matrix. This skill should be used after implementation is complete to verify coverage, proof artifacts, and credential safety before review."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate, AskUserQuestion
+allowed-tools: Glob, Grep, Read, Write, Bash, Task, TaskGet, TaskList, TaskUpdate, AskUserQuestion
 ---
 
 # CW-Validate: Implementation Validator
@@ -10,6 +10,20 @@ allowed-tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate, Ask
 ## Context Marker
 
 Always begin your response with: **CW-VALIDATE**
+
+## Sub-Agent Delegation
+
+Validation is context-heavy (reads specs, all tasks, all changed files, re-executes proofs). To protect the caller's context window, **always run validation in a sub-agent** — even when invoked interactively by the user.
+
+```
+Task({
+  subagent_type: "claude-workflow:validator",
+  description: "Validate implementation against spec",
+  prompt: "Run the cw-validate skill. Follow the full validation process below (Steps 1-6), apply all 6 gates, generate the report, and output the VALIDATION COMPLETE summary."
+})
+```
+
+After the sub-agent completes, **relay its full output to the user** (sub-agent results are not automatically visible). Then proceed to the "What Comes Next" section to offer next steps.
 
 ## Overview
 
