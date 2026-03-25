@@ -22,7 +22,10 @@ Standard schema for all review findings. All concern agents write findings in th
   "claude_md_rule": "<quoted rule from CLAUDE.md/REVIEW.md if applicable, otherwise null>",
   "cross_file_refs": ["<other files involved in this finding>"],
   "is_primary": true,
-  "validation_status": null
+  "validation_status": null,
+  "blame_classification": null,
+  "challenge_status": null,
+  "review_config_source": null
 }
 ```
 
@@ -47,6 +50,9 @@ Standard schema for all review findings. All concern agents write findings in th
 | `cross_file_refs` | Optional | Files outside the finding's `file` that are involved (callers, consumers, implementors) |
 | `is_primary` | Yes | `true` if the finding falls within the agent's assigned concern, `false` for secondary findings |
 | `validation_status` | Set by orchestrator | `null` (agent output), then set to `"verified"`, `"failed"`, or `"skipped"` by the orchestrator's factual grounding step |
+| `blame_classification` | Set by orchestrator | `null` (agent output), then set to `"new"` or `"surfaced"` by validation pipeline step 4a (blame classification) |
+| `challenge_status` | Set by orchestrator | `null` (agent output), then set to `"upheld"`, `"downgraded"`, or `"contested"` by validation pipeline step 4f (blind challenge) |
+| `review_config_source` | Set by orchestrator | `null` or path to the REVIEW.md that governed this finding's thresholds |
 
 ## Dimension Values
 
