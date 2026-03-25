@@ -1,6 +1,6 @@
 ---
 name: cw-review-team
-description: "Team-based concern-partitioned code review. Each reviewer sees ALL files through a specialized lens (security, correctness, spec compliance). This skill should be used after cw-validate for thorough cross-file review (requires CLAUDE_CODE_TASK_LIST_ID)."
+description: "Thorough concern-partitioned code review with cross-validation. Requires CLAUDE_CODE_TASK_LIST_ID. This skill should be used after cw-validate when deeper review is needed — spawns persistent team reviewers with factual grounding and challenge rounds."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, Task, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, TeamCreate, TeamDelete, SendMessage
 ---
@@ -13,7 +13,7 @@ Always begin your response with: **CW-REVIEW-TEAM**
 
 ## Overview
 
-You are the **Code Review Orchestrator** in the Claude Workflow system, using a **concern-partitioned** team approach. Unlike `cw-review` (which splits files across reviewers), you spawn 3 specialized reviewers that each examine ALL changed files through a different lens: security, correctness, and spec compliance. This catches cross-file issues that file-partitioned review can miss.
+You are the **Code Review Orchestrator** in the Claude Workflow system, using a **concern-partitioned** team approach. You spawn 5-6 specialized persistent team members that each examine ALL changed files through a different lens: bugs, security, cross-file impact, tests, conventions, and optionally type design. After collecting findings, you run factual grounding to verify claims, an optional challenge round for cross-validation, and contradiction resolution to handle agent disagreements.
 
 For small diffs you review inline (same as `cw-review`). For larger diffs you spawn the concern-partitioned team.
 
@@ -21,11 +21,13 @@ For small diffs you review inline (same as `cw-review`). For larger diffs you sp
 
 You are a **Senior Staff Engineer** leading a review team. You:
 - Assess diff size to choose inline review or team review
-- Spawn and coordinate 3 concern-focused reviewers
-- Optionally run a challenge round for cross-validation
+- Spawn and coordinate 5-6 concern-focused reviewers
+- Run factual grounding on blocking findings (deterministic verification before LLM judgment)
+- Optionally run a challenge round for cross-validation (3+ blocking findings)
+- Resolve contradictions between agents (spec suppresses bugs, security wins ties)
 - Consolidate and deduplicate findings across concerns
-- Create FIX tasks for blocking issues
-- Produce a structured review report with methodology details
+- Create FIX tasks for blocking issues with confidence above threshold
+- Produce a structured review report with detailed methodology
 
 ## Critical Constraints
 
@@ -105,32 +107,51 @@ git log main...HEAD --oneline
 
 **Early exit**: If `git diff main...HEAD --stat` shows no changes, report "No changes to review" and exit.
 
-**Capture the total diff line count** from the `--stat` summary line (e.g. "10 files changed, 185 insertions(+), 42 deletions(-)"). Add insertions + deletions = total diff lines. This determines the review path.
+**Capture the total diff line count** from the `--stat` summary line. Add insertions + deletions = total diff lines.
+
+#### Type Detection
+
+Check whether new types are introduced:
+
+```bash
+git diff main...HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.py' '*.go' '*.java' '*.rs' | grep -E '^\+.*(interface |type |class |enum |abstract |struct )' | head -5
+```
+
+If results, set `has_new_types = true` (6 concerns). Otherwise `has_new_types = false` (5 concerns).
 
 ### Step 2: Choose Review Path
 
 Get the list of all changed non-test files:
 
 ```bash
-# List changed files, excluding test files
 git diff main...HEAD --name-only | grep -v -E '(\.test\.|\.spec\.|__tests__|test/|tests/)'
 ```
 
 **If total diff lines <= 200** -> **Inline review** (Step 2a)
-**If total diff lines > 200** -> **Team review** (Steps 3-9)
+**If total diff lines > 200** -> **Team review** (Steps 3-12)
 
 ### Step 2a: Inline Review (small diffs)
 
-Review all changed non-test files directly. For each file:
+Review all changed non-test files directly. Read `../cw-review/references/review-categories.md` for category definitions. For each file:
 
 1. Read the full file: `Read({ file_path: "<path>" })`
 2. Get its diff: `git diff main...HEAD -- <path>`
-3. Evaluate against categories A-D (see [review-categories.md](../cw-review/references/review-categories.md))
-4. Record findings
+3. Evaluate against categories A-D. Focus on correctness (A) and security (B) — these are blocking. For deeper investigation on a specific concern, read the corresponding reference file on demand:
+   - `../cw-review/references/bug-detector.md` — only if you spot a suspicious correctness/error handling pattern
+   - `../cw-review/references/security-reviewer.md` — only if you spot a potential security issue
+   - `../cw-review/references/cross-file-impact.md` — only if changed functions have public callers
+4. Record findings. Apply confidence thresholds: security >= 70, all others >= 80
 
 After reviewing all files, skip to **Step 10: Create FIX Tasks**.
 
 ### Step 3: Create Team
+
+Determine the lead name for teammate messaging (this is the current session — teammates will message back to this name):
+
+```bash
+# The lead name is used by teammates for SendMessage addressing
+lead_name="lead"  # or derive from session context
+```
 
 ```
 TeamCreate({ team_name: "{task-list-id}-review-team", description: "Concern-partitioned code review team" })
@@ -138,25 +159,23 @@ TeamCreate({ team_name: "{task-list-id}-review-team", description: "Concern-part
 
 ### Step 4: Create Concern Tasks
 
-Create 3 `REVIEW-CONCERN:` tasks, one per reviewer:
+Create a `REVIEW-CONCERN:` task for each reviewer. See `../cw-review/references/fix-task-template.md` for the full concern roster and model assignments. All agents receive the full list of changed non-test files.
+
+For each concern (5 always-on + type-design if `has_new_types = true`), create the task and set metadata in sequence:
 
 ```
 TaskCreate({
-  subject: "REVIEW-CONCERN: Security review (Category B)",
-  description: "Security-focused review of all changed files. See reviewer-team-protocol.md for concern checklist.",
-  activeForm: "Reviewing security concerns"
+  subject: "REVIEW-CONCERN: {concern} ({focus})",
+  description: "Concern-specialized review of all changed files. See references/{concern}.md for methodology.",
+  activeForm: "Reviewing {concern} concerns"
 })
-```
 
-Then set metadata on each concern task:
-
-```
 TaskUpdate({
   taskId: "<concern-task-id>",
+  status: "in_progress",
   metadata: {
     task_type: "review-concern",
-    concern: "security",
-    primary_category: "B",
+    concern: "{concern}",
     changed_files: ["path/to/file1.ts", "path/to/file2.ts", ...],
     spec_path: "<path-to-spec or null>",
     standards_summary: "<brief summary of repo conventions>",
@@ -165,50 +184,31 @@ TaskUpdate({
 })
 ```
 
-Repeat for correctness (concern: "correctness", primary_category: "A") and spec compliance (concern: "spec-compliance", primary_category: "C+D").
+### Step 5: Spawn Reviewers
 
-### Step 5: Assign Ownership and Spawn Reviewers
-
-Assign ownership on each concern task, then send a **single message** with 3 Task tool calls for parallel launch:
-
-```
-TaskUpdate({ taskId: "<security-task-id>", owner: "security-reviewer", status: "in_progress" })
-TaskUpdate({ taskId: "<correctness-task-id>", owner: "correctness-reviewer", status: "in_progress" })
-TaskUpdate({ taskId: "<spec-task-id>", owner: "spec-reviewer", status: "in_progress" })
-```
-
-Then spawn all 3 in one message:
+Send a **single message** with 5-6 Task tool calls for parallel launch. Teammates load the `agents/reviewer.md` definition automatically (including protocol, tool usage, and constraints). The spawn prompt provides task-specific context the agent definition cannot know.
 
 ```
 Task({
   subagent_type: "claude-workflow:reviewer",
   team_name: "{task-list-id}-review-team",
-  name: "security-reviewer",
-  description: "Security concern review",
-  prompt: "You are security-reviewer on the {task-list-id}-review-team team.
-
-YOUR ASSIGNED TASK: <task-id> - Security review (Category B)
-
-PROTOCOL:
-1. Read the concern-partitioned protocol at: skills/cw-review-team/references/reviewer-team-protocol.md
-2. Follow the 3-phase protocol (ORIENT, EXAMINE, REPORT)
-3. Focus primarily on security concerns (Category B) across ALL changed files
-4. Note obvious secondary findings from other categories
-5. Write findings to task metadata via TaskUpdate
-6. Message the lead via SendMessage when complete
-
-CONSTRAINTS:
-- Never modify implementation code
-- Never create FIX tasks or new tasks
-- Always include file paths and line numbers
-- Set is_primary=true for security findings, is_primary=false for secondary findings
-
-SHUTDOWN:
-- Approve shutdown_request when received"
+  model: "opus",
+  name: "bug-detector",
+  description: "Bug detector review",
+  prompt: "Your assigned task ID: {task-id}.
+Lead name for SendMessage: {lead_name}.
+Reviewing branch: {branch} against {base_branch}.
+Changed files: {count} non-test files.
+Spec: {spec_path or 'none'}.
+Focus: correctness bugs and error handling defects (Category A)."
 })
 ```
 
-Repeat for correctness-reviewer and spec-reviewer with matching concern descriptions.
+Model assignments:
+- **opus**: bug-detector, security-reviewer, cross-file-impact
+- **sonnet**: test-analyzer, spec-and-conventions, type-design
+
+Repeat for each concern in a single message for parallel execution. Adjust the "Focus:" line to match each concern's domain.
 
 ### Step 6: Monitor Loop
 
@@ -216,12 +216,12 @@ Messages from teammates are auto-delivered. Track reviewer completion:
 
 **On review completion message from reviewer:**
 1. Note the reviewer as done
-2. If all 3 reviewers complete: proceed to Step 7
+2. If all reviewers complete: proceed to Step 7
 
 **On error/blocker from reviewer:**
 1. Log the error
 2. Mark that concern as "partially reviewed" in the final report
-3. If 2+ reviewers complete, proceed (do not wait indefinitely)
+3. If majority of reviewers complete, proceed (do not wait indefinitely)
 
 ### Step 7: Collect Findings
 
@@ -231,35 +231,56 @@ After all reviewers complete (or timeout):
 2. **Check for failures**: If a concern task is not completed or has no `findings` in metadata, record that concern as **partially reviewed**
 3. **Count blocking findings** across all concern tasks
 
-### Step 8: Challenge Round (Conditional)
+### Step 8: Factual Grounding
 
-**Only trigger if blocking findings >= 3.**
+For each **blocking** finding (categories A, B, C), the lead runs inline verification:
+
+1. **File verification**: Read the cited `file` at `line_start`-`line_end`. Confirm the code matches the finding's `description` and `evidence`.
+2. **Cross-reference check**: For findings with `cross_file_refs`, verify those files exist and contain the described patterns (use Grep or Read).
+3. **CLAUDE.md rule check**: For findings with `claude_md_rule`, verify the quoted rule actually exists in CLAUDE.md/REVIEW.md.
+
+**Disposition:**
+- Finding's factual claims are verified -> set `validation_status: "verified"`
+- Finding's factual claims are wrong (wrong line, function doesn't exist, code doesn't match) -> set `validation_status: "failed"`, downgrade to advisory
+- Finding has no factual claims to verify -> set `validation_status: "skipped"`
+
+### Step 9: Challenge Round (Conditional)
+
+**Only trigger if verified blocking findings >= 3.**
 
 If triggered:
 
-1. Compile a findings digest — list each blocking finding with its title, file, lines, and category
-2. Broadcast the digest to all reviewers:
+1. Compile a findings digest — list each blocking finding with its `id`, `title`, `file`, `line_start`-`line_end`, `dimension`, `confidence`, and `evidence` summary
+2. Broadcast the digest to all reviewers. Note: broadcast sends to all teammates simultaneously — costs scale with team size, but this is a single broadcast per review so it's acceptable:
 
 ```
 SendMessage({
-  type: "broadcast",
-  content: "CHALLENGE ROUND: Review these [N] blocking findings and respond with AGREE, CHALLENGE, or ADD for each.\n\n[Finding 1: title - file:lines - category]\n[Finding 2: ...]\n...",
+  to: "all",
+  content: "CHALLENGE ROUND: Review these [N] blocking findings and respond with AGREE, CHALLENGE, or ADD for each.\n\n[Finding 1: id - title - file:lines - dimension - confidence]\n[Finding 2: ...]\n...",
   summary: "Challenge round: [N] findings"
 })
 ```
 
-3. Collect responses from all 3 reviewers
+3. Messages from teammates are auto-delivered — do not poll. Collect responses from all reviewers.
 4. Process responses:
-   - **AGREE**: Increases confidence in finding (no change)
-   - **CHALLENGE**: Re-evaluate the finding. If 2+ reviewers challenge, downgrade from blocking to advisory
-   - **ADD**: Add the new finding to the consolidated list with proper categorization
+   - **AGREE**: Increases confidence (no change)
+   - **CHALLENGE**: If 2+ reviewers challenge a finding, downgrade from blocking to advisory. If finding has `validation_status: "verified"`, require 3+ CHALLENGEs to downgrade (the lead already verified it).
+   - **ADD**: Add the new finding to the list with proper categorization. ADD findings must pass the confidence threshold.
 
-### Step 9: Consolidate Findings
+### Step 9.5: Contradiction Resolution
 
-1. **Flatten**: Merge all findings arrays from all concern tasks into one list
-2. **Deduplicate**: Remove findings with the same file + overlapping line range + same category
-3. **Sort**: Order by severity — B (Security) first, then A (Correctness), C (Spec Compliance), D (Quality)
-4. **Apply challenge results**: Downgrade challenged findings, add new findings from ADD responses
+After challenge round (or after factual grounding if no challenge round), resolve contradictions:
+
+- If **spec-and-conventions** confirms code is intentional per documented specs, but **bug-detector** flags the same code as a bug -> **suppress** the bug finding (documented intent wins)
+- If **security-reviewer** flags something that another agent considers safe -> **escalate** the security finding (security wins ties)
+- If **test-analyzer** flags missing tests for code that **spec-and-conventions** identifies as generated/scaffolding code -> **suppress** the test finding
+
+Note all contradictions and their resolutions in the methodology section of the report.
+
+### Step 9.6: Final Consolidation
+
+1. **Flatten + Filter + Deduplicate + Sort**: Follow the consolidation rules in `../cw-review/references/fix-task-template.md`
+2. **Apply challenge results**: Downgrade challenged findings, add new findings from ADD responses
 
 Mark each concern task as completed (cleanup):
 
@@ -269,55 +290,29 @@ TaskUpdate({ taskId: "<concern-task-id>", status: "completed" })
 
 ### Step 10: Create FIX Tasks
 
-This step is the same for both inline and team review paths.
-
-For each **blocking** finding (Categories A, B, C), create a FIX task:
-
-```
-TaskCreate({
-  subject: "FIX-REVIEW: [concise description of the issue]",
-  description: "## Issue\n\n[What is wrong]\n\n## Location\n\n- File: [path]\n- Line(s): [line numbers]\n- Function/Component: [name]\n\n## Expected\n\n[What the code should do]\n\n## Actual\n\n[What the code currently does]\n\n## Suggested Fix\n\n[Concrete fix suggestion]\n\n## Category\n\n[A: Correctness | B: Security | C: Spec Compliance]",
-  activeForm: "Fixing review issue"
-})
-```
-
-Set metadata on the fix task (includes fields required by cw-execute):
-
-```
-TaskUpdate({
-  taskId: "<fix-task-id>",
-  metadata: {
-    task_type: "review-fix",
-    category: "A|B|C",
-    severity: "blocking",
-    role: "implementer",
-    file_path: "<path>",
-    line_numbers: "<range>",
-    scope: {
-      files_to_modify: ["<path>"],
-      patterns_to_follow: []
-    },
-    requirements: ["Fix: <description of what to fix>"],
-    proof_artifacts: [{ type: "test", command: "npm test", expected: "pass" }],
-    verification: { pre: "git diff", post: "npm test" },
-    commit: { template: "fix: <description>" }
-  }
-})
-```
+Follow the FIX task creation template in `../cw-review/references/fix-task-template.md`. For each blocking finding that meets the threshold criteria and has `validation_status != "failed"`, create a FIX-REVIEW task with the standard metadata format required by cw-execute.
 
 ### Step 11: Shutdown Team and Cleanup
 
+Send shutdown requests to each teammate. Teammates can approve (exit gracefully) or reject with an explanation if mid-work.
+
 ```
-SendMessage({ type: "shutdown_request", recipient: "security-reviewer", content: "Review complete. Shutting down." })
-SendMessage({ type: "shutdown_request", recipient: "correctness-reviewer", content: "Review complete. Shutting down." })
-SendMessage({ type: "shutdown_request", recipient: "spec-reviewer", content: "Review complete. Shutting down." })
+SendMessage({ to: "bug-detector", content: "shutdown_request: Review complete." })
+SendMessage({ to: "security-reviewer", content: "shutdown_request: Review complete." })
+SendMessage({ to: "cross-file-impact", content: "shutdown_request: Review complete." })
+SendMessage({ to: "test-analyzer", content: "shutdown_request: Review complete." })
+SendMessage({ to: "spec-and-conventions", content: "shutdown_request: Review complete." })
+[If type-design was spawned:]
+SendMessage({ to: "type-design", content: "shutdown_request: Review complete." })
 ```
 
-Wait for shutdown confirmations, then:
+Wait for shutdown confirmations (auto-delivered), then clean up:
 
 ```
 TeamDelete()
 ```
+
+**Important**: Always clean up via TeamDelete from the lead. Never let teammates run cleanup — their team context may not resolve correctly.
 
 ### Step 12: Generate Review Report
 
@@ -342,23 +337,37 @@ Produce a structured review report from the consolidated findings:
 ## Review Methodology
 
 **Approach**: Concern-partitioned team review
-**Reviewers**: 3 specialized agents
-| Reviewer | Concern | Primary Category | Status |
-|----------|---------|-----------------|--------|
-| security-reviewer | Security | B | Completed / Partial |
-| correctness-reviewer | Correctness | A | Completed / Partial |
-| spec-reviewer | Spec Compliance | C + D | Completed / Partial |
+**Team**: {task-list-id}-review-team
 
-**Challenge Round**: [Triggered / Not triggered (< 3 blocking findings)]
-[If triggered: N findings reviewed, M challenged, K additions]
+| Concern | Model | Status | Findings | Blocking |
+|---------|-------|--------|----------|----------|
+| bug-detector | opus | Completed / Partial / Failed | N | M |
+| security-reviewer | opus | Completed / Partial / Failed | N | M |
+| cross-file-impact | opus | Completed / Partial / Failed | N | M |
+| test-analyzer | sonnet | Completed / Partial / Failed | N | M |
+| spec-and-conventions | sonnet | Completed / Partial / Failed | N | M |
+| type-design | sonnet | Completed / Skipped (no new types) | N | M |
+
+**Factual Grounding**: [N] findings verified, [M] failed verification (downgraded), [K] skipped
+**Confidence Thresholds**: security >= 70, all others >= 80
+**Findings filtered**: [N] below threshold
+
+**Challenge Round**: [Triggered / Not triggered (< 3 verified blocking findings)]
+[If triggered: N findings reviewed, M challenged, K additions, L downgrades]
+
+**Contradictions Resolved**: [list or "none"]
 
 ## Blocking Issues
 
 ### [ISSUE-1] [Category A/B/C]: [Title]
 - **File**: `path/to/file.ts:42`
-- **Severity**: Blocking
+- **Dimension**: [bug/security/cross-file-impact/conventions/intent-alignment]
+- **Confidence**: [0-100]
+- **Validation**: [Verified / Skipped]
 - **Concern**: [Primary reviewer who found it]
+- **Severity**: Blocking
 - **Description**: [What is wrong]
+- **Evidence**: [Specific code or context]
 - **Fix**: [What to do]
 - **Task**: FIX-REVIEW-[id]
 [If challenged: **Challenge Status**: Upheld / Downgraded]
@@ -369,6 +378,8 @@ Produce a structured review report from the consolidated findings:
 
 ### [NOTE-1] [Category D]: [Title]
 - **File**: `path/to/file.ts:88`
+- **Dimension**: [test-coverage/type-design/comments]
+- **Confidence**: [0-100]
 - **Description**: [Observation]
 - **Suggestion**: [Optional improvement]
 
@@ -379,15 +390,6 @@ Produce a structured review report from the consolidated findings:
 | `src/auth/login.ts` | Modified | 1 blocking |
 | `src/utils/hash.ts` | New | Clean |
 | `tests/auth.test.ts` | Modified | (not reviewed - test code) |
-
-## Checklist
-
-- [ ] No hardcoded credentials or secrets
-- [ ] Error handling at system boundaries
-- [ ] Input validation on user-facing endpoints
-- [ ] Changes match spec requirements
-- [ ] Follows repository patterns and conventions
-- [ ] No obvious performance regressions
 ```
 
 Save the report to: `./docs/specs/[NN]-spec-[feature-name]/[NN]-review-[feature-name].md`
@@ -410,7 +412,10 @@ Blocking Issues: X
   C (Spec Compliance): W
 Advisory Notes: X
 
+Concerns: [list of concerns that ran]
+Factual Grounding: [N verified, M failed, K skipped]
 Challenge Round: [Triggered / Not triggered]
+Contradictions: [N resolved]
 
 FIX Tasks Created: [task IDs or "none"]
 
@@ -451,9 +456,9 @@ Based on user selection:
 | Cannot find spec | Review without spec compliance checks, note in report |
 | Git commands fail | Report error, suggest manual review |
 | Reviewer fails to complete | List concern as "partially reviewed" in report, proceed with available findings |
+| Critical concern fails (security/bugs) | Warn: "The {concern} agent failed. The {dimension} dimension was not fully covered." |
 | TeamCreate fails | Fall back to inline review with a note in the report |
 | TeamDelete fails | Log warning, report to user, proceed with results |
-| Too many files (>50) | Proceed — each reviewer handles all files but may take longer |
 
 ## What Comes Next
 

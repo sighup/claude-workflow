@@ -7,6 +7,7 @@
 - Race conditions or concurrency issues
 - Incorrect data transformations
 - Missing null/undefined checks where data could be absent
+- Cross-file impact causing breakage in consumers of changed code
 
 #### Category B: Security (Blocking)
 
@@ -22,6 +23,7 @@
 - Requirements from the spec that were missed or incorrectly implemented
 - Behavior that contradicts spec intent
 - Missing functionality described in demoable units
+- CLAUDE.md/REVIEW.md convention violations (must cite the specific rule)
 
 #### Category D: Quality (Advisory)
 
@@ -30,19 +32,24 @@
 - Missing edge case handling
 - Performance concerns (N+1 queries, unnecessary loops)
 - Inconsistency with repository patterns
+- Test coverage gaps
+- Type design issues
+- Stale or inaccurate code comments
 
 ## Severity Guidelines
 
-| Category | Creates FIX Task | Blocks Merge |
-|----------|-----------------|--------------|
-| A: Correctness bug | Yes | Yes |
-| B: Security vulnerability | Yes | Yes |
-| C: Missing spec requirement | Yes | Yes |
-| D: Quality/style note | No | No |
+Categories A, B, C are **blocking** (create FIX tasks). Category D is **advisory** (no FIX tasks). See `finding-schema.md` for full severity rules, confidence thresholds, and FIX task exclusion criteria.
 
-**Do NOT create FIX tasks for:**
-- Code style preferences already handled by linters
-- Minor naming disagreements
-- "I would have done it differently" observations
-- Test code (tests are the oracle)
-- Documentation gaps (unless spec requires it)
+## Dimension Mapping
+
+Each concern agent reports findings using a specific `dimension` value. These map to categories as follows. See `finding-schema.md` for the full enriched finding schema.
+
+| Concern | Dimension(s) | Category |
+|---------|-------------|----------|
+| bug-detector | `bug`, `error-handling` | A |
+| security-reviewer | `security` | B |
+| cross-file-impact | `cross-file-impact` | A |
+| spec-and-conventions | `conventions`, `intent-alignment` | C |
+| spec-and-conventions | `comments` | D |
+| test-analyzer | `test-coverage` | D |
+| type-design | `type-design` | D |
