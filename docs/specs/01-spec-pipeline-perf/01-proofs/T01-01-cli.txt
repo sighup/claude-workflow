@@ -1,0 +1,9 @@
+Type: cli
+Command: grep -n 'bare' bin/lib/cw-common.sh
+Expected: Line showing --bare in the CMD array of invoke_claude function
+Timestamp: 2026-03-26T00:00:00Z
+
+Output:
+109:    local CMD=(claude --bare --print --model "$MODEL" --dangerously-skip-permissions)
+
+Status: PASS

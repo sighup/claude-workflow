@@ -106,7 +106,7 @@ invoke_claude() {
     local MODEL="${2:-$CW_MODEL}"
     local ATTEMPT=0
 
-    local CMD=(claude --print --model "$MODEL" --dangerously-skip-permissions)
+    local CMD=(claude --bare --print --model "$MODEL" --dangerously-skip-permissions)
 
     # Add streaming JSON output for real-time visibility
     if [ "$CW_VERBOSE" = "true" ]; then
