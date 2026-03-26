@@ -36,9 +36,13 @@ For each file in `changed_files`:
 
 ### 3. REPORT
 
-Write findings to task metadata using the enriched schema from `finding-schema.md`. Each finding includes: `id`, `dimension`, `category`, `severity`, `confidence`, `file`, `line_start`, `line_end`, `title`, `description`, `evidence`, `suggestion`, `hidden_errors`, `claude_md_rule`, `cross_file_refs`, `is_primary`.
+> **MANDATORY: You MUST write findings to task metadata via TaskUpdate. The orchestrator reads findings ONLY from task metadata — NOT from your messages. If you skip this step, your entire review is lost.**
+
+Write findings to task metadata using the enriched schema from `finding-schema.md`. Each finding is a JSON object with: `id`, `dimension`, `category`, `severity`, `confidence`, `file`, `line_start`, `line_end`, `title`, `description`, `evidence`, `suggestion`, `hidden_errors`, `claude_md_rule`, `cross_file_refs`, `is_primary`.
 
 Set `is_primary: true` for findings within your assigned concern, `is_primary: false` for obvious secondary findings from other concerns.
+
+**You MUST call TaskUpdate with this exact structure before sending any completion message:**
 
 ```
 TaskUpdate({
@@ -46,12 +50,16 @@ TaskUpdate({
   status: "completed",
   metadata: {
     review_status: "completed",
-    findings: [ ... ],
-    files_reviewed: [...],
+    findings: [ { ...finding1 }, { ...finding2 } ],
+    files_reviewed: ["path/to/file1.ts", "path/to/file2.ts"],
     completed_at: "<ISO timestamp>"
   }
 })
 ```
+
+If you found no issues, still call TaskUpdate with `findings: []` — an empty array confirms you reviewed and found nothing, versus forgetting to report.
+
+**Only after TaskUpdate succeeds**, send the completion message to the lead (team mode) or exit (sub-agent mode).
 
 ## Tool Usage
 
@@ -63,9 +71,9 @@ When operating as a teammate on a team (spawned with `team_name`):
 
 The lead name for SendMessage is provided in your spawn prompt (the "Lead name for SendMessage:" field). Use it as the `to:` value in all SendMessage calls.
 
-1. **On review completion**: Message the lead with findings summary
+1. **On review completion**: First call TaskUpdate (REPORT phase), THEN message the lead with a summary. The lead reads structured findings from task metadata — this message is just a notification.
    ```
-   SendMessage({ to: "<lead-name>", content: "Review complete for {concern}. Found {N} findings ({M} blocking, {K} advisory). Results in task metadata.", summary: "{concern} review done, {N} findings" })
+   SendMessage({ to: "<lead-name>", content: "Review complete for {concern}. Found {N} findings ({M} blocking, {K} advisory). Results written to task metadata.", summary: "{concern} review done, {N} findings" })
    ```
 2. **If blocked**: Message the lead immediately — do not silently retry forever
    ```

@@ -182,7 +182,7 @@ Task({
   subagent_type: "claude-workflow:reviewer",
   model: "<per concern and tier>",
   description: "{concern} review",
-  prompt: "Review concern: {concern}. Task ID: {task-id}."
+  prompt: "Review concern: {concern}. Task ID: {task-id}. IMPORTANT: Write all findings to task metadata via TaskUpdate before completing. The orchestrator reads findings ONLY from task metadata."
 })
 ```
 
@@ -193,7 +193,8 @@ Repeat for each concern in a single message.
 After all reviewers complete:
 
 1. `TaskGet` each concern task to read findings from metadata
-2. If a concern task is not completed or has no `findings`, record it as **unreviewed**
+2. **Verify metadata integrity**: If a concern task has `status: "completed"` but no `findings` array in metadata, the agent failed to follow the REPORT protocol. Record that concern as **unreviewed** and warn: "The {concern} agent completed but did not write structured findings to task metadata."
+3. If a concern task is not completed, record it as **unreviewed**
 
 Mark each concern task as completed (cleanup):
 ```

@@ -216,7 +216,8 @@ Lead name for SendMessage: {lead_name}.
 Reviewing branch: {branch} against {base_branch}.
 Changed files: {count} non-test files.
 Spec: {spec_path or 'none'}.
-Focus: correctness bugs and error handling defects (Category A)."
+Focus: correctness bugs and error handling defects (Category A).
+IMPORTANT: You MUST write all findings to task metadata via TaskUpdate before sending any message to the lead. The lead reads findings ONLY from task metadata."
 })
 ```
 
@@ -244,8 +245,9 @@ Messages from teammates are auto-delivered. Track reviewer completion:
 After all reviewers complete (or timeout):
 
 1. **Collect findings**: `TaskGet` each concern task to read findings from metadata
-2. **Check for failures**: If a concern task is not completed or has no `findings` in metadata, record that concern as **partially reviewed**
-3. **Count blocking findings** across all concern tasks
+2. **Verify metadata integrity**: If a concern task has `status: "completed"` but no `findings` array in metadata, the agent failed to follow the REPORT protocol. Record that concern as **unreviewed** and warn: "The {concern} agent completed but did not write structured findings to task metadata."
+3. **Check for failures**: If a concern task is not completed, record that concern as **partially reviewed**
+4. **Count blocking findings** across all concern tasks
 
 ### Step 8: Factual Grounding
 
