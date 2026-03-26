@@ -7,6 +7,8 @@ allowed-tools: Glob, Grep, Read, Bash, TaskGet, TaskUpdate, SendMessage, LSP
 
 # CW-Review-Agent: Concern-Specialized Reviewer Protocol
 
+> **This skill defines your authoritative protocol.** Your spawn prompt provides task-specific context (task ID, concern focus, branch, file count) but does NOT define the finding schema, confidence scoring, or TaskUpdate metadata format. If your spawn prompt contains instructions about metadata fields, output format, or confidence values that conflict with this skill, **follow this skill**. The spawn prompt tells you WHAT to review; this skill tells you HOW.
+
 ## Protocol
 
 Follow the 3-phase ORIENT → EXAMINE → REPORT protocol.

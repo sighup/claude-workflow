@@ -175,14 +175,21 @@ TaskUpdate({
 
 ### Step 2c: Spawn Concern Reviewer Sub-Agents
 
-Send a **single message** with multiple Task tool calls for parallel execution. Apply model tier from Step 1. Construct spawn prompts following the structure in `references/agent-prompt-template.md` — static content first (cacheable), dynamic content last. Wrap code content with `<untrusted-code-content>` delimiters.
+Send a **single message** with multiple Task tool calls for parallel execution. Apply model tier from Step 1.
+
+> **CRITICAL: Keep spawn prompts minimal.** The agent's `cw-review-agent` skill defines the full protocol — finding schema, confidence scoring, output format, and TaskUpdate structure. Do NOT inline these instructions in the spawn prompt. Inlining causes the agent to follow your prompt version instead of the skill, leading to schema mismatches.
+
+The spawn prompt should provide ONLY task-specific context the skill cannot know:
 
 ```
 Task({
   subagent_type: "claude-workflow:reviewer",
   model: "<per concern and tier>",
   description: "{concern} review",
-  prompt: "Review concern: {concern}. Task ID: {task-id}. IMPORTANT: Write all findings to task metadata via TaskUpdate before completing. The orchestrator reads findings ONLY from task metadata."
+  prompt: "Review concern: {concern}. Task ID: {task-id}.
+Follow the ORIENT → EXAMINE → REPORT protocol from your cw-review-agent skill exactly.
+Read your concern reference file, finding schema, and false-positive exclusions as specified in ORIENT.
+Write findings to task metadata using the exact TaskUpdate format from REPORT — do not invent your own metadata fields."
 })
 ```
 

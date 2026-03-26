@@ -202,7 +202,11 @@ TaskUpdate({
 
 ### Step 5: Spawn Reviewers
 
-Send a **single message** with 5-6 Task tool calls for parallel launch. Teammates load the `agents/reviewer.md` definition automatically (including protocol, tool usage, and constraints). Construct spawn prompts following `../cw-review/references/agent-prompt-template.md` — static content first (cacheable), dynamic content last. Wrap code with `<untrusted-code-content>` delimiters.
+Send a **single message** with 5-6 Task tool calls for parallel launch. Teammates load the `agents/reviewer.md` definition automatically (including the `cw-review-agent` skill with the 3-phase ORIENT → EXAMINE → REPORT protocol).
+
+> **CRITICAL: Keep spawn prompts minimal.** The agent's `cw-review-agent` skill defines the full protocol — finding schema, confidence scoring, output format, and TaskUpdate structure. Do NOT inline these instructions in the spawn prompt. Inlining causes the agent to follow your prompt version instead of the skill, leading to schema mismatches (wrong field names, string confidence instead of integer, missing required fields).
+
+The spawn prompt should provide ONLY task-specific context the skill cannot know:
 
 ```
 Task({
@@ -217,7 +221,10 @@ Reviewing branch: {branch} against {base_branch}.
 Changed files: {count} non-test files.
 Spec: {spec_path or 'none'}.
 Focus: correctness bugs and error handling defects (Category A).
-IMPORTANT: You MUST write all findings to task metadata via TaskUpdate before sending any message to the lead. The lead reads findings ONLY from task metadata."
+
+Follow the ORIENT → EXAMINE → REPORT protocol from your cw-review-agent skill exactly.
+Read your concern reference file, finding schema, and false-positive exclusions as specified in ORIENT.
+Write findings to task metadata using the exact TaskUpdate format from REPORT — do not invent your own metadata fields."
 })
 ```
 
