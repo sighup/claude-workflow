@@ -24,6 +24,7 @@ Standard schema for all review findings. All concern agents write findings in th
   "is_primary": true,
   "validation_status": null,
   "blame_classification": null,
+  "original_severity": null,
   "challenge_status": null,
   "review_config_source": null
 }
@@ -50,8 +51,9 @@ Standard schema for all review findings. All concern agents write findings in th
 | `cross_file_refs` | Optional | Files outside the finding's `file` that are involved (callers, consumers, implementors) |
 | `is_primary` | Yes | `true` if the finding falls within the agent's assigned concern, `false` for secondary findings |
 | `validation_status` | Set by orchestrator | `null` (agent output), then set to `"verified"`, `"failed"`, or `"skipped"` by the orchestrator's factual grounding step |
-| `blame_classification` | Set by orchestrator | `null` (agent output), then set to `"new"` or `"surfaced"` by validation pipeline step 4a (blame classification) |
-| `challenge_status` | Set by orchestrator | `null` (agent output), then set to `"upheld"`, `"downgraded"`, or `"contested"` by validation pipeline step 4f (blind challenge) |
+| `blame_classification` | Set by orchestrator | `null` (agent output), then set to `"new"` or `"surfaced"` by validation pipeline step 4a. Surfaced findings are downgraded one severity level (critical→high, high→medium, medium→low). Original severity recorded in `original_severity`. |
+| `original_severity` | Set by orchestrator | `null` for new findings. For surfaced findings, records the pre-downgrade severity (e.g., `"critical"` before downgrade to `"high"`). |
+| `challenge_status` | Set by orchestrator | `null` (agent output), then set by blind challenge: `"upheld"` (≥75 confidence), `"contested"` (50-74), `"downgraded"` (25-49), or `"removed"` (<25, non-security only) |
 | `review_config_source` | Set by orchestrator | `null` or path to the REVIEW.md that governed this finding's thresholds |
 
 ## Dimension Values
