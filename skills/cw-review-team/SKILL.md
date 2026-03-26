@@ -283,9 +283,13 @@ For each finding, classify as "new" or "surfaced" using git blame:
 
 **Effect of "surfaced"**: Downgrade one severity level (critical→high, high→medium, medium→low). Record original severity in `original_severity` field. Group surfaced findings in a separate report section with blame info (author, date).
 
-### Step 9: Challenge Round
+### Step 9: Challenge Round (two phases)
 
-**Broadcast the challenge digest for ALL verified blocking findings.** Team broadcast is a single message — cost-efficient regardless of finding count.
+The challenge round has two phases: team broadcast (consensus signal) followed by blind sub-agent challenge (independent verification). Both are mandatory.
+
+#### Phase A: Team Broadcast
+
+Broadcast the challenge digest for ALL verified blocking findings. Team broadcast is a single message — cost-efficient regardless of finding count.
 
 1. Compile a findings digest — list each blocking finding with its `id`, `title`, `file`, `line_start`-`line_end`, `dimension`, `confidence`, `blame_classification`, and `evidence` summary
 2. Broadcast the digest to all reviewers:
@@ -299,35 +303,66 @@ SendMessage({
 ```
 
 3. Messages from teammates are auto-delivered — do not poll. Collect responses from all reviewers.
-4. Process responses:
-   - **AGREE**: Increases confidence (no change)
-   - **CHALLENGE**: If 2+ reviewers challenge a finding, downgrade from blocking to advisory. If finding has `validation_status: "verified"`, require 3+ CHALLENGEs to downgrade (the lead already verified it).
+4. Record team consensus for each finding:
+   - **AGREE**: Note agreement (used as supporting signal in Phase B)
+   - **CHALLENGE**: Record the challenge with reasoning
    - **ADD**: Add the new finding to the list with proper categorization. ADD findings must pass the confidence threshold.
 
-### Step 9.1: Contradiction Tiebreaker (hybrid)
+#### Phase B: Blind Sub-Agent Challenge
 
-When 2+ reviewers CHALLENGE the same finding with conflicting evidence (e.g., security-reviewer says vulnerable, bug-detector says safe), the team debate is inconclusive. Spawn a fresh blind sub-agent as independent tiebreaker:
+> **You cannot perform this challenge yourself.** You have already read all findings and team responses — you are not blind. Fresh agents that have never seen the original reasoning are the only valid challengers.
+
+After team broadcast completes, spawn **fresh blind sub-agents** for every finding that survived Phase A. These agents have never seen the team discussion — they provide genuinely independent verification.
+
+For each finding, read the raw code at `file:line_start-line_end` (fresh read), then spawn a blind agent. Send all challenge agents in **a single message** with multiple Agent tool calls for parallel execution:
 
 ```
-Task({
+Agent(
   description: "Blind challenge: {finding_id}",
   model: "sonnet",
-  prompt: "The following claim has been made about this code...
-[Use the exact blind challenge prompt template from ../cw-review/references/validation-pipeline.md — title + description + raw code only, NO evidence or original reasoning]"
-})
+  prompt: "The following claim has been made about this code. Analyze whether the code actually contains the described issue.
+
+Claim: {finding.title}
+Details: {finding.description}
+
+Here is the raw code:
+{paste the code you read fresh from file:line_start-line_end}
+
+Your job is to try to DISPROVE this claim. Look for reasons it might be wrong:
+- Defensive code that prevents the issue
+- Framework guarantees that make it impossible
+- Type system protections
+- Documented intentional behavior
+
+After your analysis, rate how likely the claim is CORRECT:
+- 0 = definitely wrong, you found clear evidence the claim is false
+- 25 = probably wrong, code likely handles this correctly
+- 50 = genuinely uncertain, could go either way
+- 75 = probably correct, no meaningful counter-evidence
+- 100 = definitely correct, issue clearly present
+
+You MUST return ONLY a JSON object:
+{\"confidence_claim_is_correct\": <integer 0-100>, \"justification\": \"<one paragraph>\"}"
+)
 ```
 
-Apply the blind verifier's `confidence_claim_is_correct` using the 4-tier scale from `../cw-review/references/validation-pipeline.md`:
-- **< 25** → Non-security: remove finding. Security: downgrade one severity level.
-- **25-49** → Downgrade one severity level.
-- **50-74** → "Contested", no severity change.
-- **≥ 75** → Finding survives, boost confidence +15 (capped at 100).
+Do NOT include the original agent's evidence, reasoning, or team broadcast responses — only the title, description, and raw code.
 
-The blind result breaks the tie when team members disagree.
+**Combine team broadcast + blind challenge results:**
+
+Apply the blind verifier's `confidence_claim_is_correct` using the 4-tier scale:
+- **< 25** → Non-security: remove finding entirely (set `challenge_status: "removed"`). Security: downgrade one severity level.
+- **25-49** → Downgrade one severity level (set `challenge_status: "downgraded"`).
+- **50-74** → No severity change, flag as "contested" (set `challenge_status: "contested"`).
+- **≥ 75** → Finding survives, boost confidence +15 capped at 100 (set `challenge_status: "upheld"`).
+
+If the team broadcast showed strong consensus (4+ AGREEs) but the blind agent scored < 50, note the discrepancy in methodology but **trust the blind result** — team members share context and correlated errors.
+
+**Self-verification checkpoint:** Before proceeding to Step 9.5, confirm: did you emit Agent tool_use blocks for Phase B? If you evaluated findings inline in your own reasoning instead of spawning agents, STOP and spawn them now.
 
 ### Step 9.5: Contradiction Resolution
 
-After challenge round (or after factual grounding if no challenge round), resolve contradictions:
+After both challenge phases, resolve contradictions:
 
 - If **spec-and-conventions** confirms code is intentional per documented specs, but **bug-detector** flags the same code as a bug -> **suppress** the bug finding (documented intent wins)
 - If **security-reviewer** flags something that another agent considers safe -> **escalate** the security finding (security wins ties)
@@ -337,8 +372,9 @@ Note all contradictions and their resolutions in the methodology section of the 
 
 ### Step 9.6: Final Consolidation
 
-1. **Flatten + Filter + Deduplicate + Sort**: Follow the consolidation rules in `../cw-review/references/fix-task-template.md`
-2. **Apply challenge results**: Downgrade challenged findings, add new findings from ADD responses
+1. **Apply blind challenge results**: Remove/downgrade/contest findings per the 4-tier scale from Phase B
+2. **Apply team additions**: Add new findings from ADD responses (must pass confidence threshold)
+3. **Flatten + Filter + Deduplicate + Sort**: Follow the consolidation rules in `../cw-review/references/fix-task-template.md`
 
 Mark each concern task as completed (cleanup):
 
@@ -400,8 +436,10 @@ Surfaced: X (pre-existing, severity downgraded)
 Concerns: [list of concerns that ran]
 Blame Classification: [N new, M surfaced]
 Factual Grounding: [N verified, M failed, K skipped]
-Challenge Round: [N challenged, M upheld, K downgraded, L contested]
-Contradictions: [N resolved, M tiebreaker sub-agents spawned]
+Challenge Round:
+  Team broadcast: [N findings, M agreed, K challenged, L additions]
+  Blind challenge: [N agents spawned, M upheld, K downgraded, L contested, J removed]
+Contradictions: [N resolved]
 
 FIX Tasks Created: [task IDs or "none"]
 
