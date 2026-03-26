@@ -1,0 +1,14 @@
+Type: cli
+Command: source bin/lib/cw-common.sh; echo "$CW_LOG_DIR" (with and without CLAUDE_PLUGIN_DATA)
+Expected: "/tmp/test-pd/logs" when set; "/tmp" when unset
+Timestamp: 2026-03-26T00:00:00Z
+
+=== Scenario 4: CW_LOG_DIR resolves to CLAUDE_PLUGIN_DATA/logs ===
+CW_LOG_DIR = /tmp/test-pd/logs
+PASS
+
+=== Scenario 5: CW_LOG_DIR falls back to /tmp when CLAUDE_PLUGIN_DATA is unset ===
+CW_LOG_DIR = /tmp
+PASS
+
+Status: PASS

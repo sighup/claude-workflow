@@ -1,0 +1,13 @@
+Type: cli
+Command: grep -n 'CW_LOG_DIR' bin/cw-pipeline && grep -n '"/tmp/cw-pipeline-' bin/cw-pipeline
+Expected: two CW_LOG_DIR references at lines 699 and 721; no hardcoded /tmp literals
+Timestamp: 2026-03-26T00:00:00Z
+
+=== Verify cw-pipeline uses CW_LOG_DIR (grep check) ===
+699:        local log_file="${CW_LOG_DIR}/cw-pipeline-${local_name}.log"
+721:        echo "  ${FEATURE_NAMES[$i]}: ${CW_LOG_DIR}/cw-pipeline-${FEATURE_NAMES[$i]}.log"
+
+=== No remaining /tmp/cw-pipeline- literals ===
+PASS: no hardcoded /tmp
+
+Status: PASS

@@ -696,7 +696,7 @@ else
 
         # Each feature runs in a subshell as a background process
         # Redirect output to a log file per feature
-        local log_file="/tmp/cw-pipeline-${local_name}.log"
+        local log_file="${CW_LOG_DIR}/cw-pipeline-${local_name}.log"
         (
             run_feature_pipeline "$local_name" "$local_mode" "$local_value"
         ) > "$log_file" 2>&1 &
@@ -718,7 +718,7 @@ else
     # Show log file locations
     log_info "Feature logs:"
     for i in "${!FEATURE_NAMES[@]}"; do
-        echo "  ${FEATURE_NAMES[$i]}: /tmp/cw-pipeline-${FEATURE_NAMES[$i]}.log"
+        echo "  ${FEATURE_NAMES[$i]}: ${CW_LOG_DIR}/cw-pipeline-${FEATURE_NAMES[$i]}.log"
     done
     echo ""
 

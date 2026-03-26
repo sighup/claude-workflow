@@ -1,0 +1,20 @@
+Type: cli
+Command: bash scripts/plugin-data-init.sh (three scenarios)
+Expected: exit 0 + logs/ created; idempotent; exit non-zero when CLAUDE_PLUGIN_DATA unset
+Timestamp: 2026-03-26T00:00:00Z
+
+=== Scenario 1: creates logs/ when CLAUDE_PLUGIN_DATA is set ===
+exit code: 0
+directory exists: PASS
+
+=== Scenario 2: idempotent (second run) ===
+exit code: 0
+directory still exists: PASS
+
+=== Scenario 3: fails when CLAUDE_PLUGIN_DATA is unset ===
+exit code: 1
+non-zero exit: PASS
+stderr: Error: CLAUDE_PLUGIN_DATA is required but is not set.
+stderr message: PASS
+
+Status: PASS

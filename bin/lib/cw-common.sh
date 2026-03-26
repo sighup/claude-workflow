@@ -62,6 +62,8 @@ CW_TIMEOUT="${CW_TIMEOUT:-0}"            # seconds, 0 = no timeout
 CW_SLEEP="${CW_SLEEP:-5}"                 # seconds between iterations
 CW_MAX_ITERATIONS="${CW_MAX_ITERATIONS:-50}"
 CW_MAX_FAILURES="${CW_MAX_FAILURES:-3}"
+CW_LOG_DIR="${CLAUDE_PLUGIN_DATA:+${CLAUDE_PLUGIN_DATA}/logs}"
+CW_LOG_DIR="${CW_LOG_DIR:-/tmp}"         # persist logs; falls back to /tmp
 
 # Task file locations
 CLAUDE_DIR="$HOME/.claude"
