@@ -81,6 +81,22 @@ Review team name: {value}-review-team
 TaskList()
 ```
 
+### Orphaned Team Recovery
+
+Before starting a new review, check if a review team from a previous session is still active:
+
+```bash
+ls ~/.claude/teams/{task-list-id}-review-team/config.json 2>/dev/null
+```
+
+If the team config exists, a previous review session was interrupted. Recover:
+
+1. Check if any `REVIEW-CONCERN:` tasks have findings in metadata — those results are still valid
+2. Send shutdown requests to any teammates that may still be alive (they will reject if already dead — that's fine)
+3. Run `TeamDelete()` to clean up the orphaned team
+4. Report to the user: "Cleaned up orphaned review team from previous session. [N] concern results recovered, [M] concerns incomplete."
+5. Ask whether to proceed with a fresh review or use the recovered findings
+
 Then determine the base branch for diff comparison:
 
 ```bash
@@ -459,6 +475,7 @@ Based on user selection:
 | Critical concern fails (security/bugs) | Warn: "The {concern} agent failed. The {dimension} dimension was not fully covered." |
 | TeamCreate fails | Fall back to inline review with a note in the report |
 | TeamDelete fails | Log warning, report to user, proceed with results |
+| Lead session interrupted | On next invocation, orphaned team recovery runs automatically (see Mandatory First Action). Completed findings are preserved in task metadata and lead inbox. |
 
 ## What Comes Next
 
