@@ -10,7 +10,6 @@ model: inherit
 tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task, LSP
 effort: medium
 maxTurns: 30
-disallowedTools: [Edit, Write]
 skills:
   - cw-research
 ---
