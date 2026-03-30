@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v2.10.0 (2026-03-30)
+
+### Documentation
+
+- Correct marketplace URL in README ([#23](https://github.com/sighup/claude-workflow/pull/23),
+  [`fefaed2`](https://github.com/sighup/claude-workflow/commit/fefaed2b6f6bf7c35ce9c686171c7c23e9fd458c))
+
+- Disambiguate env var scope in prerequisites
+  ([#24](https://github.com/sighup/claude-workflow/pull/24),
+  [`84e441a`](https://github.com/sighup/claude-workflow/commit/84e441a10142cc6690123739c1077391422278be))
+
+### Features
+
+- **agents,skills**: Add effort and maxTurns frontmatter
+  ([#25](https://github.com/sighup/claude-workflow/pull/25),
+  [`3335f4a`](https://github.com/sighup/claude-workflow/commit/3335f4a79066765f2f40d8b015bcd815a4248b4a))
+
+
 ## v2.9.0 (2026-03-05)
 
 ### Bug Fixes
