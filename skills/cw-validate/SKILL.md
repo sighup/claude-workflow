@@ -3,6 +3,7 @@ name: cw-validate
 description: "Validates implementation against spec using 6 gates and generates a coverage matrix. This skill should be used after implementation is complete to verify coverage, proof artifacts, and credential safety before review."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate, AskUserQuestion
+effort: medium
 ---
 
 # CW-Validate: Implementation Validator

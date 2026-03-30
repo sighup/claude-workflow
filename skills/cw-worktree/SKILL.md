@@ -3,6 +3,7 @@ name: cw-worktree
 description: "Manages git worktrees for parallel feature development. This skill should be used when starting multiple features at once, or to list, switch between, and merge existing worktrees."
 user-invocable: true
 allowed-tools: Bash, Glob, Grep, Read, AskUserQuestion
+effort: low
 ---
 
 # CW-Worktree: Multi-Feature Parallel Development

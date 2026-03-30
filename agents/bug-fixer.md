@@ -9,6 +9,7 @@ capabilities:
 color: red
 model: inherit
 tools: Bash, Read, Edit, Write, Glob, Grep, TaskGet, TaskUpdate, LSP
+effort: high
 skills:
   - cw-testing
 ---

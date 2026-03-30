@@ -3,6 +3,7 @@ name: cw-dispatch
 description: "Identifies independent tasks and spawns parallel agent workers. This skill should be used after cw-plan to execute multiple tasks concurrently."
 user-invocable: true
 allowed-tools: TaskList, TaskGet, TaskUpdate, Task, AskUserQuestion, Skill
+effort: medium
 ---
 
 # CW-Dispatch: Parallel Agent Dispatcher
