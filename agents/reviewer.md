@@ -9,6 +9,9 @@ capabilities:
 color: yellow
 model: inherit
 tools: Glob, Grep, Read, Bash, TaskGet, TaskUpdate, SendMessage, LSP
+effort: medium
+maxTurns: 30
+disallowedTools: [Edit, Write]
 ---
 
 # Agent: Reviewer

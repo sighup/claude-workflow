@@ -3,6 +3,7 @@ name: cw-execute
 description: "Executes a single task from the task board using the 11-phase implementation protocol. This skill should be used after cw-plan or cw-dispatch assigns a task, or when manually implementing a specific task by ID."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, LSP
+effort: high
 ---
 
 # CW-Execute: Single Task Execution

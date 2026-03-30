@@ -8,6 +8,9 @@ capabilities:
 color: yellow
 model: inherit
 tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate
+effort: medium
+maxTurns: 20
+disallowedTools: [Edit, Write]
 skills:
   - cw-validate
 ---

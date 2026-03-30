@@ -9,6 +9,7 @@ capabilities:
 color: green
 model: inherit
 tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskGet, TaskUpdate, TaskList, AskUserQuestion, SendMessage, LSP
+effort: high
 skills:
   - cw-execute
 ---

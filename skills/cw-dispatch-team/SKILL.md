@@ -3,6 +3,7 @@ name: cw-dispatch-team
 description: "Persistent agent team dispatcher with lead coordination. This skill should be used after cw-plan to execute tasks via a managed team (requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and CLAUDE_CODE_TASK_LIST_ID)."
 user-invocable: true
 allowed-tools: TaskList, TaskGet, TaskUpdate, Task, AskUserQuestion, Skill, Teammate, SendMessage
+effort: medium
 ---
 
 # CW-Dispatch-Team: Team-Based Parallel Agent Dispatcher

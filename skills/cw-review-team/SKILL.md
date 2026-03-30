@@ -3,6 +3,7 @@ name: cw-review-team
 description: "Team-based concern-partitioned code review. Each reviewer sees ALL files through a specialized lens (security, correctness, spec compliance). This skill should be used after cw-validate for thorough cross-file review (requires CLAUDE_CODE_TASK_LIST_ID)."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, Task, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, TeamCreate, TeamDelete, SendMessage
+effort: medium
 ---
 
 # CW-Review-Team: Concern-Partitioned Code Review

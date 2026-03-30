@@ -8,6 +8,8 @@ capabilities:
 color: cyan
 model: inherit
 tools: Bash, Read, Write, Glob, Grep, TaskGet, TaskUpdate, AskUserQuestion
+effort: high
+maxTurns: 25
 skills:
   - cw-testing
 ---
