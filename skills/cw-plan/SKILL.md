@@ -3,6 +3,7 @@ name: cw-plan
 description: "Transforms a specification into a task graph with dependencies. This skill should be used after cw-spec to break a spec into executable tasks with proper sequencing before dispatching with cw-dispatch."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, Skill
+effort: high
 ---
 
 # CW-Plan: Specification to Task Graph

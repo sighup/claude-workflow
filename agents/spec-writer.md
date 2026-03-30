@@ -8,6 +8,8 @@ capabilities:
 color: blue
 model: inherit
 tools: Glob, Grep, Read, Write, AskUserQuestion, WebFetch, WebSearch, LSP
+effort: high
+maxTurns: 30
 skills:
   - cw-spec
 ---

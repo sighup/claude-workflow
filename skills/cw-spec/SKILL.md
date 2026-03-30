@@ -3,6 +3,7 @@ name: cw-spec
 description: "Generates a structured specification with demoable units, functional requirements, and proof artifact definitions. This skill should be used when starting a new feature to define what will be built before any code is written."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, WebFetch, WebSearch, AskUserQuestion, Skill, LSP
+effort: high
 ---
 
 # CW-Spec: Specification Generator

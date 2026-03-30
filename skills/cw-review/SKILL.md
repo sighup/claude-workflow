@@ -3,6 +3,7 @@ name: cw-review
 description: "Reviews implementation code for bugs, security issues, and quality problems. Creates FIX tasks for issues found. This skill should be used after cw-validate to catch issues before merge."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, Task, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, LSP
+effort: medium
 ---
 
 # CW-Review: Code Review Orchestrator
