@@ -3,6 +3,7 @@
     "PreToolUse": [
       {
         "matcher": "Skill",
+        "if": "Skill(cw-dispatch-team) || Skill(cw-review-team)",
         "hooks": [
           {
             "type": "command",
