@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.11.0 (2026-03-31)
+
+### Features
+
+- **hooks**: Modernize hook system with new Claude Code features
+  ([#26](https://github.com/sighup/claude-workflow/pull/26),
+  [`1ef9571`](https://github.com/sighup/claude-workflow/commit/1ef95710eb88715dc2bb660372f2002501c92e31))
+
+
 ## v2.10.0 (2026-03-30)
 
 ### Documentation
