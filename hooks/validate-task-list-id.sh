@@ -1,40 +1,17 @@
 #!/usr/bin/env bash
 # PreToolUse hook: Block team-based skills (cw-dispatch-team, cw-review-team)
-# when CLAUDE_CODE_TASK_LIST_ID is not set in the environment. Other skills
-# (cw-dispatch, cw-review, cw-execute, cw-validate, cw-plan) are allowed
-# through without the env var.
+# when CLAUDE_CODE_TASK_LIST_ID is not set in the environment. Filtering to
+# only fire for team-based skills is handled declaratively via the "if" field
+# in hooks/hooks.json.
 
 set -euo pipefail
 
 # Read the tool input from stdin
 INPUT=$(cat)
 
-# Extract the skill name from the tool input JSON.
-# The Skill tool receives { "skill": "skill-name", ... }
-SKILL_NAME=$(echo "$INPUT" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    # tool_input is the nested input passed to the Skill tool
-    tool_input = data.get('tool_input', data)
-    print(tool_input.get('skill', ''))
-except Exception:
-    print('')
-" 2>/dev/null || echo "")
-
-# Strip any prefix (e.g., "claude-workflow:cw-dispatch" -> "cw-dispatch")
-SKILL_NAME="${SKILL_NAME##*:}"
-
-# Only gate team-based skills (persistent teams require CLAUDE_CODE_TASK_LIST_ID).
-# All other skills (cw-dispatch, cw-review, cw-execute, cw-validate, cw-plan) are allowed.
-case "$SKILL_NAME" in
-  cw-dispatch-team|cw-review-team)
-    ;;
-  *)
-    # Not a gated skill — allow
-    exit 0
-    ;;
-esac
+# Extract the skill name from the tool input JSON using jq.
+# Strip any namespace prefix (e.g., "claude-workflow:cw-dispatch-team" -> "cw-dispatch-team")
+SKILL_NAME=$(echo "$INPUT" | jq -r '(.tool_input.skill // "") | split(":") | last' 2>/dev/null || echo "")
 
 # Check if CLAUDE_CODE_TASK_LIST_ID is set
 if [ -z "${CLAUDE_CODE_TASK_LIST_ID:-}" ]; then
