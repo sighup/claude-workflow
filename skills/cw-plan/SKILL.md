@@ -201,7 +201,7 @@ Then set dependencies using `TaskUpdate` with `addBlockedBy`:
 TaskUpdate({ taskId: "t02-id", addBlockedBy: ["t01-id"] })
 ```
 
-After creating all parent tasks, **STOP** and output a `PLANNING SUMMARY`. Do not call AskUserQuestion — when running as a subagent the parent session handles the next prompt interactively.
+After creating all parent tasks, **STOP** and output a `PLANNING SUMMARY`.
 
 Evaluate two signals to form a recommendation:
 - **Complexity**: are any tasks marked `complex`?
@@ -227,6 +227,24 @@ Complex tasks: T01, T03 | none
 Recommendation: Generate sub-tasks | Execute as-is
 Reason: [one sentence — e.g. "T01 and T03 are complex and can run in parallel — sub-tasks enable finer-grained parallelism" or "All tasks are standard in a linear chain — cw-execute handles execution directly"]
 ```
+
+Then ask the user how to proceed. Mark the recommended option based on the recommendation logic above — append "(Recommended)" to its label:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "The parent task graph is ready. How would you like to proceed?",
+    header: "Next Step",
+    options: [
+      { label: "Generate sub-tasks (Recommended)", description: "Break complex tasks into implementation steps" },
+      { label: "Execute as-is", description: "Use parent tasks directly without sub-task decomposition" },
+      { label: "Adjust task graph", description: "Modify dependencies, scope, or task structure before proceeding" }
+    ]
+  }]
+})
+```
+
+In this example, "Generate sub-tasks" is recommended. If the recommendation logic chose "Execute as-is", move "(Recommended)" to that option instead.
 
 ### Phase 3: Sub-Task Creation (After User Approval)
 
