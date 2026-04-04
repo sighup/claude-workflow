@@ -5,9 +5,9 @@ capabilities:
   - Maintain structured topic files with staleness tracking
   - Route findings to appropriate topic files by content type
 color: blue
-model: inherit
+model: sonnet
 tools: Read, Write, Glob, Grep, Bash
-effort: low
+effort: medium
 maxTurns: 10
 memory: project
 skills:

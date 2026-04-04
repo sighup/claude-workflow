@@ -2,7 +2,7 @@
 name: cw-memory
 description: "Curates shared working memory for the claude-workflow system. Receives findings from workflow phases (research, implementation, review) and persists them as structured, deduplicated memory files that downstream agents consume to skip redundant discovery."
 allowed-tools: Read, Write, Glob, Grep, Bash
-effort: low
+effort: medium
 ---
 
 # CW-Memory: Working Memory Curator
