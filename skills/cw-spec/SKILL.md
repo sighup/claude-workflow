@@ -62,9 +62,19 @@ If the invocation args contain a `**Research:**` field with a directory path (e.
 
 ### Step 2: Context Assessment
 
-If working in a pre-existing project, review:
+#### Memory Check (before discovery)
 
-- Current plannerure patterns and conventions
+Before exploring the codebase from scratch, check for cached knowledge from prior research:
+
+1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+2. If available, read relevant topic files (project-discovery, code-patterns, repository-standards) to accelerate assessment — skip re-reading README/CONTRIBUTING/CLAUDE.md and skip LSP probing
+3. If no memory exists, proceed with full discovery as normal
+
+#### Context Gathering
+
+If working in a pre-existing project, review (skip items already loaded from memory):
+
+- Current architecture patterns and conventions
 - Relevant existing components or features
 - Integration constraints or dependencies
 - Repository standards from: README.md, CONTRIBUTING.md, CLAUDE.md, package.json, config files
@@ -73,7 +83,7 @@ If working in a pre-existing project, review:
 
 #### LSP Availability Check
 
-At the start of context assessment, probe whether an LSP server is available. Pick a prominent source file from the project (e.g., the main entry point or a key module) and attempt a single `documentSymbol` operation:
+If LSP availability was not resolved from memory above, probe whether an LSP server is available. Pick a prominent source file from the project (e.g., the main entry point or a key module) and attempt a single `documentSymbol` operation:
 
 ```
 LSP({

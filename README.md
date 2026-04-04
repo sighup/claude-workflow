@@ -97,15 +97,17 @@ npx playwright install
 
 ## Agent Memory
 
-Agents use `memory: project` to persist codebase knowledge across sessions and share discoveries between agents. Memory is stored in `.claude/agent-memory/` and is project-scoped (shareable via VCS).
+Agents use a shared working memory at `.claude/agent-memory/` to persist codebase knowledge across sessions. Memory is project-scoped (shareable via VCS) and managed by a dedicated **memory-curator** agent.
 
-| Agent | Role | What it remembers |
-|-------|------|-------------------|
-| Researcher | Producer | Writes shared discoveries (tech stack, architecture patterns, repository standards, testing infrastructure) to `.claude/agent-memory/shared/` |
-| Implementer | Consumer + Producer | Reads shared memory for patterns; caches verification commands, code patterns, and credential-detection regexes in `.claude/agent-memory/implementer/` |
-| Reviewer | Consumer + Producer | Reads shared memory for standards; accumulates severity classifications and common issue patterns in `.claude/agent-memory/reviewer/` |
+| Agent | Role | Description |
+|-------|------|-------------|
+| Memory Curator | Owner | Receives findings from any workflow phase and merges them into structured topic files. Spawned in the background — callers don't wait. |
+| Researcher | Producer | Spawns memory-curator after research to persist tech stack, architecture patterns, repository standards |
+| Implementer | Consumer + Producer | Reads memory before discovery; spawns memory-curator after Phase 3 with verification commands, code patterns, LSP availability |
+| Reviewer | Consumer + Producer | Reads memory before review; spawns memory-curator after review with severity classifications and issue patterns |
+| Spec Writer | Consumer | Reads memory to accelerate context assessment |
 
-Memory is treated as hints — agents verify critical facts before acting on cached values. LSP availability is always probed directly (never cached) since it is environment-specific. Running `/cw-research` refreshes all shared memory.
+The workflow functions without memory — agents fall back to full discovery when no memory exists. Memory is treated as hints; agents verify critical facts before acting on cached values.
 
 ## Task Metadata
 

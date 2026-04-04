@@ -53,9 +53,20 @@ git log --oneline -5
 
 ### Step 1: Gather Context
 
+#### Memory Check (before discovery)
+
+Before gathering context from scratch, check for cached knowledge:
+
+1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+2. If available, read relevant topic files (repository-standards, code-patterns, review-intelligence) and use as starting context
+3. If memory has LSP availability, use the cached value and skip the LSP probe below
+4. If no memory exists, discover everything from scratch as normal
+
+#### Context Gathering
+
 1. **Identify the spec**: Auto-discover in `docs/specs/` or accept user-provided path
 2. **Get the diff**: `git diff main...HEAD --stat` for overview
-3. **Load repository standards**: Check shared memory first (see memory-read below); fall back to README.md, CONTRIBUTING.md, CLAUDE.md, lint configs, tsconfig, etc. only when shared memory is absent or stale
+3. **Load repository standards**: If not loaded from memory, check README.md, CONTRIBUTING.md, CLAUDE.md, lint configs, tsconfig, etc.
 4. **Read task board**: Understand what was implemented and the intended scope
 
 ```bash
@@ -68,20 +79,9 @@ git log main...HEAD --oneline
 
 **Early exit**: If `git diff main...HEAD --stat` shows no changes, report "No changes to review" and exit.
 
-#### Memory Read
-
-Before loading standards from source files, check for cached memory:
-
-1. Read `.claude/agent-memory/shared/MEMORY.md` if it exists — use the cached `Repository Standards` section to skip re-reading README/CONTRIBUTING/CLAUDE.md
-2. Read `.claude/agent-memory/reviewer/MEMORY.md` if it exists — load prior severity classifications and common issue patterns
-3. Read `.claude/agent-memory/reviewer/severity-map.md` if it exists — apply accumulated severity heuristics when classifying new findings
-4. Read `.claude/agent-memory/reviewer/common-issues.md` if it exists — reference known patterns when evaluating files of the same type
-
-If no memory files exist, proceed with standard standards discovery (README/CONTRIBUTING/CLAUDE.md). Treat all memory as hints — verify repository standards that appear stale or inconsistent with current project files.
-
 #### LSP Availability Check
 
-After loading context and before choosing the review path, probe whether an LSP server is available. Pick one of the changed non-test files and attempt a single `documentSymbol` operation:
+If LSP availability was not resolved from memory above, probe whether an LSP server is available. Pick one of the changed non-test files and attempt a single `documentSymbol` operation:
 
 ```
 LSP({
@@ -287,89 +287,20 @@ Save the report to: `./docs/specs/[NN]-spec-[feature-name]/[NN]-review-[feature-
 
 If no spec directory is found, output the report directly.
 
-### Step 4b: Write Review Intelligence Memory
+### Step 4b: Update Review Memory
 
-After saving the review report, write accumulated intelligence to `.claude/agent-memory/reviewer/` so future reviews benefit from patterns discovered in this run.
+After generating the review report, spawn the memory curator in the background to persist review intelligence:
 
-**Create directories if absent:**
-
-```bash
-mkdir -p .claude/agent-memory/reviewer
+```
+Agent({
+  subagent_type: "claude-workflow:memory-curator",
+  description: "Persist review intelligence findings",
+  run_in_background: true,
+  prompt: "source: review\nfindings:\n- Repository standards: {any standards discovered during this review that aren't already cached}\n- Severity classifications: {what was blocking vs advisory, with generalized examples}\n- Common issue patterns: {patterns grouped by file type, e.g. 'route handlers: always validate input at boundary'}\ncontext:\n  cached_at: {ISO timestamp}"
+})
 ```
 
-**Write or update `.claude/agent-memory/reviewer/MEMORY.md`** — index file with a summary of accumulated intelligence. Append new entries; never overwrite prior content:
-
-```markdown
----
-cached_at: {ISO timestamp}
----
-
-# Reviewer Memory
-
-## Repository Standards
-
-- cached_at: {ISO timestamp}
-- summary: {1-2 sentences on coding style, commit format, PR conventions discovered in this review}
-- details: .claude/agent-memory/shared/repository-standards.md (if shared memory exists)
-
-## Severity Map
-
-- cached_at: {ISO timestamp}
-- details: severity-map.md
-
-## Common Issues
-
-- cached_at: {ISO timestamp}
-- details: common-issues.md
-```
-
-**Write or update `.claude/agent-memory/reviewer/severity-map.md`** — append new severity classification examples from this review. Each example includes the category (A/B/C/D), a description of the pattern, and whether it is blocking or advisory:
-
-```markdown
----
-cached_at: {ISO timestamp}
----
-
-# Severity Map
-
-## Blocking Patterns
-
-- category: {A|B|C}
-  pattern: {description of the issue type}
-  example: {brief, generalized description — no specific task or file details}
-  cached_at: {ISO timestamp}
-
-## Advisory Patterns
-
-- category: D
-  pattern: {description of the issue type}
-  example: {brief, generalized description}
-  cached_at: {ISO timestamp}
-```
-
-**Write or update `.claude/agent-memory/reviewer/common-issues.md`** — append new issue patterns grouped by file type. Only add patterns that appeared in this review and are not already present:
-
-```markdown
----
-cached_at: {ISO timestamp}
----
-
-# Common Issues by File Type
-
-## .{ext} files
-
-- pattern: {generalized description of the issue}
-  severity: blocking|advisory
-  category: {A|B|C|D}
-  cached_at: {ISO timestamp}
-```
-
-**Memory-write rules:**
-
-- Write only generalized patterns and heuristics — never individual findings, specific file paths, task IDs, or author details
-- Append new entries to existing files; never delete or overwrite prior intelligence
-- Include `cached_at` timestamps on every new entry
-- Never write credentials, API keys, tokens, or verbatim code snippets to memory files
+Do NOT include individual findings — only reusable patterns and heuristics that improve future reviews.
 
 ### Step 5: Output Summary
 

@@ -33,9 +33,8 @@ You are an **autonomous coding agent**. Your entire context comes from:
 2. The task's metadata (scope, requirements, proof artifacts)
 3. Git history
 4. The codebase itself
-5. Project memory at `.claude/agent-memory/` (shared discoveries and implementer-specific cached facts)
 
-Memory is read at the start of Phase 3 and written at the end of Phase 3. Treat it as hints — verify before relying on cached commands.
+You have no memory of previous executions.
 
 ## Critical Constraints
 
@@ -94,33 +93,27 @@ Confirm codebase health before touching anything.
 
 Load patterns and understand conventions.
 
-#### Memory Read (Start of Phase 3)
+#### Memory Check (before discovery)
 
-Before reading pattern files, check for shared and implementer memory:
+Before reading pattern files and probing LSP, check for cached knowledge:
 
-1. Attempt to read `.claude/agent-memory/shared/MEMORY.md`. If it exists:
-   - Extract architecture patterns and code conventions — use as prior context when reading `patterns_to_follow` files
-   - Note the `cached_at` timestamp to assess staleness
+1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+2. If available, read relevant topic files (project-discovery, code-patterns, verification) and use as starting context
+3. If memory has LSP availability, use the cached value and skip the LSP probe below
+4. If no memory exists, proceed with full discovery as normal
 
-2. Attempt to read `.claude/agent-memory/implementer/MEMORY.md`. If it exists:
-   - Load `verification.md` for cached pre/post verification commands — use in Phase 2 and Phase 5 without re-discovering
-   - Load `patterns.md` for cached code patterns — use as prior context alongside `patterns_to_follow` files
-   - Load `sanitization.md` for cached credential-detection regex patterns — use during Phase 7 (SANITIZE)
-
-3. If neither memory file exists, proceed with full discovery (current behavior).
-
-4. Treat all loaded memory as hints — if a cached verification command fails, re-discover from project config rather than failing the task; update memory with the corrected command afterward.
+Treat cached facts as hints — verify critical ones (e.g., if a cached verification command fails, re-discover from project config).
 
 #### Pattern Loading
 
 1. Read each file in `metadata.scope.patterns_to_follow`
-2. Extract: structure, naming, error handling, test patterns (merge with any cached patterns from memory)
+2. Extract: structure, naming, error handling, test patterns
 3. Read files in `metadata.scope.files_to_modify`
 4. Verify parent directories exist for `metadata.scope.files_to_create`
 
 #### LSP Availability Check
 
-Probe whether an LSP server is available. LSP availability is environment-specific and must always be probed directly — never cached in memory. Pick a file from `metadata.scope.files_to_modify` or `metadata.scope.patterns_to_follow` and attempt a single `documentSymbol` operation:
+If LSP availability was not resolved from memory above, probe whether an LSP server is available. Pick a file from `metadata.scope.files_to_modify` or `metadata.scope.patterns_to_follow` and attempt a single `documentSymbol` operation:
 
 ```
 LSP({
@@ -139,83 +132,18 @@ When `lsp_available = true`, use LSP alongside Glob/Grep/Read in this phase and 
 - `goToDefinition` to trace types and interfaces referenced in files being modified
 - `findReferences` to understand how modified functions/exports are consumed elsewhere
 
-#### Memory Write (End of Phase 3)
+#### Memory Update (after discovery)
 
-After completing pattern loading and LSP check, write discovered project facts to implementer memory:
+After loading patterns and completing this phase, spawn the memory curator in the background to persist discovered facts for subsequent workers:
 
-1. Create directories if they do not exist:
-   ```bash
-   mkdir -p .claude/agent-memory/implementer
-   ```
-
-2. Write `.claude/agent-memory/implementer/MEMORY.md` — index of cached facts:
-   ```markdown
-   ---
-   cached_at: {ISO timestamp}
-   ---
-
-   # Implementer Memory
-
-   ## Cached Facts
-
-   - [verification.md](verification.md) — pre/post verification commands
-   - [patterns.md](patterns.md) — code patterns from patterns_to_follow
-   - [sanitization.md](sanitization.md) — credential detection regex patterns
-   ```
-
-3. Write `.claude/agent-memory/implementer/verification.md` — pre/post verification commands from `metadata.verification.pre` and `metadata.verification.post`, plus any commands discovered from project config files (package.json scripts, Makefile targets, etc.):
-   ```markdown
-   ---
-   cached_at: {ISO timestamp}
-   ---
-
-   # Verification Commands
-
-   ## Pre-Commit
-   {list of commands from metadata.verification.pre}
-
-   ## Post-Commit
-   {list of commands from metadata.verification.post}
-   ```
-
-4. Write `.claude/agent-memory/implementer/patterns.md` — code patterns extracted during Phase 3:
-   ```markdown
-   ---
-   cached_at: {ISO timestamp}
-   ---
-
-   # Code Patterns
-
-   ## Structure
-   {naming conventions, file organization}
-
-   ## Error Handling
-   {error handling patterns observed}
-
-   ## Testing
-   {test file location, test framework, test conventions}
-   ```
-
-5. Write `.claude/agent-memory/implementer/sanitization.md` — regex patterns for credential detection (never actual credential values):
-   ```markdown
-   ---
-   cached_at: {ISO timestamp}
-   ---
-
-   # Credential Detection Patterns
-
-   ## Regex Patterns
-   - API keys: `sk-[A-Za-z0-9]+`, `pk_[A-Za-z0-9]+`, `api[_-]?key\s*[:=]`
-   - Tokens: `Bearer\s+[A-Za-z0-9._-]+`, `access[_-]?token\s*[:=]`
-   - Passwords: `password\s*[:=]`, `secret\s*[:=]`, `credential`
-   - Connection strings: `://[^:]+:[^@]+@`
-   - Private keys: `-----BEGIN (RSA |EC )?PRIVATE KEY-----`
-
-   ## Project-Specific Patterns
-   {any additional patterns observed in this project's codebase — patterns only, no values}
-   ```
-
-6. Security check before writing: never write API keys, tokens, secrets, credentials, or file contents verbatim — patterns and summaries only.
+```
+Agent({
+  subagent_type: "claude-workflow:memory-curator",
+  description: "Persist implementation discovery findings",
+  run_in_background: true,
+  prompt: "source: implementation\nfindings:\n- Verification commands: {pre/post commands and expected outputs}\n- Code patterns: {naming, error handling, test structure from patterns_to_follow}\n- LSP availability: {true/false}\n- Credential patterns: {regex patterns for sanitization, never actual values}\ncontext:\n  cached_at: {ISO timestamp}"
+})
+```
 
 ### Phase 4: IMPLEMENT
 

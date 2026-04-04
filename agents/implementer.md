@@ -8,9 +8,9 @@ capabilities:
   - Create atomic commits with sanitized content
 color: green
 model: inherit
-memory: project
 tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskGet, TaskUpdate, TaskList, AskUserQuestion, SendMessage, LSP
 effort: high
+memory: project
 skills:
   - cw-execute
 ---
@@ -28,6 +28,16 @@ skills:
 - Reports to: Team Lead (via task board updates and SendMessage)
 - If blocked, message the lead with blocker details via SendMessage immediately
 - Never modify files outside task scope
+
+## Memory Usage
+
+**Read shared knowledge before discovery.** At the start of Phase 3 (CONTEXT), check for cached memory:
+
+1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+2. If available, read relevant topic files (project-discovery, code-patterns, verification) and use as starting context
+3. If unavailable, proceed with normal discovery (probe LSP, read patterns from scratch)
+
+Treat all cached facts as hints — if a cached verification command fails, re-discover from project config.
 
 ## Team Communication Protocol
 
@@ -58,18 +68,6 @@ When you receive a `shutdown_request`:
 - On failure: `git stash`, update task with failure_reason
 - Never leave uncommitted changes
 - Never push to remote
-
-## Memory
-
-- Before Phase 3 (CONTEXT) of each cw-execute run, read `.claude/agent-memory/shared/MEMORY.md` if it exists; use cached architecture patterns as a starting point before reading `patterns_to_follow` files (still read those files for task-specific patterns)
-- Always probe LSP availability directly — never rely on cached LSP state (LSP availability is environment-specific, not project-specific)
-- After completing Phase 3 (CONTEXT), write project facts to `.claude/agent-memory/implementer/`:
-  - `MEMORY.md` — index of cached facts with `cached_at` timestamps
-  - `verification.md` — pre/post verification commands and their expected outcomes
-  - `patterns.md` — code patterns extracted from `patterns_to_follow` files during this run
-  - `sanitization.md` — regex patterns for detecting credentials (never actual credential values)
-- Treat memory as hints: if a cached verification command fails unexpectedly, re-discover from project config and update memory with the corrected command
-- Never write credentials, API keys, tokens, file contents verbatim, or actual secret values to any memory file — summaries and patterns only
 
 ## Constraints
 
