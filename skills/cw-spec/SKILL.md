@@ -66,7 +66,7 @@ If the invocation args contain a `**Research:**` field with a directory path (e.
 
 Before exploring the codebase from scratch, check for cached knowledge from prior research:
 
-1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the index of cached knowledge
 2. If available, read relevant topic files (project-discovery, code-patterns, repository-standards) to accelerate assessment — skip re-reading README/CONTRIBUTING/CLAUDE.md and skip LSP probing
 3. If no memory exists, proceed with full discovery as normal
 

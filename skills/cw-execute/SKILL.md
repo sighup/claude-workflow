@@ -97,7 +97,7 @@ Load patterns and understand conventions.
 
 Before reading pattern files and probing LSP, check for cached knowledge:
 
-1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the index of cached knowledge
 2. If available, read relevant topic files (project-discovery, code-patterns, verification) and use as starting context
 3. If memory has LSP availability, use the cached value and skip the LSP probe below
 4. If no memory exists, proceed with full discovery as normal
@@ -134,14 +134,14 @@ When `lsp_available = true`, use LSP alongside Glob/Grep/Read in this phase and 
 
 #### Memory Update (after discovery)
 
-After loading patterns and completing this phase, spawn the memory curator in the background to persist discovered facts for subsequent workers:
+After loading patterns and completing this phase, spawn the memory curator in the background to persist discovered facts for subsequent workers. Include verification commands, code patterns, LSP availability, and credential detection patterns (patterns only, never actual values).
 
 ```
 Agent({
   subagent_type: "claude-workflow:memory-curator",
   description: "Persist implementation discovery findings",
   run_in_background: true,
-  prompt: "source: implementation\nfindings:\n- Verification commands: {pre/post commands and expected outputs}\n- Code patterns: {naming, error handling, test structure from patterns_to_follow}\n- LSP availability: {true/false}\n- Credential patterns: {regex patterns for sanitization, never actual values}\ncontext:\n  cached_at: {ISO timestamp}"
+  prompt: "{discovery findings with source: implementation and timestamp}"
 })
 ```
 

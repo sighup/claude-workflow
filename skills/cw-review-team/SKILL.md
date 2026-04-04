@@ -95,7 +95,7 @@ git log --oneline -5
 
 Before gathering context from scratch, check for cached knowledge:
 
-1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the index of cached knowledge
 2. If available, read relevant topic files (repository-standards, code-patterns, review-intelligence) and use as starting context
 3. If no memory exists, discover everything from scratch as normal
 
@@ -407,18 +407,16 @@ If no spec directory is found, output the report directly.
 
 ### Step 12b: Update Review Memory
 
-After saving the review report, spawn the memory curator in the background to persist review intelligence:
+After saving the review report, spawn the memory curator in the background to persist review intelligence. Include repository standards, severity classifications, and common issue patterns — but not individual findings (those belong in the report and task metadata).
 
 ```
 Agent({
   subagent_type: "claude-workflow:memory-curator",
   description: "Persist team review intelligence findings",
   run_in_background: true,
-  prompt: "source: review\nfindings:\n- Repository standards: {any standards discovered during this review that aren't already cached}\n- Severity classifications: {what was blocking vs advisory, with generalized examples}\n- Common issue patterns: {patterns grouped by file type}\ncontext:\n  cached_at: {ISO timestamp}"
+  prompt: "{review intelligence with source: review and timestamp}"
 })
 ```
-
-Do NOT include individual findings — only reusable patterns and heuristics that improve future reviews.
 
 ### Step 13: Output Summary
 

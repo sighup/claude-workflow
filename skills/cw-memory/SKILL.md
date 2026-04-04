@@ -1,6 +1,6 @@
 ---
 name: cw-memory
-description: "Curates shared working memory for the claude-workflow system. Receives findings from workflow phases (research, implementation, review) and persists them as structured, deduplicated memory files that downstream agents consume to skip redundant discovery."
+description: "Curates shared working memory for the claude-workflow system. Merges findings from workflow phases (research, implementation, review) into structured, deduplicated topic files that downstream agents read to skip redundant discovery. Used exclusively by the memory-curator agent — not user-invocable."
 allowed-tools: Read, Write, Glob, Grep, Bash
 effort: medium
 ---
@@ -30,11 +30,7 @@ If the prompt does not contain findings in this structure, report the issue and 
 
 ## Memory Location
 
-All memory lives under `.claude/agent-memory/`. Create the directory if it doesn't exist:
-
-```bash
-mkdir -p .claude/agent-memory
-```
+All memory lives under `.claude/agent-memory/claude-workflow-memory-curator/`. The framework creates this directory automatically via `memory: project` — no manual setup needed.
 
 ## Protocol
 
@@ -42,7 +38,7 @@ mkdir -p .claude/agent-memory
 
 Check what already exists:
 
-1. Try `Read(.claude/agent-memory/MEMORY.md)` for the current index
+1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the current index
 2. For each topic file referenced in the index that overlaps with the incoming findings, read it too
 
 If no memory exists yet, you're starting fresh — skip to Step 3.
@@ -83,18 +79,33 @@ Route findings to the appropriate file based on content:
 
 If findings don't fit any existing topic file and represent a genuinely new category, create a new file with a descriptive name and add it to the index.
 
+#### What Belongs in Memory
+
+Memory describes **what the codebase is** — facts that remain true regardless of what feature is being built. Apply this test: if a different developer started a completely unrelated feature tomorrow, would this fact help them? If yes, it's a codebase fact. If it only matters for the current feature, it belongs in the spec or task board.
+
+**Good** — codebase facts:
+- "Next.js 14.2.2 with App Router" (true for any feature)
+- "Tests use Vitest with happy-dom" (true for any feature)
+- "No graph visualization library installed" (true for any feature)
+
+**Bad** — feature-scoped context:
+- "Will need to add reactflow for Pipeline View" (planning for a specific feature)
+- "Phase 3 data model readiness" (status of a specific spec)
+- "Missing: aggregate endpoint not yet built" (task-level gap analysis)
+
 #### Write Rules
 
 - Include `cached_at` ISO timestamp in frontmatter on every write
 - Keep entries concise — one-line summaries with just enough detail to be actionable
 - Never store credentials, API keys, tokens, or secrets
 - Never store verbatim file contents — summaries and file references only
-- Never store ephemeral task state (task IDs, in-progress status) — that belongs in task metadata
+- Never store feature-scoped planning, gap analysis, or task state — that belongs in specs and task metadata
 - Never store individual review findings — only reusable patterns derived from them
+- When in doubt, ask: "Is this about the codebase, or about the current feature?" Only persist the former
 
 ### Step 4: Update Index
 
-Write or update `.claude/agent-memory/MEMORY.md` as an index of all topic files. Keep it under 200 lines. Each entry is one line linking to the detail file with a brief summary:
+Write or update `.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md` as an index of all topic files. Keep it under 200 lines. Each entry is one line linking to the detail file with a brief summary:
 
 ```markdown
 # Agent Memory
@@ -110,23 +121,15 @@ Write or update `.claude/agent-memory/MEMORY.md` as an index of all topic files.
 
 The index has no frontmatter — it's a plain navigation aid.
 
-### Step 5: Confirm
+### Step 5: Verify and Confirm
 
-After writing, output a summary of what changed:
+After writing, read back the MEMORY.md index to verify it's well-formed and all linked topic files exist. If something looks wrong, fix it before confirming.
 
-```
-CW-MEMORY UPDATED
-=================
-Source: {source}
-Files written: {list of files created or updated}
-New entries: {count}
-Updated entries: {count}
-Skipped (duplicate): {count}
-```
+Then output a brief summary of what changed — which files were created or updated, and what kind of findings were persisted. Keep it concise; the exact format is up to you.
 
 ## Constraints
 
 - Never modify source code — you only manage memory files
-- Never read or explore the codebase beyond `.claude/agent-memory/` — your input is the findings in your prompt
+- Never read or explore the codebase beyond `.claude/agent-memory/claude-workflow-memory-curator/` — your input is the findings in your prompt
 - Never invent findings — only persist what was provided to you
 - If findings are ambiguous or incomplete, persist what you can and note gaps in the relevant topic file

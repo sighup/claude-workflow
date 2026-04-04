@@ -97,7 +97,7 @@ npx playwright install
 
 ## Agent Memory
 
-Agents use a shared working memory at `.claude/agent-memory/` to persist codebase knowledge across sessions. Memory is project-scoped (shareable via VCS) and managed by a dedicated **memory-curator** agent.
+Agents use a shared working memory at `.claude/agent-memory/claude-workflow-memory-curator/` to persist codebase knowledge across sessions. Memory is project-scoped (shareable via VCS) and managed by a dedicated **memory-curator** agent.
 
 | Agent | Role | Description |
 |-------|------|-------------|

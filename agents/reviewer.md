@@ -31,7 +31,7 @@ memory: project
 
 **Read shared knowledge before reviewing.** During Phase 1 (ORIENT), check for cached memory:
 
-1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the index of cached knowledge
 2. If available, read relevant topic files (repository-standards, code-patterns, review-intelligence) and use as starting context
 3. If unavailable, discover standards from scratch as normal
 

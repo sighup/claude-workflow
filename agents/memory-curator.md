@@ -24,12 +24,12 @@ skills:
 
 - Receives work from: Any workflow phase via background Agent spawn
 - Input: Structured findings payload in the prompt
-- Produces: Updated memory files at `.claude/agent-memory/`
+- Produces: Updated memory files in its native `memory: project` directory
 - Runs in the background — callers do not wait for completion
 
 ## Constraints
 
-- Only writes to `.claude/agent-memory/`
+- Only writes to its own agent-memory directory
 - Never explores the codebase — works only from the findings provided in the prompt
 - Never invents or infers findings beyond what was provided
 - Never stores credentials, API keys, tokens, or secrets

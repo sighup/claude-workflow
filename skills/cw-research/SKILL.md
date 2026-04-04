@@ -164,16 +164,16 @@ The report contains sections for each of the five dimensions (Summary, Tech Stac
 
 After compiling findings, spawn the memory curator **in the background** to persist discoveries. This runs concurrently with Step 4 (interactive refinement) so the user is not blocked.
 
+Compose a prompt that includes the source (`research`), the compiled auto-explore findings (LSP availability, tech stack, architecture, repository standards, testing infrastructure), and the current timestamp. The memory curator knows how to route findings to topic files — just provide the facts.
+
 ```
 Agent({
   subagent_type: "claude-workflow:memory-curator",
-  description: "Persist research findings to shared memory",
+  description: "Persist auto-explore findings to memory",
   run_in_background: true,
-  prompt: "source: research\nfindings:\n- LSP availability: {result}\n- Tech stack: {languages, frameworks, build tools}\n- Architecture: {patterns, directory structure, entry points}\n- Repository standards: {README/CONTRIBUTING summaries, commit conventions, linting config}\n- Testing infrastructure: {framework, command, test file locations}\ncontext:\n  cached_at: {ISO timestamp}\n  topic: {research topic}"
+  prompt: "{auto-explore findings with source: research and timestamp}"
 })
 ```
-
-If deep-dive exploration (Step 6) produces additional findings, spawn the memory curator again to update memory with the enriched context.
 
 ### Step 4: Interactive Refinement
 
@@ -321,6 +321,19 @@ If external context sources were provided in Step 5, add an "External Context" s
 **7c. Update the summary:**
 
 Revise the Summary section at the top of the report to incorporate key insights from deep-dive findings and external context. The summary should reflect the complete picture, not just the initial auto-explore.
+
+### Step 7b: Memory Checkpoint — Deep-Dive Enrichment
+
+After integrating deep-dive findings, spawn the memory curator again to enrich memory with the deeper discoveries. The auto-explore checkpoint (Step 3b) captured broad facts; this checkpoint captures the detailed patterns, conventions, and architecture insights that only surface during deep investigation.
+
+```
+Agent({
+  subagent_type: "claude-workflow:memory-curator",
+  description: "Enrich memory with deep-dive findings",
+  run_in_background: true,
+  prompt: "{deep-dive findings with source: research and timestamp}"
+})
+```
 
 ### Step 8: Save Report
 

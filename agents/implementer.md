@@ -33,7 +33,7 @@ skills:
 
 **Read shared knowledge before discovery.** At the start of Phase 3 (CONTEXT), check for cached memory:
 
-1. Try `Read(.claude/agent-memory/MEMORY.md)` for the index of cached knowledge
+1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the index of cached knowledge
 2. If available, read relevant topic files (project-discovery, code-patterns, verification) and use as starting context
 3. If unavailable, proceed with normal discovery (probe LSP, read patterns from scratch)
 
