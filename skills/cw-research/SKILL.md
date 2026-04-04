@@ -364,12 +364,6 @@ research_report: docs/specs/research-{topic_slug}/research-{topic_slug}.md
 
 # Shared Agent Memory
 
-## LSP Availability
-
-- available: {true|false}
-- cached_at: {ISO timestamp}
-- supported_file_types: {list of file types with LSP support, or "none"}
-
 ## Tech Stack
 
 - cached_at: {ISO timestamp}

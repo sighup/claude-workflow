@@ -95,6 +95,18 @@ npm install --save-dev playwright-bdd @playwright/test
 npx playwright install
 ```
 
+## Agent Memory
+
+Agents use `memory: project` to persist codebase knowledge across sessions and share discoveries between agents. Memory is stored in `.claude/agent-memory/` and is project-scoped (shareable via VCS).
+
+| Agent | Role | What it remembers |
+|-------|------|-------------------|
+| Researcher | Producer | Writes shared discoveries (tech stack, architecture patterns, repository standards, testing infrastructure) to `.claude/agent-memory/shared/` |
+| Implementer | Consumer + Producer | Reads shared memory for patterns; caches verification commands, code patterns, and credential-detection regexes in `.claude/agent-memory/implementer/` |
+| Reviewer | Consumer + Producer | Reads shared memory for standards; accumulates severity classifications and common issue patterns in `.claude/agent-memory/reviewer/` |
+
+Memory is treated as hints — agents verify critical facts before acting on cached values. LSP availability is always probed directly (never cached) since it is environment-specific. Running `/cw-research` refreshes all shared memory.
+
 ## Task Metadata
 
 Every task on the board carries self-contained metadata enabling autonomous execution:

@@ -61,9 +61,8 @@ When you receive a `shutdown_request`:
 
 ## Memory
 
-- Before Phase 3 (CONTEXT) of each cw-execute run, read `.claude/agent-memory/shared/MEMORY.md` if it exists; use cached LSP availability and architecture patterns as a starting point
-- When shared memory provides `lsp_available`, skip the LSP probe in Phase 3 and use the cached value directly
-- When shared memory provides architecture patterns, use them as prior context before reading `patterns_to_follow` files; still read those files for task-specific patterns
+- Before Phase 3 (CONTEXT) of each cw-execute run, read `.claude/agent-memory/shared/MEMORY.md` if it exists; use cached architecture patterns as a starting point before reading `patterns_to_follow` files (still read those files for task-specific patterns)
+- Always probe LSP availability directly — never rely on cached LSP state (LSP availability is environment-specific, not project-specific)
 - After completing Phase 3 (CONTEXT), write project facts to `.claude/agent-memory/implementer/`:
   - `MEMORY.md` — index of cached facts with `cached_at` timestamps
   - `verification.md` — pre/post verification commands and their expected outcomes

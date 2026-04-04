@@ -99,7 +99,6 @@ Load patterns and understand conventions.
 Before reading pattern files, check for shared and implementer memory:
 
 1. Attempt to read `.claude/agent-memory/shared/MEMORY.md`. If it exists:
-   - Extract `lsp_available` value — set `lsp_available` from cache (skip LSP probe below)
    - Extract architecture patterns and code conventions — use as prior context when reading `patterns_to_follow` files
    - Note the `cached_at` timestamp to assess staleness
 
@@ -121,9 +120,7 @@ Before reading pattern files, check for shared and implementer memory:
 
 #### LSP Availability Check
 
-If `lsp_available` was set from shared memory, skip this probe and use the cached value directly.
-
-Otherwise, probe whether an LSP server is available. Pick a file from `metadata.scope.files_to_modify` or `metadata.scope.patterns_to_follow` and attempt a single `documentSymbol` operation:
+Probe whether an LSP server is available. LSP availability is environment-specific and must always be probed directly — never cached in memory. Pick a file from `metadata.scope.files_to_modify` or `metadata.scope.patterns_to_follow` and attempt a single `documentSymbol` operation:
 
 ```
 LSP({
@@ -158,12 +155,6 @@ After completing pattern loading and LSP check, write discovered project facts t
    ---
 
    # Implementer Memory
-
-   ## LSP Availability
-
-   - available: {true|false}
-   - cached_at: {ISO timestamp}
-   - source: {probe|shared-memory}
 
    ## Cached Facts
 
