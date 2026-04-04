@@ -55,6 +55,9 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
 | `cw-gherkin` | Generate Gherkin BDD scenarios from spec acceptance criteria; called automatically by cw-spec |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
+| `/cw-heartbeat` | Pull issues from Linear and run them through the cw pipeline |
+| `/cw-linear-init` | Set up Linear integration (creates `.claude-workflow/config.yaml`) |
+| `/cw-linear-status` | Show heartbeat queue, blocked issues, and recent history |
 
 ## Prerequisites
 
@@ -124,6 +127,80 @@ Every task on the board carries self-contained metadata enabling autonomous exec
   "model": null
 }
 ```
+
+## Linear Integration (Optional)
+
+The heartbeat system connects Linear to the cw pipeline — issues assigned to your agent get automatically specced, planned, executed, and validated.
+
+### Setup
+
+```
+# Inside Claude:
+/cw-linear-init
+```
+
+This creates `.claude-workflow/config.yaml` with your team key, agent name, and pipeline flags. Requires a [Linear MCP server](https://github.com/linear/linear-mcp) configured in Claude Code.
+
+### Usage
+
+```
+# Interactive — process the Linear queue
+/cw-heartbeat
+
+# Preview what would be processed
+/cw-heartbeat --dry-run
+
+# Process a specific issue
+/cw-heartbeat --issue ENG-123
+
+# Check queue and history
+/cw-linear-status
+```
+
+### How It Works
+
+```
+Linear Issue (Todo) → /cw-heartbeat picks it up
+                       ↓
+                    cw-spec (auto-generate spec from issue)
+                       ↓
+                    cw-plan (decompose into task graph)
+                       ↓
+                    cw-dispatch (parallel execution)
+                       ↓
+                    cw-validate (6-gate verification)
+                       ↓
+                    Report back to Linear (structured comment + state update)
+```
+
+The heartbeat is **additive** — all existing `/cw-*` commands work exactly as before without Linear. You can mix heartbeat-driven and manual work in the same project.
+
+### Unattended Execution
+
+```bash
+# From the shell (CI, cron, scheduled task)
+./bin/cw-heartbeat --model sonnet
+
+# Dry run
+./bin/cw-heartbeat --dry-run
+```
+
+### Configuration
+
+`.claude-workflow/config.yaml` controls heartbeat behavior:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `heartbeat.max_issues_per_heartbeat` | 2 | Issues to process per cycle |
+| `heartbeat.stale_lock_hours` | 1 | Hours before a lock is considered stale |
+| `heartbeat.error_cooldown_minutes` | 30 | Wait time after errors |
+| `heartbeat.quiet_hours` | disabled | Time window to skip processing |
+| `pipeline.auto_spec` | true | Auto-generate specs from issues |
+| `pipeline.auto_plan` | true | Auto-decompose into tasks |
+| `pipeline.auto_dispatch` | true | Auto-execute tasks in parallel |
+| `pipeline.auto_validate` | true | Auto-run validation gates |
+| `pipeline.auto_review` | false | Auto-run code review |
+| `pipeline.auto_pr` | false | Auto-create pull requests |
 
 ## Shell Scripts
 

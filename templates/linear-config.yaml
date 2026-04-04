@@ -1,0 +1,51 @@
+# Claude Workflow — Linear Integration Configuration
+#
+# This file is created by /cw-linear-init and lives at .claude-workflow/config.yaml
+# in your project root. It configures the heartbeat loop that pulls work from
+# Linear and feeds it into the cw pipeline.
+
+version: 1
+
+linear:
+  # Your Linear team key (e.g., "ENG", "PRODUCT")
+  team: "{{TEAM}}"
+
+  # The Linear user name that issues are assigned to (your bot/agent identity)
+  user_name: "{{USER_NAME}}"
+
+heartbeat:
+  # Maximum issues to process per heartbeat cycle
+  max_issues_per_heartbeat: 2
+
+  # Hours before a stale agent-working lock is auto-cleared
+  stale_lock_hours: 1
+
+  # Minutes to wait before retrying after an error
+  error_cooldown_minutes: 30
+
+  # Optional quiet hours — heartbeat skips execution during this window
+  # quiet_hours:
+  #   enabled: true
+  #   start: "18:00"
+  #   end: "09:00"
+  #   timezone: "America/New_York"
+
+labels:
+  # Parent label group in Linear (all CW labels live under this)
+  group: "claude-workflow"
+
+  # State labels applied to issues during processing
+  states:
+    - "agent-working"
+    - "agent-blocked"
+
+pipeline:
+  # Which cw stages run automatically per heartbeat issue
+  auto_spec: true
+  auto_plan: true
+  auto_dispatch: true
+  auto_validate: true
+
+  # Human gates — disabled by default, enable to require manual approval
+  auto_review: false
+  auto_pr: false

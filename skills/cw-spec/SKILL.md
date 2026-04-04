@@ -34,6 +34,29 @@ You are a **Senior Product Manager and Technical Lead** responsible for:
 - **ALWAYS** validate scope before proceeding
 - **ALWAYS** include proof artifacts for each demoable unit
 
+## Linear Integration Mode (`--from-linear`)
+
+When invoked with `--from-linear`, the spec is being generated from a Linear issue provided by `/cw-heartbeat`. In this mode:
+
+1. **The issue title becomes the feature name** — use it for the spec directory name (e.g., `01-spec-ENG-123-add-search-endpoint`)
+2. **The issue description and comments are the requirements** — treat them as pre-answered clarifying questions
+3. **Skip interactive clarifying questions** (Step 4) — the issue content IS the user input. Instead, synthesize requirements directly from the issue body, comments, and any linked issues.
+4. **Skip the review step** (Step 6) — proceed directly after generation since the heartbeat runs non-interactively
+5. **Skip the "What Comes Next" prompt** — the heartbeat orchestrator handles the next stage
+
+The issue context will be provided in the invocation args as structured text:
+
+```
+--from-linear
+Issue: ENG-123
+Title: Add search endpoint
+Description: [issue body markdown]
+Comments: [chronological comments]
+Parent: [parent issue context, if any]
+```
+
+Extract requirements from this context and proceed through Steps 1-3 and 5 normally. The resulting spec should be just as rigorous as an interactive spec — the only difference is where the input comes from.
+
 ## Process
 
 ### Step 1: Create Spec Directory
