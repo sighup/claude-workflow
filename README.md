@@ -101,11 +101,11 @@ Agents use a shared working memory at `.claude/agent-memory/claude-workflow-memo
 
 | Agent | Role | Description |
 |-------|------|-------------|
-| Memory Curator | Owner | Receives findings from any workflow phase and merges them into structured topic files. Spawned in the background — callers don't wait. |
-| Researcher | Producer | Spawns memory-curator after research to persist tech stack, architecture patterns, repository standards |
-| Implementer | Consumer + Producer | Reads memory before discovery; spawns memory-curator after Phase 3 with verification commands, code patterns, LSP availability |
-| Reviewer | Consumer + Producer | Reads memory before review; spawns memory-curator after review with severity classifications and issue patterns |
-| Spec Writer | Consumer | Reads memory to accelerate context assessment |
+| Memory Curator | Codebase memory owner | Receives research findings and merges them into structured topic files. Spawned in the background — callers don't wait. |
+| Researcher | Producer | Only producer of codebase memory. Spawns memory-curator after auto-explore and deep-dive phases. |
+| Implementer | Consumer | Reads memory before discovery. Does not write — implementation changes the codebase, making observations immediately stale. |
+| Reviewer | Consumer + own memory | Reads codebase memory for standards/patterns. Writes review heuristics (severity patterns, common issues) to its own `memory: project` directory. |
+| Spec Writer | Consumer | Reads memory to accelerate context assessment. |
 
 The workflow functions without memory — agents fall back to full discovery when no memory exists. Memory is treated as hints; agents verify critical facts before acting on cached values.
 

@@ -57,9 +57,9 @@ git log --oneline -5
 
 Before gathering context from scratch, check for cached knowledge:
 
-1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the index of cached knowledge
-2. If available, read relevant topic files (repository-standards, code-patterns, review-intelligence) and use as starting context
-3. If memory has LSP availability, use the cached value and skip the LSP probe below
+1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for codebase facts (standards, patterns, LSP availability)
+2. Check reviewer's own memory directory for prior review intelligence (severity patterns, common issues)
+3. If codebase memory has LSP availability, use the cached value and skip the LSP probe below
 4. If no memory exists, discover everything from scratch as normal
 
 #### Context Gathering
@@ -286,19 +286,6 @@ Produce a structured review report from the consolidated findings:
 Save the report to: `./docs/specs/[NN]-spec-[feature-name]/[NN]-review-[feature-name].md`
 
 If no spec directory is found, output the report directly.
-
-### Step 4b: Update Review Memory
-
-After generating the review report, spawn the memory curator in the background to persist review intelligence. Include repository standards, severity classifications, and common issue patterns — but not individual findings (those belong in the report and task metadata).
-
-```
-Agent({
-  subagent_type: "claude-workflow:memory-curator",
-  description: "Persist review intelligence findings",
-  run_in_background: true,
-  prompt: "{review intelligence with source: review and timestamp}"
-})
-```
 
 ### Step 5: Output Summary
 

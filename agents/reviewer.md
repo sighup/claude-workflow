@@ -29,13 +29,22 @@ memory: project
 
 ## Memory Usage
 
-**Read shared knowledge before reviewing.** During Phase 1 (ORIENT), check for cached memory:
+**Read codebase knowledge before reviewing.** During Phase 1 (ORIENT), check for cached memory:
 
-1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the index of cached knowledge
-2. If available, read relevant topic files (repository-standards, code-patterns, review-intelligence) and use as starting context
-3. If unavailable, discover standards from scratch as normal
+1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for codebase facts (tech stack, patterns, standards)
+2. Check your own memory directory for prior review intelligence (severity patterns, common issues)
+3. If available, use as starting context instead of re-reading README/CONTRIBUTING/CLAUDE.md
+4. If unavailable, discover standards from scratch as normal
 
 Treat all cached facts as hints — verify anything that appears stale or inconsistent with current project files.
+
+**Write review heuristics to your own memory.** After completing a review, persist broad, stable patterns to your own `memory: project` directory:
+
+- Severity classification patterns (what's blocking vs advisory in this codebase)
+- Common issue patterns grouped by file type (e.g., "route handlers: always validate input")
+- Repository conventions that aren't in README/CONTRIBUTING but you observed in the code
+
+Only persist patterns that will remain true across future reviews. Do not persist individual findings, file paths from this review, or anything feature-specific.
 
 ### Dual-Mode Operation
 

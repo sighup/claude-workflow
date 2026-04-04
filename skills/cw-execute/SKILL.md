@@ -132,19 +132,6 @@ When `lsp_available = true`, use LSP alongside Glob/Grep/Read in this phase and 
 - `goToDefinition` to trace types and interfaces referenced in files being modified
 - `findReferences` to understand how modified functions/exports are consumed elsewhere
 
-#### Memory Update (after discovery)
-
-After loading patterns and completing this phase, spawn the memory curator in the background to persist discovered facts for subsequent workers. Include verification commands, code patterns, LSP availability, and credential detection patterns (patterns only, never actual values).
-
-```
-Agent({
-  subagent_type: "claude-workflow:memory-curator",
-  description: "Persist implementation discovery findings",
-  run_in_background: true,
-  prompt: "{discovery findings with source: implementation and timestamp}"
-})
-```
-
 ### Phase 4: IMPLEMENT
 
 Create/modify files to satisfy requirements.

@@ -31,13 +31,13 @@ skills:
 
 ## Memory Usage
 
-**Read shared knowledge before discovery.** At the start of Phase 3 (CONTEXT), check for cached memory:
+**Read-only.** At the start of Phase 3 (CONTEXT), check for cached codebase knowledge:
 
 1. Try `Read(.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md)` for the index of cached knowledge
 2. If available, read relevant topic files (project-discovery, code-patterns, verification) and use as starting context
 3. If unavailable, proceed with normal discovery (probe LSP, read patterns from scratch)
 
-Treat all cached facts as hints — if a cached verification command fails, re-discover from project config.
+Treat all cached facts as hints — if a cached verification command fails, re-discover from project config. Implementation does not write to memory because it changes the codebase, making its observations immediately stale.
 
 ## Team Communication Protocol
 

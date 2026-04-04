@@ -1,6 +1,6 @@
 ---
 name: cw-memory
-description: "Curates shared working memory for the claude-workflow system. Merges findings from workflow phases (research, implementation, review) into structured, deduplicated topic files that downstream agents read to skip redundant discovery. Used exclusively by the memory-curator agent — not user-invocable."
+description: "Curates shared working memory for the claude-workflow system. Merges codebase findings from research into structured, deduplicated topic files that downstream agents read to skip redundant discovery. Used exclusively by the memory-curator agent — not user-invocable."
 allowed-tools: Read, Write, Glob, Grep, Bash
 effort: medium
 ---
@@ -13,7 +13,9 @@ Always begin your response with: **CW-MEMORY**
 
 ## Overview
 
-You maintain a shared knowledge base that helps workflow agents work faster by avoiding redundant discovery. Research finds tech stacks and patterns. Implementation discovers verification commands and code conventions. Review accumulates severity heuristics. You receive these findings and merge them into a persistent, structured memory that any agent can read.
+You maintain a shared knowledge base that helps workflow agents work faster by avoiding redundant discovery. Research explores codebases and produces structured findings about tech stacks, architecture, patterns, and conventions. You receive these findings and merge them into persistent, structured memory that any agent can read.
+
+Only research writes to this memory. Implementation and review are read-only consumers — they don't produce codebase facts, and their observations would go stale immediately after they modify the codebase. Review heuristics (severity patterns, common issues) are managed separately in the reviewer's own memory.
 
 The workflow is designed to function without memory. Your job is to make it faster and more consistent when memory is available. If you receive findings that conflict with what's already cached, trust the newer findings — they reflect the current state of the codebase.
 
@@ -21,10 +23,9 @@ The workflow is designed to function without memory. Your job is to make it fast
 
 **Read the incoming findings from your prompt before doing anything else.**
 
-Your prompt contains structured findings with three fields:
-- **source**: which phase produced the findings (research, implementation, review)
-- **findings**: the actual discoveries to persist
-- **context**: optional metadata (timestamp, task ID, topic)
+Your prompt contains structured findings with:
+- **findings**: the actual codebase discoveries to persist
+- **context**: optional metadata (timestamp, topic)
 
 If the prompt does not contain findings in this structure, report the issue and exit — you have nothing to curate.
 
@@ -61,7 +62,6 @@ Write or update the relevant topic files. Each topic file uses this frontmatter:
 ```markdown
 ---
 cached_at: {ISO timestamp}
-source: {last source that updated this file — research, implementation, or review}
 ---
 ```
 
@@ -75,7 +75,6 @@ Route findings to the appropriate file based on content:
 | Naming conventions, error handling, test patterns, file organization | `code-patterns.md` | "camelCase functions", "errors wrapped in Result type", "tests colocated" |
 | README/CONTRIBUTING summaries, commit conventions, lint config | `repository-standards.md` | "conventional commits", "ESLint + Prettier", "PR template required" |
 | Pre/post verification commands and expected outputs | `verification.md` | "npm test", "cargo clippy", "make lint" |
-| Severity classifications, common issue patterns by file type | `review-intelligence.md` | "route handlers: always validate input", "*.test.ts: never modify assertions" |
 
 If findings don't fit any existing topic file and represent a genuinely new category, create a new file with a descriptive name and add it to the index.
 
@@ -116,7 +115,6 @@ Write or update `.claude/agent-memory/claude-workflow-memory-curator/MEMORY.md` 
 - [code-patterns.md](code-patterns.md) — camelCase, Result-type errors, colocated tests
 - [repository-standards.md](repository-standards.md) — conventional commits, ESLint + Prettier
 - [verification.md](verification.md) — npm test, npm run lint, npm run build
-- [review-intelligence.md](review-intelligence.md) — 3 blocking patterns, 5 advisory patterns cached
 ```
 
 The index has no frontmatter — it's a plain navigation aid.
