@@ -8,6 +8,7 @@ capabilities:
   - Create atomic commits with sanitized content
 color: green
 model: inherit
+memory: project
 tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskGet, TaskUpdate, TaskList, AskUserQuestion, SendMessage, LSP
 effort: high
 skills:
@@ -57,6 +58,19 @@ When you receive a `shutdown_request`:
 - On failure: `git stash`, update task with failure_reason
 - Never leave uncommitted changes
 - Never push to remote
+
+## Memory
+
+- Before Phase 3 (CONTEXT) of each cw-execute run, read `.claude/agent-memory/shared/MEMORY.md` if it exists; use cached LSP availability and architecture patterns as a starting point
+- When shared memory provides `lsp_available`, skip the LSP probe in Phase 3 and use the cached value directly
+- When shared memory provides architecture patterns, use them as prior context before reading `patterns_to_follow` files; still read those files for task-specific patterns
+- After completing Phase 3 (CONTEXT), write project facts to `.claude/agent-memory/implementer/`:
+  - `MEMORY.md` — index of cached facts with `cached_at` timestamps
+  - `verification.md` — pre/post verification commands and their expected outcomes
+  - `patterns.md` — code patterns extracted from `patterns_to_follow` files during this run
+  - `sanitization.md` — regex patterns for detecting credentials (never actual credential values)
+- Treat memory as hints: if a cached verification command fails unexpectedly, re-discover from project config and update memory with the corrected command
+- Never write credentials, API keys, tokens, file contents verbatim, or actual secret values to any memory file — summaries and patterns only
 
 ## Constraints
 

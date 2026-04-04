@@ -8,6 +8,7 @@ capabilities:
   - Communicate with review lead via SendMessage (team mode)
 color: yellow
 model: inherit
+memory: project
 tools: Glob, Grep, Read, Bash, TaskGet, TaskUpdate, SendMessage, LSP
 effort: medium
 maxTurns: 30
@@ -53,6 +54,15 @@ Both protocols use the same 3-phase structure:
 1. ORIENT - Load task, extract assignment and review context
 2. EXAMINE - Read files + diffs, evaluate against assigned categories
 3. REPORT - Write findings to task metadata via TaskUpdate, mark completed
+
+## Memory
+
+- Before starting review, check `.claude/agent-memory/shared/MEMORY.md` for cached repository standards; use those instead of re-reading README/CONTRIBUTING/CLAUDE.md when available
+- Also load prior review intelligence from `.claude/agent-memory/reviewer/MEMORY.md` (severity classifications, common issue patterns) if it exists
+- After completing each review, write accumulated intelligence to `.claude/agent-memory/reviewer/` — repository standards discovered, severity classification examples, and common issue patterns grouped by file type
+- Memory-write is additive: append new patterns to existing files; never overwrite or delete prior intelligence
+- Do NOT persist individual findings (those belong in task metadata) — only generalized patterns and heuristics derived from findings
+- Never write credentials, API keys, tokens, or verbatim file contents to memory files
 
 ## Constraints
 
