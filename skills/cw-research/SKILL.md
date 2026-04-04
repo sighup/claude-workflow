@@ -341,11 +341,130 @@ Derive each field from the research findings (feature name, problem statement, k
 
 Read the saved report file, append the meta-prompt section using the template from `references/meta-prompt-template.md`, and write the updated file.
 
-### Step 10: Present Results and Next-Step Options
+### Step 10: Write Shared Memory
+
+After generating the meta-prompt, write codebase discoveries to `.claude/agent-memory/shared/` so downstream agents (implementer, reviewer) can consume them without re-discovering.
+
+**10a. Create directories if they do not exist:**
+
+```bash
+mkdir -p .claude/agent-memory/shared
+mkdir -p .claude/agent-memory/researcher
+```
+
+**10b. Write shared memory index:**
+
+Write `.claude/agent-memory/shared/MEMORY.md` with a frontmatter header and index of available memory files. Populate from research findings:
+
+```markdown
+---
+cached_at: {ISO timestamp of this research run}
+research_report: docs/specs/research-{topic_slug}/research-{topic_slug}.md
+---
+
+# Shared Agent Memory
+
+## LSP Availability
+
+- available: {true|false}
+- cached_at: {ISO timestamp}
+- supported_file_types: {list of file types with LSP support, or "none"}
+
+## Tech Stack
+
+- cached_at: {ISO timestamp}
+- summary: {1-2 sentence description of primary language(s), framework(s), build tool(s)}
+- primary_language: {language}
+- frameworks: {list}
+- build_tool: {tool}
+
+## Architecture Patterns
+
+- cached_at: {ISO timestamp}
+- summary: {brief description of dominant architectural style}
+- key_patterns: {list of patterns, e.g. "layered modules", "event-driven", "CLI pipeline"}
+
+## Repository Standards
+
+- cached_at: {ISO timestamp}
+- summary: {brief description of conventions, style guides, commit format}
+- details: repository-standards.md
+
+## Testing Infrastructure
+
+- cached_at: {ISO timestamp}
+- framework: {test framework(s)}
+- command: {how to run tests}
+- location: {where test files live, e.g. "tests/", "__tests__/", colocated}
+
+## Detailed Findings
+
+- [project-discovery.md](project-discovery.md) — tech stack and directory structure
+- [code-patterns.md](code-patterns.md) — naming conventions, error handling, test patterns
+- [repository-standards.md](repository-standards.md) — README, CONTRIBUTING, style guide summaries
+```
+
+**10c. Write detailed shared memory files:**
+
+Write `.claude/agent-memory/shared/project-discovery.md` with tech stack and directory structure findings from Step 2 (auto-explore: Tech Stack dimension) and Step 6 (deep-dive).
+
+Write `.claude/agent-memory/shared/code-patterns.md` with naming conventions, error handling patterns, and test conventions extracted from Steps 2 and 6 (Architecture & Patterns, Test & Quality dimensions).
+
+Write `.claude/agent-memory/shared/repository-standards.md` with summaries of README, CONTRIBUTING, CLAUDE.md, and any style guide files found during exploration. Include commit message format and PR conventions if discovered.
+
+Each detailed file must include a `cached_at` frontmatter field.
+
+**10d. Write researcher's own memory:**
+
+Write `.claude/agent-memory/researcher/MEMORY.md` with research-specific state (NOT a copy of shared memory):
+
+```markdown
+---
+cached_at: {ISO timestamp}
+---
+
+# Researcher Memory
+
+## Topics Explored
+
+- topic: {topic_slug}
+  cached_at: {ISO timestamp}
+  report: docs/specs/research-{topic_slug}/research-{topic_slug}.md
+  dimensions: [tech-stack, architecture, dependencies, testing, data-models]
+  deep_dives: {N}
+  external_sources: {N}
+
+## External Sources Processed
+
+{List of external sources used in this run, one per line, with their type and URL/path}
+```
+
+**10e. Security check before writing:**
+
+Never write to memory files:
+- API keys, tokens, secrets, or credentials of any kind
+- Verbatim file contents — only summaries and file references
+- Connection strings with embedded credentials
+
+**10f. Confirm writes:**
+
+After writing all files, confirm:
+
+```
+MEMORY WRITTEN
+==============
+Shared memory: .claude/agent-memory/shared/MEMORY.md
+Project discovery: .claude/agent-memory/shared/project-discovery.md
+Code patterns: .claude/agent-memory/shared/code-patterns.md
+Repository standards: .claude/agent-memory/shared/repository-standards.md
+Researcher memory: .claude/agent-memory/researcher/MEMORY.md
+```
+
+### Step 11: Present Results and Next-Step Options
 
 After saving the report with the meta-prompt, present a summary and offer next-step options to the user.
 
-**10a. Present the completion summary:**
+**11a. Present the completion summary:**
 
 ```
 CW-RESEARCH COMPLETE
@@ -364,7 +483,7 @@ Key findings:
 A meta-prompt for /cw-spec has been generated at the end of the report.
 ```
 
-**10b. Present next-step options:**
+**11b. Present next-step options:**
 
 ```
 AskUserQuestion({
