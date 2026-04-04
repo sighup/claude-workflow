@@ -8,6 +8,24 @@ effort: medium
 
 # CW-Research: Codebase Research and Context Aggregation
 
+## Dispatch Mode
+
+**When invoked as `/cw-research` from the main session**, do NOT execute the protocol below directly. Instead, spawn the researcher agent which has `memory: project` enabled for persistent codebase knowledge:
+
+```
+Agent({
+  subagent_type: "claude-workflow:researcher",
+  description: "Run cw-research: {topic or 'general'}",
+  prompt: "Execute the cw-research protocol for topic: {user's topic argument, or 'general codebase exploration' if none provided}. Follow the full protocol from your injected cw-research skill — start at MANDATORY FIRST ACTION and proceed through all steps including Step 10 (Write Shared Memory). {Include any additional context the user provided.}"
+})
+```
+
+After the agent completes, relay its results to the user (the CW-RESEARCH COMPLETE summary and next-step options). Then stop.
+
+**When executing as the researcher agent** (this skill was injected via `skills:` frontmatter): Skip this Dispatch Mode section entirely. Execute the protocol below starting from "Context Marker".
+
+---
+
 ## Context Marker
 
 Always begin your response with: **CW-RESEARCH**
