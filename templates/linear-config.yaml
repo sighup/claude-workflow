@@ -31,22 +31,24 @@ heartbeat:
   #   timezone: "America/New_York"
 
 labels:
-  # Parent label group in Linear (all CW labels live under this)
-  group: "claude-workflow"
+  # Label groups in Linear are single-select: only one label from a group
+  # can be applied to an issue at a time.
 
-  # State labels applied to issues during processing
+  # State label group (single-select) — agent processing state
+  state_group: "cw-state"
   states:
     - "agent-working"
     - "agent-blocked"
 
-  # Phase transition labels
+  # Phase label group (single-select) — lifecycle phase tracking
+  phase_group: "cw-phase"
   phases:
     - "needs-research"
-    - "agent-ready-for-spec"
-    - "agent-spec-complete"
+    - "ready-for-spec"
+    - "spec-complete"
 
-  # Applied to child stories created from demoable units
-  story: "agent-story"
+  # Standalone label applied to sub-issues created from demoable units
+  managed: "cw-managed"
 
 pipeline:
   # Which cw stages run automatically per heartbeat
@@ -62,13 +64,13 @@ pipeline:
   # Research phase — run cw-research before spec if issue seems vague
   auto_research: false
 
-  # E2E testing — run cw-testing per story after validation
+  # E2E testing — run cw-testing per sub-issue after validation
   auto_testing: true
 
-  # Epic-level review — run cw-review-team on full diff after all stories complete
-  epic_review: false
+  # Parent-level review — run cw-review-team on full diff after all sub-issues complete
+  parent_review: false
 
-  # Branch strategy for story PRs
-  #   "direct"      — each story PR merges to main independently
-  #   "integration" — story branches merge into feature/{epic-slug}, then one PR to main
+  # Branch strategy for sub-issue PRs
+  #   "direct"      — each sub-issue PR merges to main independently
+  #   "integration" — sub-issue branches merge into feature/{feature-slug}, then one PR to main
   branch_strategy: "direct"

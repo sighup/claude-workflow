@@ -57,8 +57,8 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
 | `/cw-heartbeat` | Phase-aware dispatcher — pulls Linear issues, detects lifecycle phase, runs one phase per cycle |
 | `/cw-linear-init` | Set up Linear integration (creates `.claude-workflow/config.yaml` + labels) |
-| `/cw-linear-status` | Show epic phases, story progress, blocked issues, and heartbeat history |
-| `cw-linear-sync` | Internal skill — abstracts Linear API operations for the heartbeat |
+| `/cw-linear-status` | Show parent issue phases, sub-issue progress, blocked issues, and heartbeat history |
+| `cw-linear-sync` | Internal skill — abstracts Linear MCP operations for the heartbeat |
 
 ## Prerequisites
 
@@ -131,33 +131,32 @@ Every task on the board carries self-contained metadata enabling autonomous exec
 
 ## Linear Integration (Optional)
 
-The heartbeat system uses Linear as a **collaboration surface** between humans and the agent. Epics decompose into Linear stories (one per demoable unit), humans review and approve, then the agent executes each story in an isolated worktree.
+The heartbeat system uses Linear as a **collaboration surface** between humans and the agent. Parent issues decompose into Linear sub-issues (one per demoable unit), humans review and approve, then the agent executes each sub-issue in an isolated worktree.
 
 ### Two-Tier Decomposition
 
 ```
-Linear Epic (Feature)
+Linear Parent Issue (Feature)
   ↓ cw-spec decomposes
-Linear Stories (Demoable Units)    ← human reviews, reorders, approves here
-  ↓ heartbeat picks up each story
-Native Task Board (per worktree)   ← agent-internal, ephemeral
+Linear Sub-issues (Demoable Units)    ← human reviews, reorders, approves here
+  ↓ heartbeat picks up each sub-issue
+Native Task Board (per worktree)      ← agent-internal, ephemeral
   ↓ cw-dispatch executes
-Proof Artifacts + Commits          ← reported back to Linear
+Proof Artifacts + Commits             ← reported back to Linear
 ```
 
 ### Lifecycle
 
 ```
-Phase 0: Trigger         Human creates/assigns Linear epic
-Phase 1: Research        cw-research → summary posted to epic              (optional)
-Phase 2: Decompose       cw-spec → Linear stories from demoable units
-     ─── HUMAN GATE ───  Review stories, reorder, approve by moving to Todo
-Phase 3: Execute         Per-story: worktree → cw-plan → cw-dispatch → cw-validate
-Phase 4: Review          Per-story: cw-review → FIX tasks → re-review      (optional)
-Phase 5: Test            Per-story: cw-testing with .feature scenarios      (optional)
-Phase 6: Story PR        Per-story: create PR from story branch             (optional)
-Phase 7: Epic Validate   All stories done → cross-story validation          (optional)
-Phase 8: Complete        Epic → Done
+Phase 0: Trigger         Human creates/assigns Linear parent issue
+Phase 1: Research        cw-research → summary posted to parent              (optional)
+Phase 2: Decompose       cw-spec → Linear sub-issues from demoable units
+     ─── HUMAN GATE ───  Review sub-issues, reorder, approve by moving to Todo
+Phase 3: Execute         Per sub-issue: worktree → cw-plan → cw-dispatch → cw-validate
+Phase 4: Review          Per sub-issue: cw-review → FIX tasks → re-review    (optional)
+Phase 5: Test            Per sub-issue: cw-testing with .feature scenarios    (optional)
+Phase 6: Sub-issue PR    Per sub-issue: create PR from sub-issue branch      (optional)
+Phase 7: Complete        All sub-issues Done → Linear auto-completes parent
 ```
 
 Each phase runs in a **fresh Claude subprocess** via plugin bin/ executables, keeping context windows clean. The heartbeat skill is a lightweight routing layer that never accumulates codebase content.
@@ -169,7 +168,7 @@ Each phase runs in a **fresh Claude subprocess** via plugin bin/ executables, ke
 /cw-linear-init
 ```
 
-Creates `.claude-workflow/config.yaml` with team key, agent name, pipeline flags, and 6 lifecycle labels in Linear. Requires a [Linear MCP server](https://github.com/linear/linear-mcp) configured in Claude Code.
+Creates `.claude-workflow/config.yaml` with team key, agent name, pipeline flags, and labels across 2 single-select label groups + 1 standalone label in Linear. Requires a [Linear MCP server](https://github.com/linear/linear-mcp) configured in Claude Code.
 
 ### Usage
 
@@ -193,24 +192,26 @@ Creates `.claude-workflow/config.yaml` with team key, agent name, pipeline flags
 # From the shell (CI, cron, scheduled task)
 ./bin/cw-heartbeat --model sonnet
 
-# Execute a single story in isolation (used by heartbeat internally)
-./bin/cw-heartbeat-story --epic-slug auth --story-slug add-login \
+# Execute a single sub-issue in isolation (used by heartbeat internally)
+./bin/cw-heartbeat-execute --feature auth --unit-slug add-login \
   --spec docs/specs/01-spec-auth/01-spec-auth.md --unit 1
 
-# Run an epic phase in isolation
-./bin/cw-heartbeat-epic --phase spec --issue-id ENG-100 --title "JWT Auth"
+# Run a parent issue phase in isolation
+./bin/cw-heartbeat-phase --phase spec --issue-id ENG-100 --title "JWT Auth"
 ```
 
 ### Labels
 
-| Label | Purpose |
-|-------|---------|
-| `agent-working` | Agent is actively processing this issue |
-| `agent-blocked` | Agent needs human input |
-| `needs-research` | Epic needs codebase research before spec |
-| `agent-ready-for-spec` | Research done, ready for spec generation |
-| `agent-spec-complete` | Spec done, stories created in Backlog |
-| `agent-story` | Agent-managed child story of an epic |
+Labels use Linear's single-select label groups — only one label from a group can be applied per issue.
+
+| Group | Label | Purpose |
+|-------|-------|---------|
+| `cw-state` | `agent-working` | Agent is actively processing this issue |
+| `cw-state` | `agent-blocked` | Agent needs human input |
+| `cw-phase` | `needs-research` | Parent issue needs codebase research before spec |
+| `cw-phase` | `ready-for-spec` | Research done, ready for spec generation |
+| `cw-phase` | `spec-complete` | Spec done, sub-issues created in Backlog |
+| *(standalone)* | `cw-managed` | Agent-managed sub-issue (child of a parent issue) |
 
 ### Configuration
 
@@ -226,19 +227,19 @@ Creates `.claude-workflow/config.yaml` with team key, agent name, pipeline flags
 | `pipeline.auto_plan` | true | Auto-decompose into tasks |
 | `pipeline.auto_dispatch` | true | Auto-execute tasks in parallel |
 | `pipeline.auto_validate` | true | Auto-run validation gates |
-| `pipeline.auto_review` | false | Auto-run code review per story |
+| `pipeline.auto_review` | false | Auto-run code review per sub-issue |
 | `pipeline.auto_pr` | false | Auto-create pull requests |
 | `pipeline.auto_research` | false | Run cw-research if issue is sparse |
-| `pipeline.auto_testing` | true | Run cw-testing per story |
-| `pipeline.epic_review` | false | Run cw-review-team on full epic diff |
-| `pipeline.branch_strategy` | `direct` | `direct` (story PRs to main) or `integration` (epic branch) |
+| `pipeline.auto_testing` | true | Run cw-testing per sub-issue |
+| `pipeline.parent_review` | false | Run cw-review-team on full parent issue diff |
+| `pipeline.branch_strategy` | `direct` | `direct` (sub-issue PRs to main) or `integration` (feature branch) |
 
 ### How It Stays Additive
 
 - All existing `/cw-*` commands work unchanged without Linear configured
 - The heartbeat produces the same specs, task graphs, proof artifacts, and commits as manual workflow
 - You can mix heartbeat-driven and manual work in the same project
-- Stories are regular Linear issues — humans can take over any story by reassigning it
+- Sub-issues are regular Linear issues — humans can take over any sub-issue by reassigning it
 
 ## Shell Scripts
 

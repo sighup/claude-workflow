@@ -1,6 +1,6 @@
 ---
 name: cw-linear-sync
-description: "Internal skill that abstracts Linear MCP interactions for the heartbeat lifecycle. Handles issue queries, story creation from specs, structured comment posting, and label state management. Called by cw-heartbeat, not directly by users."
+description: "Internal skill that abstracts Linear MCP interactions for the heartbeat lifecycle. Handles issue queries, sub-issue creation from specs, structured comment posting, and label state management. Called by cw-heartbeat, not directly by users."
 user-invocable: false
 allowed-tools: Read, Glob, Grep, Bash
 effort: low
@@ -21,7 +21,7 @@ The heartbeat invokes you with a specific **operation** and **payload**. You exe
 ## Critical Constraints
 
 - **NEVER** modify issue state without explicit instruction from the heartbeat
-- **NEVER** create stories without a completed spec to source from
+- **NEVER** create sub-issues without a completed spec to source from
 - **NEVER** post comments that don't follow the structured format
 - **ALWAYS** return structured results the heartbeat can parse
 - **ALWAYS** handle MCP tool errors gracefully (report, don't crash)
@@ -42,42 +42,42 @@ user_name: {agent_name}
 **Process:**
 1. Query Linear for issues assigned to `user_name` in team `team`
 2. Categorize each issue:
-   - **Epics**: Issues without `agent-story` label
-   - **Stories**: Issues with `agent-story` label
+   - **Parent issues**: Issues without `cw-managed` label
+   - **Sub-issues**: Issues with `cw-managed` label
 3. For each issue, determine phase (see Phase Detection in heartbeat-protocol.md)
 4. Filter out issues with `agent-working` label (unless lock is stale)
 5. For `agent-blocked` issues: include only if a new comment exists since the last agent comment
-6. Sort: In Progress first, then by priority (Urgent > High > Medium > Low > None)
+6. Sort: In Progress first, then by priority (Urgent > High > Medium > Low > No priority)
 
 **Return:**
 ```
 QUEUE_RESULT
-epics:
+parent_issues:
   - id: ENG-100
     title: "JWT Authentication"
     phase: SPEC
     status: Todo
     priority: High
     labels: []
-stories:
+sub_issues:
   - id: ENG-456
     title: "Add login endpoint"
-    phase: STORY_EXECUTE
+    phase: EXECUTE
     status: Todo
     priority: High
     parent_id: ENG-100
-    labels: [agent-story]
+    labels: [cw-managed]
 total: {N}
 ```
 
-### 2. CREATE_STORIES
+### 2. CREATE_SUB_ISSUES
 
-Create Linear child issues from a spec's demoable units.
+Create Linear sub-issues from a spec's demoable units.
 
 **Input:**
 ```
-operation: CREATE_STORIES
-parent_id: {epic_issue_id}
+operation: CREATE_SUB_ISSUES
+parent_id: {parent_issue_id}
 spec_path: {path_to_spec_file}
 team: {team_key}
 ```
@@ -87,9 +87,9 @@ team: {team_key}
 2. Extract each **Demoable Unit** section:
    - Title
    - Purpose
-   - Functional Requirements (become the story description)
+   - Functional Requirements (become the sub-issue description)
    - Proof Artifacts (become acceptance criteria)
-3. For each demoable unit, create a child issue in Linear:
+3. For each demoable unit, create a sub-issue in Linear:
    - **Title**: Demoable unit title
    - **Description**: Formatted markdown with:
      ```markdown
@@ -106,17 +106,17 @@ team: {team_key}
      Spec: `{spec_path}`
      Unit: {unit_number}
      ```
-   - **Parent**: Set to `parent_id`
+   - **Parent**: Set to `parent_id` (makes it a sub-issue)
    - **Status**: Backlog (not Todo — human must approve by moving to Todo)
-   - **Labels**: `agent-story`
+   - **Labels**: `cw-managed`
    - **Team**: `team`
-4. Apply `agent-spec-complete` label to the parent epic
+4. Apply `spec-complete` phase label to the parent issue
 
 **Return:**
 ```
-STORIES_CREATED
+SUB_ISSUES_CREATED
 parent_id: ENG-100
-stories:
+sub_issues:
   - id: ENG-456
     title: "Add login endpoint"
     unit: 1
@@ -137,7 +137,7 @@ Post a structured comment to a Linear issue following the heartbeat protocol for
 ```
 operation: POST_COMMENT
 issue_id: {issue_id}
-phase: {RESEARCH | SPEC | STORY_EXECUTE | STORY_REVIEW | STORY_TEST | EPIC_VALIDATE}
+phase: {RESEARCH | SPEC | EXECUTE | REVIEW | TEST | VALIDATE}
 result: {completed | blocked | error}
 body: {structured markdown body}
 ```
@@ -177,12 +177,15 @@ remove: [label3]
 1. Fetch current labels on the issue
 2. Add requested labels (skip if already present)
 3. Remove requested labels (skip if not present)
+4. Respect label group single-select rules:
+   - `cw-state` group: adding `agent-working` removes `agent-blocked` and vice versa
+   - `cw-phase` group: adding `ready-for-spec` removes `needs-research`, etc.
 
 **Return:**
 ```
 LABELS_UPDATED
 issue_id: ENG-456
-current_labels: [agent-story, agent-working]
+current_labels: [cw-managed, agent-working]
 ```
 
 ### 5. UPDATE_STATUS
@@ -208,7 +211,7 @@ status: Done
 
 ### 6. GET_ISSUE_CONTEXT
 
-Fetch full context for an issue (used before spec generation or story execution).
+Fetch full context for an issue (used before spec generation or sub-issue execution).
 
 **Input:**
 ```
@@ -219,8 +222,8 @@ issue_id: {issue_id}
 **Process:**
 1. Fetch the issue: title, description, status, labels, priority
 2. Fetch comments (chronological)
-3. Fetch parent issue context (if this is a child)
-4. Fetch child issues (if this is a parent/epic)
+3. Fetch parent issue context (if this is a sub-issue)
+4. Fetch sub-issues (if this is a parent issue)
 5. Fetch linked/related issues
 
 **Return:**
@@ -241,25 +244,25 @@ comments:
     date: "2026-04-02T14:00:00Z"
     body: "Heartbeat #1 — RESEARCH — ..."
 parent: null
-children:
+sub_issues:
   - id: ENG-456
     title: "Add login endpoint"
     status: Backlog
-    labels: [agent-story]
+    labels: [cw-managed]
 ```
 
 ### 7. CHECK_CHILDREN_STATUS
 
-Check if all child stories of an epic are complete.
+Check if all sub-issues of a parent issue are complete.
 
 **Input:**
 ```
 operation: CHECK_CHILDREN_STATUS
-parent_id: {epic_issue_id}
+parent_id: {parent_issue_id}
 ```
 
 **Process:**
-1. Fetch all child issues with `agent-story` label
+1. Fetch all sub-issues with `cw-managed` label
 2. Check status of each
 
 **Return:**
@@ -271,7 +274,7 @@ done: 2
 in_progress: 1
 blocked: 0
 all_done: false
-children:
+sub_issues:
   - id: ENG-456, status: Done
   - id: ENG-457, status: Done
   - id: ENG-458, status: In Progress

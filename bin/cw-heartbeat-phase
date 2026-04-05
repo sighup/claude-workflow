@@ -1,15 +1,15 @@
 #!/bin/bash
 #
-# cw-heartbeat-epic - Execute a single epic-level phase in a fresh Claude session
+# cw-heartbeat-phase - Execute a single parent issue phase in a fresh Claude session
 #
-# Runs one phase (research, spec, or validate) for an epic issue and outputs
+# Runs one phase (research, spec, or validate) for a parent issue and outputs
 # a JSON result to stdout. Called by the cw-heartbeat skill to keep each phase
 # in its own context window.
 #
 # Usage:
-#   cw-heartbeat-epic --phase research --issue-id ENG-100 --title "JWT Auth"
-#   cw-heartbeat-epic --phase spec --issue-id ENG-100 --title "JWT Auth" --description "..."
-#   cw-heartbeat-epic --phase validate --issue-id ENG-100 --spec docs/specs/01-spec-auth/...
+#   cw-heartbeat-phase --phase research --issue-id ENG-100 --title "JWT Auth"
+#   cw-heartbeat-phase --phase spec --issue-id ENG-100 --title "JWT Auth" --description "..."
+#   cw-heartbeat-phase --phase validate --issue-id ENG-100 --spec docs/specs/01-spec-auth/...
 #
 # Options:
 #   --phase PHASE         Phase to run: research, spec, validate
@@ -17,7 +17,7 @@
 #   --title TEXT          Issue title
 #   --description TEXT    Issue description (for spec phase)
 #   --spec PATH           Spec file path (for validate phase)
-#   --epic-review BOOL    Run cw-review-team at epic level (for validate phase)
+#   --parent-review BOOL    Run cw-review-team at parent level (for validate phase)
 #   -m, --model MODEL     Claude model to use (default: sonnet)
 #   -v, --verbose         Stream JSON output for real-time visibility
 #   -h, --help            Show this help message
@@ -46,21 +46,21 @@ ISSUE_ID=""
 TITLE=""
 DESCRIPTION=""
 SPEC_PATH=""
-EPIC_REVIEW=false
+PARENT_REVIEW=false
 
 # =============================================================================
 # Argument Parsing
 # =============================================================================
 
 show_help() {
-    echo "Usage: cw-heartbeat-epic --phase PHASE [OPTIONS]" >&2
+    echo "Usage: cw-heartbeat-phase --phase PHASE [OPTIONS]" >&2
     echo "" >&2
-    echo "Execute a single epic-level phase in a fresh Claude session." >&2
+    echo "Execute a single parent-level phase in a fresh Claude session." >&2
     echo "" >&2
     echo "Phases:" >&2
     echo "  research    Run cw-research for the issue" >&2
     echo "  spec        Run cw-spec and generate specification" >&2
-    echo "  validate    Run cw-validate on full epic diff" >&2
+    echo "  validate    Run cw-validate on full parent issue diff" >&2
     echo "" >&2
     echo "Options:" >&2
     echo "  --phase PHASE       Phase to run (required)" >&2
@@ -68,7 +68,7 @@ show_help() {
     echo "  --title TEXT        Issue title" >&2
     echo "  --description TEXT  Issue description" >&2
     echo "  --spec PATH         Spec file path (validate phase)" >&2
-    echo "  --epic-review BOOL  Run epic-level review (validate phase)" >&2
+    echo "  --parent-review BOOL  Run parent-level review (validate phase)" >&2
     echo "  -m, --model MODEL   Claude model (default: $CW_MODEL)" >&2
     echo "  -v, --verbose       Stream JSON output" >&2
     echo "  -h, --help          Show this help" >&2
@@ -81,7 +81,7 @@ while [[ $# -gt 0 ]]; do
         --title) require_arg "--title" "${2:-}"; TITLE="$2"; shift 2 ;;
         --description) require_arg "--description" "${2:-}"; DESCRIPTION="$2"; shift 2 ;;
         --spec) require_arg "--spec" "${2:-}"; SPEC_PATH="$2"; shift 2 ;;
-        --epic-review) require_arg "--epic-review" "${2:-}"; EPIC_REVIEW="$2"; shift 2 ;;
+        --parent-review) require_arg "--parent-review" "${2:-}"; PARENT_REVIEW="$2"; shift 2 ;;
         -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
         -v|--verbose) CW_VERBOSE=true; shift ;;
         -h|--help) show_help; exit 0 ;;
@@ -230,7 +230,7 @@ This is running non-interactively — proceed autonomously without using AskUser
 
 # ─── VALIDATE ────────────────────────────────────────────────────────────────
 validate)
-    log_info "Running epic validation for $ISSUE_ID" >&2
+    log_info "Running parent validation for $ISSUE_ID" >&2
 
     if [ -z "$SPEC_PATH" ]; then
         log_error "--spec is required for validate phase" >&2
@@ -239,24 +239,24 @@ validate)
 
     VALIDATE_PROMPT="Use the Skill tool to invoke 'cw-validate'.
 
-Run the 6-gate validation against the spec at $SPEC_PATH. This is the epic-level final validation across all story branches.
+Run the 6-gate validation against the spec at $SPEC_PATH. This is the parent-level final validation across all sub-issue branches.
 
 This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
     if invoke_claude "$VALIDATE_PROMPT" "$CW_MODEL"; then
-        log_success "Epic validation completed" >&2
+        log_success "Parent issue validation completed" >&2
 
-        # Run epic-level review if requested
-        if [ "$EPIC_REVIEW" = "true" ]; then
-            log_info "Running epic-level review (cw-review-team)..." >&2
+        # Run parent-level review if requested
+        if [ "$PARENT_REVIEW" = "true" ]; then
+            log_info "Running parent-level review (cw-review-team)..." >&2
 
             REVIEW_PROMPT="Use the Skill tool to invoke 'cw-review-team'.
 
-Review the full implementation across all story branches. This is the final cross-story review. Create FIX tasks for any blocking issues.
+Review the full implementation across all sub-issue branches. This is the final cross-unit review. Create FIX tasks for any blocking issues.
 
 This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
-            invoke_claude "$REVIEW_PROMPT" "$CW_MODEL" || log_warning "Epic review had issues" >&2
+            invoke_claude "$REVIEW_PROMPT" "$CW_MODEL" || log_warning "Parent review had issues" >&2
         fi
 
         jq --arg r "completed" '.result = $r' \
@@ -264,7 +264,7 @@ This is running non-interactively — proceed autonomously without using AskUser
     else
         jq '.error = "cw-validate invocation failed"' \
             "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
-        log_error "Epic validation failed" >&2
+        log_error "Parent issue validation failed" >&2
         exit 1
     fi
     ;;

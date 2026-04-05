@@ -14,7 +14,7 @@ Always begin your response with: **CW-LINEAR-INIT**
 
 ## Overview
 
-You initialize the Linear integration for an existing claude-workflow project. This creates the configuration file and Linear labels needed for the heartbeat lifecycle — the two-tier system where epics decompose into Linear stories (human-reviewable), and stories execute via the cw pipeline (agent-internal).
+You initialize the Linear integration for an existing claude-workflow project. This creates the configuration file and Linear labels needed for the heartbeat lifecycle — the two-tier system where parent issues decompose into Linear sub-issues (human-reviewable), and sub-issues execute via the cw pipeline (agent-internal).
 
 ## Your Role
 
@@ -22,7 +22,7 @@ You are a **setup assistant** who:
 - Gathers Linear team and user configuration
 - Creates the `.claude-workflow/config.yaml` file
 - Verifies Linear MCP tools are available
-- Creates required labels in Linear
+- Creates required label groups and labels in Linear
 
 ## Critical Constraints
 
@@ -97,21 +97,21 @@ AskUserQuestion({
 
 ### Step 4: Create Linear Labels
 
-Using the Linear MCP tools, create the label group and all lifecycle labels:
+Using the Linear MCP tools, create label groups and labels:
 
-1. Create parent label group: `claude-workflow`
-
-2. Create **state labels** under the group:
+1. Create **label group `cw-state`** (single-select — only one label from this group per issue):
    - `agent-working` — Agent is actively processing this issue
    - `agent-blocked` — Agent needs human input before continuing
 
-3. Create **phase transition labels** under the group:
-   - `needs-research` — Epic needs codebase research before spec generation
-   - `agent-ready-for-spec` — Research done, ready for spec generation
-   - `agent-spec-complete` — Spec generated, stories created in Backlog
+2. Create **label group `cw-phase`** (single-select — only one label from this group per issue):
+   - `needs-research` — Parent issue needs codebase research before spec generation
+   - `ready-for-spec` — Research done, ready for spec generation
+   - `spec-complete` — Spec generated, sub-issues created in Backlog
 
-4. Create **story label** under the group:
-   - `agent-story` — This issue is an agent-managed story (child of an epic)
+3. Create **standalone label**:
+   - `cw-managed` — This issue is an agent-managed sub-issue (child of a parent issue)
+
+**Note:** Label groups in Linear are single-select — only one label from a group can be applied to an issue at a time. This is why state and phase are separate groups: an issue can be both `agent-working` (state) and `ready-for-spec` (phase) simultaneously.
 
 If label creation fails (permissions, duplicates), log a warning but don't fail the init.
 
@@ -139,14 +139,14 @@ Linear integration initialized:
   Agent:   {USER_NAME}
 
   Labels created:
-    State:   agent-working, agent-blocked
-    Phase:   needs-research, agent-ready-for-spec, agent-spec-complete
-    Story:   agent-story
+    Group cw-state (single-select):  agent-working, agent-blocked
+    Group cw-phase (single-select):  needs-research, ready-for-spec, spec-complete
+    Standalone:                      cw-managed
 
   Lifecycle:
-    Epic (Todo) → Research (optional) → Spec + Decompose → Stories (Backlog)
-        ─── HUMAN GATE ─── (move stories to Todo to approve)
-    Story (Todo) → Plan → Execute → Validate → Review → Test → Done
+    Parent Issue (Todo) → Research (optional) → Spec + Decompose → Sub-issues (Backlog)
+        ─── HUMAN GATE ─── (move sub-issues to Todo to approve)
+    Sub-issue (Todo) → Plan → Execute → Validate → Review → Test → Done
 
 Next steps:
   1. Create or assign a Linear issue to "{USER_NAME}"

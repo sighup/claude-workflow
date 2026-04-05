@@ -3,29 +3,28 @@
 ## Two-Tier Decomposition Model
 
 ```
-Linear Epic (Feature)
+Linear Parent Issue (Feature)
   ↓ cw-spec decomposes
-Linear Stories (Demoable Units)    ← human reviews/approves here
-  ↓ heartbeat picks up each story
-Native Task Board (per worktree)   ← agent-internal, ephemeral
+Linear Sub-issues (Demoable Units)   ← human reviews/approves here
+  ↓ heartbeat picks up each sub-issue
+Native Task Board (per worktree)     ← agent-internal, ephemeral
   ↓ cw-dispatch executes
-Proof Artifacts + Commits          ← reported back to Linear
+Proof Artifacts + Commits            ← reported back to Linear
 ```
 
 ## Lifecycle Phases
 
 ```
-Phase 0: Trigger         Human creates/assigns Linear epic
+Phase 0: Trigger         Human creates/assigns Linear issue
 Phase 1: Research        cw-research → post summary → label transition       (optional)
-Phase 2: Decompose       cw-spec → create Linear stories from demoable units (one cycle)
-     ─── HUMAN GATE ───  Human reviews stories, reorders, approves by moving to Todo
-Phase 3: Execute         Per-story: worktree → cw-plan → cw-dispatch → cw-validate
-Phase 4: Review          Per-story: cw-review → FIX tasks → re-review loop
-Phase 5: Test            Per-story: cw-testing with story's .feature file
-Phase 6: Story PR        Per-story: create PR from story branch              (optional)
-Phase 7: Epic Validate   All stories done → cw-validate on full feature      (optional)
-Phase 8: Epic Review     cw-review-team on full diff (cross-story issues)    (optional)
-Phase 9: Complete        Epic → Done, final PR if integration branch
+Phase 2: Decompose       cw-spec → create sub-issues from demoable units     (one cycle)
+     ─── HUMAN GATE ───  Human reviews sub-issues, reorders, approves by moving to Todo
+Phase 3: Execute         Per sub-issue: worktree → cw-plan → cw-dispatch → cw-validate
+Phase 4: Review          Per sub-issue: cw-review → FIX tasks → re-review    (optional)
+Phase 5: Test            Per sub-issue: cw-testing with .feature file        (optional)
+Phase 6: Sub-issue PR    Per sub-issue: create PR from unit branch           (optional)
+Phase 7: Auto-complete   All sub-issues Done → Linear auto-completes parent
+Phase 8: Parent Review   cw-review-team on full diff (cross-unit issues)     (optional)
 ```
 
 ## Phase Detection Logic
@@ -33,87 +32,87 @@ Phase 9: Complete        Epic → Done, final PR if integration branch
 ```
 determine_phase(issue):
 
-  ── Epics (no agent-story label) ──
+  ── Parent issues (no cw-managed label) ──
 
-  if has_label("needs-research") and not has_label("agent-ready-for-spec"):
+  if has_label("needs-research") and not has_label("ready-for-spec"):
     → RESEARCH
 
-  if has_label("agent-ready-for-spec"):
+  if has_label("ready-for-spec"):
     → SPEC
 
-  if status == "Todo" and not has_label("agent-spec-complete"):
+  if status == "Todo" and not has_label("spec-complete"):
     → SPEC
 
-  if has_label("agent-spec-complete") and all_children_done():
-    → EPIC_VALIDATE
+  if has_label("spec-complete"):
+    → WAITING (sub-issues in progress; Linear auto-completes parent)
 
-  else:
-    → WAITING (stories in progress)
-
-  ── Stories (has agent-story label) ──
+  ── Sub-issues (has cw-managed label) ──
 
   if status == "Todo":
-    → STORY_EXECUTE
+    → EXECUTE
 
-  if status == "In Review":
-    → STORY_REVIEW
+  if status == "In Progress":
+    → EXECUTE (resume)
 
   if status == "Done":
     → SKIP
-
-  else:
-    → SKIP
 ```
 
-## Label State Machine
+## Label Design
 
-### Labels
+Linear label groups are **single-select** (only one label from a group per issue). This enforces correct state transitions.
 
-| Label | Applied To | Purpose |
+### Label Group: `cw-state` (single-select)
+
+| Label | Meaning |
+|---|---|
+| `agent-working` | Agent is actively processing this issue |
+| `agent-blocked` | Agent cannot proceed without human input |
+
+### Label Group: `cw-phase` (single-select)
+
+| Label | Applied To | Meaning |
 |---|---|---|
-| `agent-working` | Epic or Story | Mutex — agent is actively processing this issue |
-| `agent-blocked` | Epic or Story | Agent cannot proceed without human input |
-| `needs-research` | Epic | Triggers Phase 1 (research) before spec |
-| `agent-ready-for-spec` | Epic | Phase 1 complete, ready for Phase 2 |
-| `agent-spec-complete` | Epic | Phase 2 complete, stories created |
-| `agent-story` | Story | Marks this as an agent-managed child of an epic |
+| `needs-research` | Parent issue | Triggers research phase before spec |
+| `ready-for-spec` | Parent issue | Research done, ready for spec generation |
+| `spec-complete` | Parent issue | Spec generated, sub-issues created |
+
+### Standalone Label
+
+| Label | Applied To | Meaning |
+|---|---|---|
+| `cw-managed` | Sub-issue | Marks this as an agent-created sub-issue |
 
 ### Transitions
 
 ```
-Epic lifecycle:
-  (new, assigned)
-    → [needs-research]      if auto_research or manually tagged
-    → SPEC phase             if no research needed
+Parent issue lifecycle:
+  (new, assigned to agent, Todo)
+    → [needs-research]     if auto_research or manually tagged
+    → SPEC phase           if no research needed
 
   [needs-research]
     → RESEARCH phase
-    → [agent-ready-for-spec] on success
-    → [agent-blocked]        on failure
+    → [ready-for-spec]     on success
+    → [agent-blocked]      on failure
 
-  [agent-ready-for-spec]  or  (Todo, no labels)
+  [ready-for-spec]  or  (Todo, no phase label)
     → SPEC phase
-    → [agent-spec-complete]  on success (stories created in Backlog)
-    → [agent-blocked]        on failure
+    → [spec-complete]      on success (sub-issues created in Backlog)
+    → [agent-blocked]      on failure
 
-  [agent-spec-complete]
-    → WAITING                while stories are in progress
-    → EPIC_VALIDATE          when all stories are Done
-    → Done                   on validation pass
+  [spec-complete]
+    → WAITING              while sub-issues are in progress
+    → Auto-completed       when all sub-issues are Done (Linear built-in)
 
-Story lifecycle:
-  (Backlog, agent-story)
-    → WAITING                until human moves to Todo
+Sub-issue lifecycle:
+  (Backlog, cw-managed)
+    → WAITING              until human moves to Todo
 
-  (Todo, agent-story)
-    → STORY_EXECUTE          heartbeat picks up
-    → Done                   on success
-    → [agent-blocked]        on failure
-
-  (In Review, agent-story)
-    → STORY_REVIEW           heartbeat runs review + test
-    → Done                   on pass
-    → [agent-blocked]        on failure
+  (Todo, cw-managed)
+    → EXECUTE              heartbeat picks up
+    → Done                 on success
+    → [agent-blocked]      on failure
 ```
 
 ## Linear Comment Format
@@ -153,9 +152,9 @@ Proceeding to spec generation.
 ### Specification Complete
 **Spec:** `{spec_file_path}`
 
-### Demoable Units → Stories
-| # | Story | Linear ID |
-|---|-------|-----------|
+### Demoable Units → Sub-issues
+| # | Sub-issue | Linear ID |
+|---|-----------|-----------|
 | 1 | {title} | {ID} |
 | 2 | {title} | {ID} |
 
@@ -163,14 +162,14 @@ Proceeding to spec generation.
 {goals from spec}
 
 ### Next
-Stories created in Backlog. Move stories to Todo to approve for execution.
+Sub-issues created in Backlog. Move to Todo to approve for execution.
 ```
 
-**STORY_EXECUTE:**
+**EXECUTE:**
 ```markdown
 ### Execution Complete
-**Worktree:** `.worktrees/feature-{epic}-{story}/`
-**Branch:** `feature/{epic}/{story}`
+**Worktree:** `.worktrees/feature-{feature}-{unit}/`
+**Branch:** `feature/{feature}/{unit}`
 
 ### Tasks
 {completed}/{total} tasks completed
@@ -191,7 +190,7 @@ Stories created in Backlog. Move stories to Todo to approve for execution.
 | ... | ... |
 ```
 
-**STORY_REVIEW:**
+**REVIEW (per sub-issue):**
 ```markdown
 ### Code Review
 **Result:** {APPROVED | CHANGES REQUESTED}
@@ -208,21 +207,6 @@ No blocking issues found.
 {N} FIX tasks created and executed. {M} resolved.
 ```
 
-**EPIC_VALIDATE:**
-```markdown
-### Epic Validation
-**All stories complete.** Running cross-story validation.
-
-### Story Summary
-| Story | Status | Commits |
-|-------|--------|---------|
-| {title} | Done | {N} |
-| {title} | Done | {N} |
-
-### Overall
-{PASS or FAIL with details}
-```
-
 ## Lockfile Format
 
 `.claude-workflow/heartbeat.lock`:
@@ -231,7 +215,7 @@ No blocking issues found.
   "pid": 12345,
   "started_at": "2026-04-05T10:30:00Z",
   "issue_id": "ENG-123",
-  "phase": "STORY_EXECUTE"
+  "phase": "EXECUTE"
 }
 ```
 
@@ -239,7 +223,7 @@ No blocking issues found.
 
 `.claude-workflow/heartbeat-log.jsonl` (append-only):
 ```json
-{"timestamp":"2026-04-05T10:30:00Z","issue_id":"ENG-456","issue_title":"Add login endpoint","phase":"STORY_EXECUTE","duration_seconds":340,"result":"completed","commits":["abc1234"],"spec_path":"docs/specs/01-spec-auth/01-spec-auth.md"}
+{"timestamp":"2026-04-05T10:30:00Z","issue_id":"ENG-456","issue_title":"Add login endpoint","phase":"EXECUTE","duration_seconds":340,"result":"completed","commits":["abc1234"],"spec_path":"docs/specs/01-spec-auth/01-spec-auth.md"}
 ```
 
 ## Retry Logic
@@ -258,5 +242,5 @@ When `heartbeat.quiet_hours.enabled` is true, the heartbeat checks the current t
 
 | Strategy | Behavior |
 |---|---|
-| `direct` | Each story creates a PR directly to main. Stories can ship independently. |
-| `integration` | Stories merge into `feature/{epic-slug}`. One final PR to main when epic validates. |
+| `direct` | Each sub-issue creates a PR directly to main. Units can ship independently. |
+| `integration` | Sub-issue branches merge into `feature/{feature-slug}`. One final PR to main. |

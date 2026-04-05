@@ -1,17 +1,17 @@
 #!/bin/bash
 #
-# cw-heartbeat-story - Execute a single Linear story in an isolated worktree
+# cw-heartbeat-execute - Execute a single Linear sub-issue in an isolated worktree
 #
 # Creates a git worktree with its own task list, runs the cw pipeline stages
 # (plan → dispatch → validate → review → test), and outputs a JSON result
 # to stdout. Called by the cw-heartbeat skill for session isolation.
 #
 # Usage:
-#   cw-heartbeat-story [OPTIONS]
+#   cw-heartbeat-execute [OPTIONS]
 #
 # Required:
-#   --epic-slug NAME      Epic feature name (for worktree/branch naming)
-#   --story-slug NAME     Story name (for worktree/branch naming)
+#   --feature NAME        Feature name (for worktree/branch naming)
+#   --unit-slug NAME      Unit name (for worktree/branch naming)
 #   --spec PATH           Path to the spec file
 #   --unit N              Demoable unit number in the spec
 #
@@ -29,8 +29,8 @@
 #   All progress logging goes to stderr.
 #
 # Exit Codes:
-#   0  Story completed successfully
-#   1  Story execution failed (blocked/error)
+#   0  Sub-issue completed successfully
+#   1  Sub-issue execution failed (blocked/error)
 #   4  Missing dependencies or invalid arguments
 #
 
@@ -43,8 +43,8 @@ source "$SCRIPT_DIR/lib/cw-common.sh"
 # Configuration
 # =============================================================================
 
-EPIC_SLUG=""
-STORY_SLUG=""
+FEATURE_SLUG=""
+UNIT_SLUG=""
 SPEC_PATH=""
 UNIT_NUM=""
 DO_REVIEW=false
@@ -57,13 +57,13 @@ RESUME=false
 # =============================================================================
 
 show_help() {
-    echo "Usage: cw-heartbeat-story [OPTIONS]" >&2
+    echo "Usage: cw-heartbeat-execute [OPTIONS]" >&2
     echo "" >&2
-    echo "Execute a single Linear story in an isolated worktree." >&2
+    echo "Execute a single Linear sub-issue in an isolated worktree." >&2
     echo "" >&2
     echo "Required:" >&2
-    echo "  --epic-slug NAME    Epic feature name" >&2
-    echo "  --story-slug NAME   Story name" >&2
+    echo "  --feature NAME    Feature name" >&2
+    echo "  --unit-slug NAME   Unit name" >&2
     echo "  --spec PATH         Spec file path" >&2
     echo "  --unit N            Demoable unit number" >&2
     echo "" >&2
@@ -79,8 +79,8 @@ show_help() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --epic-slug) require_arg "--epic-slug" "${2:-}"; EPIC_SLUG="$2"; shift 2 ;;
-        --story-slug) require_arg "--story-slug" "${2:-}"; STORY_SLUG="$2"; shift 2 ;;
+        --feature) require_arg "--feature" "${2:-}"; FEATURE_SLUG="$2"; shift 2 ;;
+        --unit-slug) require_arg "--unit-slug" "${2:-}"; UNIT_SLUG="$2"; shift 2 ;;
         --spec) require_arg "--spec" "${2:-}"; SPEC_PATH="$2"; shift 2 ;;
         --unit) require_arg "--unit" "${2:-}"; UNIT_NUM="$2"; shift 2 ;;
         --review) DO_REVIEW=true; shift ;;
@@ -102,8 +102,8 @@ done
 check_jq || exit 4
 check_claude || exit 4
 
-if [ -z "$EPIC_SLUG" ] || [ -z "$STORY_SLUG" ] || [ -z "$SPEC_PATH" ] || [ -z "$UNIT_NUM" ]; then
-    log_error "Required: --epic-slug, --story-slug, --spec, --unit" >&2
+if [ -z "$FEATURE_SLUG" ] || [ -z "$UNIT_SLUG" ] || [ -z "$SPEC_PATH" ] || [ -z "$UNIT_NUM" ]; then
+    log_error "Required: --feature, --unit-slug, --spec, --unit" >&2
     exit 4
 fi
 
@@ -112,8 +112,8 @@ if [ ! -f "$SPEC_PATH" ]; then
     exit 4
 fi
 
-WORKTREE_NAME="${EPIC_SLUG}-${STORY_SLUG}"
-BRANCH_NAME="feature/${EPIC_SLUG}/${STORY_SLUG}"
+WORKTREE_NAME="${FEATURE_SLUG}-${UNIT_SLUG}"
+BRANCH_NAME="feature/${FEATURE_SLUG}/${UNIT_SLUG}"
 ORIGINAL_DIR="$(pwd)"
 RESULT_FILE=$(mktemp)
 START_TIME=$(date +%s)
@@ -122,8 +122,8 @@ START_TIME=$(date +%s)
 cat > "$RESULT_FILE" << EOF
 {
   "result": "error",
-  "epic_slug": "$EPIC_SLUG",
-  "story_slug": "$STORY_SLUG",
+  "feature_slug": "$FEATURE_SLUG",
+  "unit_slug": "$UNIT_SLUG",
   "spec_path": "$SPEC_PATH",
   "unit": $UNIT_NUM,
   "commits": [],
@@ -155,7 +155,7 @@ trap cleanup EXIT
 # Worktree Setup
 # =============================================================================
 
-log_info "Story: $EPIC_SLUG / $STORY_SLUG (unit $UNIT_NUM)" >&2
+log_info "Sub-issue: $FEATURE_SLUG / $UNIT_SLUG (unit $UNIT_NUM)" >&2
 log_info "Spec: $SPEC_PATH" >&2
 log_info "Model: $CW_MODEL" >&2
 
@@ -322,9 +322,9 @@ jq \
     "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
 
 if [ "$FINAL_RESULT" = "completed" ]; then
-    log_success "Story completed" >&2
+    log_success "Sub-issue completed" >&2
     exit 0
 else
-    log_error "Story blocked" >&2
+    log_error "Sub-issue blocked" >&2
     exit 1
 fi
