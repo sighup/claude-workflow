@@ -8,7 +8,6 @@ color: purple
 model: opus
 tools: Glob, Grep, Read, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, Skill
 effort: high
-maxTurns: 25
 skills:
   - cw-plan
 ---

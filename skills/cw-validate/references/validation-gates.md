@@ -90,29 +90,30 @@ Six mandatory gates that determine PASS/FAIL for implementation validation.
 
 **Note**: `[REDACTED]` placeholders are acceptable and expected.
 
-### GATE G: Adversarial Testing (REQUIRED)
+### GATE G: Adversarial Analysis (REQUIRED)
 
-**Rule**: Adversarial tests must not reveal critical or high-severity issues.
+**Rule**: Code analysis must not reveal unhandled critical boundary conditions or security gaps.
 
 **How to check**:
-1. Run targeted adversarial tests appropriate to the feature type:
-   - **Boundary values**: Empty inputs, zero, negative, max-length, Unicode, special characters
-   - **Concurrency**: Parallel requests, race conditions, duplicate submissions
-   - **Idempotency**: Same operation twice should be safe (no duplicate data, no errors)
-   - **Error propagation**: Deep failures surface correctly with meaningful messages
-   - **State cleanup**: Partial failures don't leave orphan data or broken state
-   - **Input validation**: Malformed input rejected at boundaries (SQL injection, XSS, oversized payloads)
+1. Read the implementation code and analyze it for gaps in these categories:
+   - **Boundary values**: Are edge cases (empty, zero, negative, max-length, Unicode) handled at input boundaries?
+   - **Concurrency**: Is shared mutable state protected? Are critical sections guarded?
+   - **Idempotency**: Do create/update handlers check for existing records? Are operations safe to retry?
+   - **Error propagation**: Do error paths produce meaningful messages? Do they leak internals (stack traces, paths)?
+   - **State cleanup**: Are multi-step operations atomic? Do partial failures leave orphan data?
+   - **Input validation**: Are injection vectors (SQL, XSS, command injection) handled at system boundaries?
 2. Not all categories apply to every feature — skip irrelevant ones
-3. Each test produces PASS or FAIL with evidence
-4. Any FAIL with CRITICAL or HIGH impact = gate FAILS
+3. Each finding references specific files and line numbers
+4. Mark as PASS (correctly handled) or CONCERN (gap found)
+5. Any CONCERN with CRITICAL or HIGH impact = gate FAILS
 
-**Mindset**: Try to break the implementation, not confirm it works. Think like an attacker or a careless user, not a happy-path tester.
+**Mindset**: Review the code like an attacker looking for gaps, not a verifier confirming it works. This is static analysis, not runtime testing — read the code, trace the paths, find the holes.
 
 **Common triggers**:
-- API endpoint accepts empty required fields without validation
-- Duplicate POST creates duplicate records instead of returning conflict
-- Error messages expose internal stack traces or sensitive paths
-- Concurrent writes corrupt shared state
+- Input validation missing on a public-facing endpoint
+- No uniqueness check before INSERT (idempotency gap)
+- Error handler catches and re-throws without sanitizing sensitive details
+- Shared state accessed without synchronization
 
 ## Severity Rubric
 
@@ -133,7 +134,7 @@ Six mandatory gates that determine PASS/FAIL for implementation validation.
 | R4 Git Traceability | No commit-to-task mapping | Incomplete mapping | Minor gaps | Clear mapping |
 | R5 Evidence Quality | No evidence collected | Partial evidence | Minor gaps | Complete evidence |
 | R6 Repository Compliance | Major pattern violations | Some violations | Minor deviations | Full compliance |
-| R7 Adversarial Resilience | Critical boundary/concurrency failures | Some adversarial failures | Minor edge case issues | All adversarial tests pass |
+| R7 Adversarial Analysis | Unhandled critical boundary/security gaps | Some unhandled edge cases | Minor gaps with low impact | All analyzed categories clean |
 
 ## Red Flags (Auto-Escalate to CRITICAL/HIGH)
 

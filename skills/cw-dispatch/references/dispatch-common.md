@@ -178,3 +178,18 @@ Gates: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F]
 Output this summary directly to the user, then:
 - **If PASS**: Inform user implementation is ready for review/merge
 - **If FAIL**: Show blocking issues and recommend running the dispatch skill again after fixes
+
+## Recommended Quality Gate Order
+
+After all tasks complete, the user can run quality gates in any order. When presenting options, recommend this sequence:
+
+```
+/cw-validate  →  /cw-testing  →  /cw-review  →  PR
+```
+
+**Why this order:**
+1. **Validate first**: Catches workflow-level issues (missing proofs, scope violations, credential leaks) before investing time in E2E tests or code review. Fast and cheap.
+2. **Test second**: E2E tests verify behavioral correctness against the spec. Catches application bugs that validation's static analysis can't.
+3. **Review last**: Human-quality code review is most valuable after known bugs are fixed. Reviewers focus on design and maintainability rather than chasing test failures.
+
+Each gate is optional — the user may skip any of them. But when offering next steps, present them in this order and mark the next recommended gate.

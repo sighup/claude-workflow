@@ -9,7 +9,6 @@ color: green
 model: inherit
 tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task, LSP
 effort: medium
-maxTurns: 25
 skills:
   - cw-research
 ---

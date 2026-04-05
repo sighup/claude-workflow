@@ -40,10 +40,11 @@
 - New constants or configuration values that already exist elsewhere
 
 **How to check for reuse opportunities:**
-1. For each new function or utility in the diff, search the codebase for similar function names or signatures
-2. Check if the project already has a `utils/`, `helpers/`, `lib/`, or `common/` directory with overlapping functionality
-3. Look for existing npm packages, standard library functions, or framework utilities that do the same thing
-4. Flag duplicates as advisory — the implementer may have had a good reason to create a new version
+1. **Name search**: For each new function in the diff, `Grep` the codebase for the same function name (e.g., new `formatDate` → search for existing `formatDate`, `dateFormat`, `formatTimestamp`)
+2. **Directory scan**: `Glob` for `**/utils/**`, `**/helpers/**`, `**/lib/**`, `**/common/**`, `**/shared/**` and read their exports — these are the most likely locations for existing utilities
+3. **Pattern match**: If the new code implements a common pattern (debounce, retry, deep merge, slug generation, validation), search for that pattern name across the codebase and `package.json` dependencies
+4. **Import check**: Look at what the new file already imports — the same package may export a function that replaces the hand-rolled version (e.g., writing a custom `pick()` when lodash is already a dependency)
+5. Flag duplicates as advisory — the implementer may have had a good reason to create a new version
 
 ## Severity Guidelines
 
