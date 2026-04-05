@@ -94,10 +94,10 @@ After restarting, run /cw-plan again to continue.
 ### Step 1: Analysis
 
 1. **Locate Spec**: User provides path or find the most recent spec in `./docs/specs/` without an accompanying task graph
-2. **Analyze Requirements**: Read functional requirements **with their R-IDs** (R1.1, R1.2, etc.) when present. For old-format specs without R-IDs, generate them as `R01.1`, `R01.2`, etc.
-3. **Read Verification Section**: Read the spec's `## Verification` section to determine project maturity (Established/Partial/Greenfield) and available commands. If absent, fall back to reading project config files directly.
+2. **Analyze Requirements**: Read functional requirements **with their R-IDs** (R1.1, R1.2, etc.)
+3. **Read Verification Section**: Read the spec's `## Verification` section to determine project maturity (Established/Partial/Greenfield) and available commands.
 4. **Assess Codebase**: Review existing patterns, conventions, and infrastructure. Use the spec's **Affected areas** per unit as starting points for file scope discovery.
-5. **Identify Dependencies**: Consume explicit `**Depends on:**` declarations from the spec for `addBlockedBy`. Only infer dependencies for units without explicit declarations.
+5. **Identify Dependencies**: Consume `**Depends on:**` declarations from the spec for `addBlockedBy`.
 6. **Evaluate Complexity**: Assign `trivial`, `standard`, or `complex` to each unit
 6. **Assign Model**: Map complexity to model recommendation:
    - `trivial` → `"haiku"` (fast, cost-effective)
@@ -179,10 +179,10 @@ TaskCreate({
       files_to_create: [...],
       files_to_modify: [...],
       patterns_to_follow: [...],
-      affected_areas: [...]              // Optional — carried from spec's Affected areas field
+      affected_areas: [...]              // From spec's Affected areas field
     },
     requirements: [
-      { id: "R1.1", text: "...", testable: true }  // Use spec R-IDs verbatim; generate R01.1 format only for old-format specs
+      { id: "R1.1", text: "...", testable: true }  // Use spec R-IDs verbatim
     ],
     proof_artifacts: [
       { type: "test|cli|url|file|screenshot|visual", command: "...", expected: "...", capture_method: "auto|manual|skip" }
@@ -266,11 +266,10 @@ Ensure complete coverage:
 
 ## Verification Commands
 
-Populate `verification.pre` and `verification.post` using this priority:
+Populate `verification.pre` and `verification.post` from the spec's `## Verification` section:
 
-1. **Primary source**: The spec's `## Verification` section — use the listed commands directly
-2. **Fallback** (old-format specs without `## Verification`): Read project config (package.json, Makefile, pyproject.toml, Cargo.toml) to determine correct commands
-3. **Greenfield handling**: For tasks in units *before* the bootstrapping unit, set `verification.pre: []` and `verification.post: []` (empty arrays — the executor iterates arrays, so empty = no-op). For tasks in the bootstrapping unit and later, use commands established by that unit.
+1. **Established/Partial projects**: Use the listed commands directly
+2. **Greenfield projects**: For tasks in units *before* the bootstrapping unit, set `verification.pre: []` and `verification.post: []` (empty arrays — the executor iterates arrays, so empty = no-op). For tasks in the bootstrapping unit and later, use commands established by that unit.
 
 Common command patterns by ecosystem:
 
@@ -296,9 +295,9 @@ Before presenting to user:
 - [ ] Sub-tasks inherit `demoable_unit` and `demoable_unit_title` from their parent
 - [ ] Model assignments match complexity (`trivial`→haiku, `standard`→sonnet, `complex`→opus)
 - [ ] Explicit `Depends on` declarations from the spec are respected in `addBlockedBy`
-- [ ] Requirement IDs match the spec's R-IDs (R1.1, R2.1 format) when present
+- [ ] Requirement IDs match the spec's R-IDs (R1.1, R2.1 format)
 - [ ] Verification arrays are empty for pre-bootstrap greenfield tasks
-- [ ] `affected_areas` from spec carried into scope metadata when available
+- [ ] `affected_areas` from spec carried into scope metadata
 
 ## Output Requirements
 
