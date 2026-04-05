@@ -98,6 +98,7 @@ After workers complete:
 ```
 CW-DISPATCH COMPLETE
 =====================
+VERDICT: ALL_COMPLETE | PARTIAL | FAILED
 Workers spawned: 2
   worker-1: T01 - [subject] -> COMPLETED
   worker-2: T04 - [subject] -> COMPLETED

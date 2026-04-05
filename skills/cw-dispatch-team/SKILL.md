@@ -218,6 +218,7 @@ Run `TaskList()` for final state. Run post-completion synthesis — see [dispatc
 ```
 CW-DISPATCH-TEAM COMPLETE
 ===========================
+VERDICT: ALL_COMPLETE | PARTIAL | FAILED
 Team: {task-list-id}-team
 Workers: N
 Tasks completed: X/Y

@@ -284,7 +284,7 @@ If no spec directory is found, output the report directly.
 ```
 CW-REVIEW COMPLETE
 ===================
-Overall: APPROVED | CHANGES REQUESTED
+VERDICT: APPROVED | CHANGES_REQUESTED
 
 Blocking Issues: X
   A (Correctness): Y
