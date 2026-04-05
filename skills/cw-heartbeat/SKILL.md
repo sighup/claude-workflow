@@ -149,14 +149,36 @@ Compile this into a **spec prompt** — the input for cw-spec.
 Execute each stage based on `pipeline.*` config flags:
 
 **Stage 1 — Spec** (if `auto_spec: true`):
+
+Spawn a spec-writer subagent with the full issue context inlined in the prompt. Do NOT invoke cw-spec as a skill — instead, construct a complete Task prompt that gives the spec-writer everything it needs:
+
 ```
-Skill({ skill: "cw-spec", args: "--from-linear" })
+Task({
+  subagent_type: "claude-workflow:spec-writer",
+  description: "Generate spec for {ISSUE_ID}",
+  prompt: "Generate a specification for this feature. Read protocol at: skills/cw-spec/SKILL.md.
+
+This is an automated call from cw-heartbeat — you are running non-interactively:
+- Skip Step 4 (clarifying questions) — the issue context below IS the requirements
+- Skip Step 6 (review and refinement) — proceed directly after generation
+- Skip 'What Comes Next' — the heartbeat orchestrator handles the next stage
+- Use '{ISSUE_ID}-{slugified-title}' as the feature name in the spec directory
+
+Issue: {ISSUE_ID}
+Title: {ISSUE_TITLE}
+
+Description:
+{ISSUE_DESCRIPTION}
+
+Comments:
+{CHRONOLOGICAL_COMMENTS}
+
+Parent context:
+{PARENT_ISSUE_CONTEXT_OR_NONE}"
+})
 ```
 
-Pass the issue context as the initial prompt. The `--from-linear` flag tells cw-spec to:
-- Use the issue title/description as the feature description
-- Skip clarifying questions (the issue IS the requirements)
-- Use the issue ID in the spec directory name (e.g., `01-spec-ENG-123-search-endpoint`)
+This gives the spec-writer the same structured context it would get from a human, without adding conditional branching logic to cw-spec itself.
 
 If `--skip-spec` was provided, locate the existing spec from the issue or most recent spec in `docs/specs/`.
 
