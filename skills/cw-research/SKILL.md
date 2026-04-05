@@ -148,7 +148,7 @@ Task({
 })
 ```
 
-See `references/research-dimensions.md` for dimension focus areas, subagent prompt templates, and topic filtering examples.
+See [research-dimensions.md](references/research-dimensions.md) for dimension focus areas, subagent prompt templates, and topic filtering examples.
 
 **Collecting results:** After all five subagents complete, collect their findings into the report template (Step 3).
 
@@ -156,7 +156,7 @@ See `references/research-dimensions.md` for dimension focus areas, subagent prom
 
 Assemble the subagent findings into a structured markdown report. This is the initial version -- it will be enriched with deep-dive findings and external context in later steps.
 
-See `references/report-template.md` for the full markdown template and report size guidelines.
+See [report-template.md](references/report-template.md) for the full markdown template and report size guidelines.
 
 The report contains sections for each of the five dimensions (Summary, Tech Stack & Project Structure, Architecture & Patterns, Dependencies & Integrations, Test & Quality Patterns, Data Models & API Surface), with subsections for key findings in each area.
 
@@ -235,7 +235,7 @@ AskUserQuestion({
 
 **5b. Classify and process each source:**
 
-See `references/external-context-protocol.md` for the source classification table, graceful error handling patterns, source attribution rules, and storage format.
+See [external-context-protocol.md](references/external-context-protocol.md) for the source classification table, graceful error handling patterns, source attribution rules, and storage format.
 
 Classify each source by type (Web URL, GitHub URL, local file, local directory, image file, or search query) and process with the appropriate tool. Handle inaccessible sources gracefully -- never fail the research process due to an unreachable source.
 
@@ -301,7 +301,7 @@ For each dimension that received a deep-dive, update the corresponding section i
 
 **7b. Add external context section:**
 
-If external context sources were provided in Step 5, add an "External Context" section to the report. See `references/external-context-protocol.md` for the report integration format and source attribution rules.
+If external context sources were provided in Step 5, add an "External Context" section to the report. See [external-context-protocol.md](references/external-context-protocol.md) for the report integration format and source attribution rules.
 
 **7c. Update the summary:**
 
@@ -333,13 +333,13 @@ After saving the report, generate a "Meta-Prompt" section and append it to the e
 
 **9a. Compose the meta-prompt:**
 
-See `references/meta-prompt-template.md` for the field derivation table and full meta-prompt markdown template.
+See [meta-prompt-template.md](references/meta-prompt-template.md) for the field derivation table and full meta-prompt markdown template.
 
 Derive each field from the research findings (feature name, problem statement, key components, architectural constraints, patterns to follow, suggested demoable units, and code references).
 
 **9b. Append the meta-prompt to the report:**
 
-Read the saved report file, append the meta-prompt section using the template from `references/meta-prompt-template.md`, and write the updated file.
+Read the saved report file, append the meta-prompt section using the template from [meta-prompt-template.md](references/meta-prompt-template.md), and write the updated file.
 
 ### Step 10: Present Results and Next-Step Options
 
@@ -413,10 +413,10 @@ AskUserQuestion({
 
 | Document | Contents |
 |----------|----------|
-| `references/report-template.md` | Full markdown report template and size guidelines |
-| `references/research-dimensions.md` | Five exploration dimensions with focus areas and subagent prompts |
-| `references/external-context-protocol.md` | Source classification, error handling, attribution rules |
-| `references/meta-prompt-template.md` | Meta-prompt field derivation and template |
+| [report-template.md](references/report-template.md) | Full markdown report template and size guidelines |
+| [research-dimensions.md](references/research-dimensions.md) | Five exploration dimensions with focus areas and subagent prompts |
+| [external-context-protocol.md](references/external-context-protocol.md) | Source classification, error handling, attribution rules |
+| [meta-prompt-template.md](references/meta-prompt-template.md) | Meta-prompt field derivation and template |
 
 ***
 

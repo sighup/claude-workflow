@@ -46,7 +46,7 @@ All 6 gates must pass for overall PASS:
 | **E** | Implementation follows repository standards | Yes |
 | **F** | No real credentials in proof artifacts | Yes |
 
-See `references/validation-gates.md` for detailed gate definitions.
+See [validation-gates.md](references/validation-gates.md) for detailed gate definitions.
 
 ## Process
 
@@ -112,7 +112,7 @@ For each proof artifact in completed tasks:
 
 ### Step 5: Apply Gates
 
-Check each gate in order (A through F). See `references/validation-gates.md`.
+Check each gate in order (A through F). See [validation-gates.md](references/validation-gates.md).
 
 ### Step 6: Generate Report
 

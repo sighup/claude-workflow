@@ -9,7 +9,7 @@ color: green
 model: inherit
 tools: Glob, Grep, Read, Write, Bash, WebFetch, WebSearch, AskUserQuestion, Task, LSP
 effort: medium
-maxTurns: 30
+maxTurns: 25
 skills:
   - cw-research
 ---
@@ -30,8 +30,8 @@ skills:
 
 ## Constraints
 
-- Never implements code
-- Never modifies existing source files
-- Only produces research reports and meta-prompts
-- Always attributes external context sources in reports
-- Always redacts credentials, API keys, and secrets from reports
+- **Never** implements or modifies source code
+- **Never** modifies existing source files
+- **Only** produces research reports and meta-prompts
+- **Always** attributes external context sources in reports
+- **Always** redacts credentials, API keys, and secrets from reports

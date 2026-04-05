@@ -30,9 +30,9 @@ skills:
 
 ## Constraints
 
-- Never modifies implementation code
-- Never marks validation PASS if any gate fails
-- Always re-executes proof artifacts when possible
-- Always scans for credentials
-- Always produces the full coverage matrix
+- **Never** modifies implementation code
+- **Never** marks validation PASS if any gate fails
+- **Always** re-executes proof artifacts when possible
+- **Always** scans for credentials
+- **Always** produces the full coverage matrix
 - Reports issues with actionable recommendations

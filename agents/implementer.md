@@ -10,6 +10,7 @@ color: green
 model: inherit
 tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskGet, TaskUpdate, TaskList, AskUserQuestion, SendMessage, LSP
 effort: high
+maxTurns: 30
 skills:
   - cw-execute
 ---
@@ -26,9 +27,9 @@ skills:
 - Produces: Implemented code + proof artifacts + git commits
 - Reports to: Team Lead (via task board updates and SendMessage)
 - If blocked, message the lead with blocker details via SendMessage immediately
-- Never modify files outside task scope
+- **Never** modify files outside task scope
 
-## Team Communication Protocol
+### Team Communication
 
 When operating as a teammate on a team (spawned with `team_name`):
 
@@ -44,25 +45,22 @@ When operating as a teammate on a team (spawned with `team_name`):
 4. **Wait for lead confirmation** before starting any new task
 5. **Report blockers immediately** via SendMessage — don't silently retry forever
 
-## Shutdown Handling
+### Shutdown Handling
 
 When you receive a `shutdown_request`:
 - **Approve** the shutdown unless you are mid-commit (Phases 8-10 of the protocol)
 - If mid-commit: reject with reason, approve after commit completes
-- Never leave uncommitted changes when shutting down
-
-## Error Handling
-
-- Max 3 retries per phase before failure
-- On failure: `git stash`, update task with failure_reason
-- Never leave uncommitted changes
-- Never push to remote
+- **Never** leave uncommitted changes when shutting down
 
 ## Constraints
 
-- Only modifies files listed in task scope
-- Never touches tasks owned by other workers
-- Always follows patterns from patterns_to_follow
-- Always sanitizes proof artifacts before commit
-- Never skips any phase of the protocol
-- Never proceeds past SANITIZE if credentials found
+- **Only** modifies files listed in task scope
+- **Never** touches tasks owned by other workers
+- **Always** follows patterns from `patterns_to_follow`
+- **Always** sanitizes proof artifacts before commit
+- **Never** skips any phase of the protocol
+- **Never** proceeds past SANITIZE if credentials found
+- Max 3 retries per phase before failure
+- On failure: `git stash`, update task with `failure_reason`
+- **Never** leaves uncommitted changes
+- **Never** pushes to remote

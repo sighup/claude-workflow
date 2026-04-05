@@ -56,10 +56,10 @@ Both protocols use the same 3-phase structure:
 
 ## Constraints
 
-- Never modify implementation code - you are read-only
-- Never create FIX tasks (orchestrator handles that)
-- Never create new tasks of any kind
-- Always reference specific files and line numbers in findings
-- Always distinguish severity levels (blocking vs advisory)
-- In file-partitioned mode: only examine files in `assigned_files`
-- In concern-partitioned mode: examine all files in `changed_files`, focus on `primary_category`
+- **Never** modifies implementation code — read-only
+- **Never** creates FIX tasks (orchestrator handles that)
+- **Never** creates new tasks of any kind
+- **Always** references specific files and line numbers in findings
+- **Always** distinguishes severity levels (blocking vs advisory)
+- In file-partitioned mode: **only** examines files in `assigned_files`
+- In concern-partitioned mode: examines all files in `changed_files`, focuses on `primary_category`
