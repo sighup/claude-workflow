@@ -70,6 +70,7 @@ If working in a pre-existing project, review:
 - Repository standards from: README.md, CONTRIBUTING.md, CLAUDE.md, package.json, config files
 - Testing patterns and quality practices
 - Commit message conventions
+- **Verification commands**: Identify existing lint, build, and test commands from package.json scripts, Makefile targets, pyproject.toml, or equivalent. Classify project maturity as: Established (all exist), Partial (some exist), or Greenfield (none exist)
 
 #### LSP Availability Check
 
@@ -194,19 +195,32 @@ Generate the specification using this structure:
 
 ## Demoable Units of Work
 
+> Requirement IDs use the format **R{unit}.{seq}** (R1.1, R1.2 for Unit 1; R2.1 for Unit 2). These IDs are referenced directly by the planner — do not renumber after approval.
+
 ### Unit 1: [Title]
 
 **Purpose:** [What this slice accomplishes]
+**Depends on:** [Unit N, Unit M | None]
+**Affected areas:** `[dir/]`, `[file.ts]` [(new) for greenfield paths]
 
 **Functional Requirements:**
-- The system shall [requirement: clear, testable, unambiguous]
-- The system shall [requirement: clear, testable, unambiguous]
+- **R1.1**: The system shall [requirement: clear, testable, unambiguous]
+- **R1.2**: The system shall [requirement: clear, testable, unambiguous]
 
 **Proof Artifacts:**
 - [Type]: [description] demonstrates [what it proves]
 
 ### Unit 2: [Title]
-[Same structure as Unit 1]
+
+**Purpose:** [What this slice accomplishes]
+**Depends on:** [Unit 1 | None]
+**Affected areas:** `[dir/]`, `[file.ts]` [(new) for greenfield paths]
+
+**Functional Requirements:**
+- **R2.1**: The system shall [requirement]
+
+**Proof Artifacts:**
+- [Type]: [description] demonstrates [what it proves]
 
 ## Non-Goals (Out of Scope)
 [What this feature will NOT include]
@@ -216,6 +230,19 @@ Generate the specification using this structure:
 
 ## Repository Standards
 [Existing patterns implementation should follow]
+
+## Verification
+
+**Project maturity:** [Established | Partial | Greenfield]
+
+**Available commands:**
+| Check | Command |
+|-------|---------|
+| Lint  | `[command or "none"]` |
+| Build | `[command or "none"]` |
+| Test  | `[command or "none"]` |
+
+**Greenfield bootstrapping:** [Which unit establishes missing commands, or "N/A — all commands available"]
 
 ## Technical Considerations
 [Implementation constraints, dependencies, plannerural decisions]
@@ -262,6 +289,10 @@ Each demoable unit must be:
 - **Appropriately sized**: 2-4 units per spec is typical
 - **Sequentially buildable**: Later units can depend on earlier ones
 
+Per-unit metadata fields:
+- **Depends on** is optional. Write "None" for independent units, or omit the line. When specified, the planner uses it directly for task dependency ordering (`addBlockedBy`). When omitted, the planner infers from context.
+- **Affected areas** lists directories and key files the unit will touch. For greenfield, mark new paths with `(new)`. This is directional guidance — the planner determines exact file scope from the codebase.
+
 ## Proof Artifact Types
 
 | Type | Format | Example |
@@ -271,6 +302,8 @@ Each demoable unit must be:
 | URL | `URL: [url] shows [expected]` | `URL: /dashboard shows welcome message` |
 | Screenshot | `Screenshot: [page] showing [state]` | `Screenshot: /login page showing error state` |
 | File | `File: [path] contains [pattern]` | `File: config.json contains new field` |
+
+> **Greenfield note:** For early units in greenfield projects where no test runner exists, use `File` proof artifacts to verify setup (e.g., `File: package.json contains "test" script`). The planner sets `verification.pre` and `verification.post` to empty arrays for these units.
 
 ## Output Requirements
 
