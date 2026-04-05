@@ -90,6 +90,49 @@ Before outputting any completion or "no tasks" message, verify:
 
 **WARNING**: If you find yourself writing a detailed "completion report" with stats like "151 proof artifacts" or "63 library files" that you did NOT just count from TaskList, you are hallucinating. STOP and re-run TaskList.
 
+## Post-Completion Synthesis
+
+After all workers in a batch complete, **synthesize** their outputs before reporting. Your job is not to relay — it is to understand. Never delegate understanding.
+
+### Integration Check
+
+Read the completed tasks' metadata and git commits, then check for:
+
+1. **Cross-worker imports**: Did Worker-1 create a type/module that Worker-2's code should reference? Check for missing imports or unresolved references.
+   ```bash
+   # Check for build/type errors that suggest integration gaps
+   # Run the project's build command (from task verification.pre)
+   ```
+
+2. **Conflicting patterns**: Did workers use different conventions for the same concern? (e.g., different error handling styles, naming conventions, or API response shapes)
+   ```bash
+   # Review git log for the batch
+   git log --oneline -N  # N = number of workers
+   ```
+
+3. **Missed connections**: New endpoints without route registration, new components without exports, new schemas without migration files.
+
+4. **Scope leakage**: Files modified that weren't in any task's declared scope.
+
+### When to Flag
+
+- **CRITICAL**: Build/type errors after merging worker outputs → must fix before next batch
+- **WARNING**: Pattern inconsistencies → note in report, let review catch details
+- **INFO**: Minor integration observations → include in report for awareness
+
+### Synthesis Output
+
+Add to the dispatch completion report:
+
+```
+Integration Check:
+  Build: PASS | FAIL [command output if failed]
+  Cross-worker issues: [none | list of issues found]
+  Pattern consistency: [consistent | list of divergences]
+```
+
+If the build fails after workers complete, attempt to fix obvious integration issues (missing imports, registration). If the fix is non-trivial, report it as a blocking issue.
+
 ## Error Handling
 
 If a worker fails (task remains in_progress or goes back to pending):

@@ -92,7 +92,8 @@ Repeat for each worker with incrementing worker-N identifiers.
 After workers complete:
 
 1. Run `TaskList` to check final state
-2. Report results:
+2. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
+3. Report results:
 
 ```
 CW-DISPATCH COMPLETE
@@ -100,6 +101,11 @@ CW-DISPATCH COMPLETE
 Workers spawned: 2
   worker-1: T01 - [subject] -> COMPLETED
   worker-2: T04 - [subject] -> COMPLETED
+
+Integration Check:
+  Build: PASS | FAIL
+  Cross-worker issues: [none | list]
+  Pattern consistency: [consistent | list]
 
 Newly unblocked:
   T02 (was blocked by T01) -> now READY

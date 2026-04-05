@@ -213,7 +213,7 @@ Teammate({ operation: "cleanup" })
 
 ### Step 9: Report and Offer Validation
 
-Run `TaskList()` for final state, then report:
+Run `TaskList()` for final state. Run post-completion synthesis — see [dispatch-common.md](../cw-dispatch/references/dispatch-common.md#post-completion-synthesis) for integration checks. Then report:
 
 ```
 CW-DISPATCH-TEAM COMPLETE
@@ -225,6 +225,11 @@ Tasks completed: X/Y
   worker-1: T01 -> COMPLETED, T05 -> COMPLETED
   worker-2: T04 -> COMPLETED
   ...
+
+Integration Check:
+  Build: PASS | FAIL
+  Cross-worker issues: [none | list]
+  Pattern consistency: [consistent | list]
 
 Progress: X/Y tasks complete
 ```
