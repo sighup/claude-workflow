@@ -127,7 +127,7 @@ The topic `authentication` scopes exploration to authentication-related files, p
 ```
 Perform a general codebase exploration covering all areas without topic filtering.
 
-**Depth levels** (optional `--depth` flag):
+**Depth levels** (optional, specified in natural language):
 
 | Depth | Behavior | Steps Executed |
 |-------|----------|----------------|
@@ -135,9 +135,14 @@ Perform a general codebase exploration covering all areas without topic filterin
 | `medium` (default) | Full process as documented | All steps |
 | `thorough` | Full process + expanded exploration with 2 passes per dimension | All steps, with repeat auto-explore |
 
-Parse from invocation: `/cw-research --depth quick authentication`
+Examples:
+```
+/cw-research quick overview of authentication
+/cw-research thorough analysis of the payment system
+/cw-research authentication
+```
 
-If `--depth` is not specified, default to `medium`.
+If the user doesn't mention a depth level, default to `medium`. Look for keywords like "quick", "brief", "overview" (→ quick) or "thorough", "deep", "comprehensive" (→ thorough) in the invocation text.
 
 **Determine topic slug** for the output filename:
 ```

@@ -38,7 +38,7 @@ You are a **BDD Specialist** responsible for:
 
 Determine the spec to process, in order of precedence:
 
-1. `--spec <path>` argument provided in the invocation prompt
+1. Spec path mentioned in the invocation prompt (e.g., "generate scenarios for docs/specs/01-spec-auth/...")
 2. Most recently modified `*.md` file in `docs/specs/*/` (excluding any `.feature` files)
 3. Use `AskUserQuestion` if ambiguous (multiple specs modified recently)
 
@@ -152,7 +152,7 @@ If found, run in two passes:
 
 > **When the invocation prompt contains an explicit skip instruction** (e.g., "skip Step 4" or "This is an automated call from cw-spec"): skip this phase and return after saving `.feature` files.
 >
-> **Otherwise** (any direct user invocation, with or without `--spec`): proceed with the question below.
+> **Otherwise** (any direct user invocation, with or without a spec path): proceed with the question below.
 
 After saving all `.feature` files, ask:
 
