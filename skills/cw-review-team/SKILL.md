@@ -402,7 +402,7 @@ If no spec directory is found, output the report directly.
 ```
 CW-REVIEW-TEAM COMPLETE
 ========================
-Overall: APPROVED | CHANGES REQUESTED
+VERDICT: APPROVED | CHANGES_REQUESTED
 Review team: {task-list-id}-review-team (cleaned up)
 
 Blocking Issues: X
