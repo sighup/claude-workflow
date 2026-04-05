@@ -12,7 +12,7 @@ Examine all changed files through your primary concern lens. Report findings —
 |----------|----------------|----------|-----------------|
 | security-reviewer | Security | B | Injection (SQL, XSS, command), auth/authz gaps, credential leaks, path traversal, unsafe deserialization, insecure data handling |
 | correctness-reviewer | Correctness | A | Logic errors, off-by-one, missing error handling, race conditions, incorrect transforms, null/undefined gaps |
-| spec-reviewer | Spec Compliance | C + D | Missing requirements, behavior contradicting spec, missing demoable units, dead code, complexity, performance, pattern inconsistency |
+| spec-reviewer | Spec Compliance | C + D + E | Missing requirements, behavior contradicting spec, missing demoable units, dead code, complexity, performance, pattern inconsistency, reuse opportunities (duplicated utilities, re-implemented patterns) |
 
 Each reviewer may note **secondary findings** outside their primary concern when issues are obvious, but the primary concern is the focus.
 

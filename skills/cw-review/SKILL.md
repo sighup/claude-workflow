@@ -104,11 +104,12 @@ Review all changed non-test files directly. For each file:
 
 1. Read the full file: `Read({ file_path: "<path>" })`
 2. Get its diff: `git diff main...HEAD -- <path>`
-3. Evaluate against categories A–D (see [review-categories.md](references/review-categories.md))
-4. When `lsp_available = true`, use LSP to deepen the review:
+3. Evaluate against categories A–E (see [review-categories.md](references/review-categories.md))
+4. **Reuse check** (Category E): For new functions or utilities in the diff, search the codebase for existing implementations that overlap. Use `Grep` to find similar function names, patterns, or logic. Flag duplicates as advisory findings.
+5. When `lsp_available = true`, use LSP to deepen the review:
    - `findReferences` to check if changes have ripple effects beyond the diff (e.g., callers of a modified function that now need updating)
    - `incomingCalls` to understand the impact of modified functions on their consumers
-5. Record findings
+6. Record findings
 
 After reviewing all files, skip to **Step 3: Create FIX Tasks**.
 

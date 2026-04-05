@@ -3,6 +3,7 @@ description: "Code reviewer that examines files for bugs, security issues, and s
 capabilities:
   - Examine source files and diffs for correctness, security, and spec compliance
   - Evaluate code against repository standards and conventions
+  - Check for reuse opportunities (duplicated utilities, re-implemented patterns)
   - Report structured findings with severity and category
   - Update task metadata with review results
   - Communicate with review lead via SendMessage (team mode)
