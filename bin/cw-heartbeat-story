@@ -1,0 +1,330 @@
+#!/bin/bash
+#
+# cw-heartbeat-story - Execute a single Linear story in an isolated worktree
+#
+# Creates a git worktree with its own task list, runs the cw pipeline stages
+# (plan → dispatch → validate → review → test), and outputs a JSON result
+# to stdout. Called by the cw-heartbeat skill for session isolation.
+#
+# Usage:
+#   cw-heartbeat-story [OPTIONS]
+#
+# Required:
+#   --epic-slug NAME      Epic feature name (for worktree/branch naming)
+#   --story-slug NAME     Story name (for worktree/branch naming)
+#   --spec PATH           Path to the spec file
+#   --unit N              Demoable unit number in the spec
+#
+# Optional:
+#   --review              Run cw-review after validation
+#   --testing             Run cw-testing after review
+#   --pr                  Create PR after completion
+#   --resume              Resume in existing worktree (skip creation)
+#   -m, --model MODEL     Claude model to use (default: sonnet)
+#   -v, --verbose         Stream JSON output for real-time visibility
+#   -h, --help            Show this help message
+#
+# Output:
+#   JSON object to stdout with execution results.
+#   All progress logging goes to stderr.
+#
+# Exit Codes:
+#   0  Story completed successfully
+#   1  Story execution failed (blocked/error)
+#   4  Missing dependencies or invalid arguments
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+EPIC_SLUG=""
+STORY_SLUG=""
+SPEC_PATH=""
+UNIT_NUM=""
+DO_REVIEW=false
+DO_TESTING=false
+DO_PR=false
+RESUME=false
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+show_help() {
+    echo "Usage: cw-heartbeat-story [OPTIONS]" >&2
+    echo "" >&2
+    echo "Execute a single Linear story in an isolated worktree." >&2
+    echo "" >&2
+    echo "Required:" >&2
+    echo "  --epic-slug NAME    Epic feature name" >&2
+    echo "  --story-slug NAME   Story name" >&2
+    echo "  --spec PATH         Spec file path" >&2
+    echo "  --unit N            Demoable unit number" >&2
+    echo "" >&2
+    echo "Optional:" >&2
+    echo "  --review            Run cw-review after validation" >&2
+    echo "  --testing           Run cw-testing after review" >&2
+    echo "  --pr                Create PR after completion" >&2
+    echo "  --resume            Resume in existing worktree" >&2
+    echo "  -m, --model MODEL   Claude model (default: $CW_MODEL)" >&2
+    echo "  -v, --verbose       Stream JSON output" >&2
+    echo "  -h, --help          Show this help" >&2
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --epic-slug) require_arg "--epic-slug" "${2:-}"; EPIC_SLUG="$2"; shift 2 ;;
+        --story-slug) require_arg "--story-slug" "${2:-}"; STORY_SLUG="$2"; shift 2 ;;
+        --spec) require_arg "--spec" "${2:-}"; SPEC_PATH="$2"; shift 2 ;;
+        --unit) require_arg "--unit" "${2:-}"; UNIT_NUM="$2"; shift 2 ;;
+        --review) DO_REVIEW=true; shift ;;
+        --testing) DO_TESTING=true; shift ;;
+        --pr) DO_PR=true; shift ;;
+        --resume) RESUME=true; shift ;;
+        -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
+        -v|--verbose) CW_VERBOSE=true; shift ;;
+        -h|--help) show_help; exit 0 ;;
+        -*) log_error "Unknown option: $1" >&2; show_help; exit 4 ;;
+        *) log_error "Unexpected argument: $1" >&2; show_help; exit 4 ;;
+    esac
+done
+
+# =============================================================================
+# Validation
+# =============================================================================
+
+check_jq || exit 4
+check_claude || exit 4
+
+if [ -z "$EPIC_SLUG" ] || [ -z "$STORY_SLUG" ] || [ -z "$SPEC_PATH" ] || [ -z "$UNIT_NUM" ]; then
+    log_error "Required: --epic-slug, --story-slug, --spec, --unit" >&2
+    exit 4
+fi
+
+if [ ! -f "$SPEC_PATH" ]; then
+    log_error "Spec file not found: $SPEC_PATH" >&2
+    exit 4
+fi
+
+WORKTREE_NAME="${EPIC_SLUG}-${STORY_SLUG}"
+BRANCH_NAME="feature/${EPIC_SLUG}/${STORY_SLUG}"
+ORIGINAL_DIR="$(pwd)"
+RESULT_FILE=$(mktemp)
+START_TIME=$(date +%s)
+
+# Initialize result
+cat > "$RESULT_FILE" << EOF
+{
+  "result": "error",
+  "epic_slug": "$EPIC_SLUG",
+  "story_slug": "$STORY_SLUG",
+  "spec_path": "$SPEC_PATH",
+  "unit": $UNIT_NUM,
+  "commits": [],
+  "proof_paths": [],
+  "gate_results": {},
+  "error": null,
+  "duration_seconds": 0
+}
+EOF
+
+# Cleanup function
+cleanup() {
+    cd "$ORIGINAL_DIR" 2>/dev/null || true
+    local end_time=$(date +%s)
+    local duration=$((end_time - START_TIME))
+
+    # Update duration in result
+    local tmp=$(mktemp)
+    jq --argjson d "$duration" '.duration_seconds = $d' "$RESULT_FILE" > "$tmp" && mv "$tmp" "$RESULT_FILE"
+
+    # Output result to stdout
+    cat "$RESULT_FILE"
+    rm -f "$RESULT_FILE"
+}
+
+trap cleanup EXIT
+
+# =============================================================================
+# Worktree Setup
+# =============================================================================
+
+log_info "Story: $EPIC_SLUG / $STORY_SLUG (unit $UNIT_NUM)" >&2
+log_info "Spec: $SPEC_PATH" >&2
+log_info "Model: $CW_MODEL" >&2
+
+WORKTREE_DIR=".worktrees/feature-${WORKTREE_NAME}"
+
+if [ "$RESUME" = true ] && [ -d "$WORKTREE_DIR" ]; then
+    log_info "Resuming in existing worktree: $WORKTREE_DIR" >&2
+    cd "$WORKTREE_DIR"
+else
+    log_info "Creating worktree: $WORKTREE_DIR" >&2
+
+    if ! create_worktree "$WORKTREE_NAME"; then
+        log_error "Failed to create worktree" >&2
+        jq '.error = "Failed to create worktree"' "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+        exit 1
+    fi
+
+    cd "$CW_WORKTREE_PATH"
+fi
+
+WORK_DIR="$(pwd)"
+
+# Discover session for this worktree
+if ! discover_session "$WORK_DIR" 2>/dev/null; then
+    log_info "No existing session — first run in this worktree" >&2
+fi
+
+# =============================================================================
+# Pipeline Stages
+# =============================================================================
+
+STAGE_OK=true
+
+# ─── Stage 1: Plan ──────────────────────────────────────────────────────────
+log_info "Stage 1: Planning (cw-plan scoped to unit $UNIT_NUM)..." >&2
+
+PLAN_PROMPT="Use the Skill tool to invoke 'cw-plan'.
+
+Plan the implementation for demoable unit $UNIT_NUM from the spec at $SPEC_PATH. Create tasks on the native task board scoped to this unit's requirements only.
+
+This is running non-interactively — proceed autonomously. Auto-decompose into sub-tasks. Do not use AskUserQuestion."
+
+if invoke_claude "$PLAN_PROMPT" "$CW_MODEL"; then
+    log_success "Planning completed" >&2
+else
+    log_error "Planning failed" >&2
+    jq '.error = "Planning failed"' "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+    STAGE_OK=false
+fi
+
+# ─── Stage 2: Execute ───────────────────────────────────────────────────────
+if [ "$STAGE_OK" = true ]; then
+    log_info "Stage 2: Executing tasks (cw-dispatch)..." >&2
+
+    # Discover session again now that tasks exist
+    discover_session "$WORK_DIR" 2>/dev/null || true
+
+    DISPATCH_PROMPT="Use the Skill tool to invoke 'cw-dispatch'.
+
+Execute all tasks on the board. This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$DISPATCH_PROMPT" "$CW_MODEL"; then
+        log_success "Execution completed" >&2
+    else
+        log_warning "Execution had issues" >&2
+        # Don't fail — validate will catch incomplete work
+    fi
+fi
+
+# ─── Stage 3: Validate ──────────────────────────────────────────────────────
+if [ "$STAGE_OK" = true ]; then
+    log_info "Stage 3: Validating..." >&2
+
+    discover_session "$WORK_DIR" 2>/dev/null || true
+
+    VALIDATE_PROMPT="Use the Skill tool to invoke 'cw-validate'.
+
+Run the 6-gate validation against the spec. This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$VALIDATE_PROMPT" "$CW_MODEL"; then
+        log_success "Validation completed" >&2
+    else
+        log_warning "Validation had issues" >&2
+    fi
+fi
+
+# ─── Stage 4: Review (optional) ─────────────────────────────────────────────
+if [ "$STAGE_OK" = true ] && [ "$DO_REVIEW" = true ]; then
+    log_info "Stage 4: Code review..." >&2
+
+    REVIEW_PROMPT="Use the Skill tool to invoke 'cw-review'.
+
+Review all code changes on this branch. Create FIX-REVIEW tasks for blocking issues.
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$REVIEW_PROMPT" "$CW_MODEL"; then
+        log_success "Review completed" >&2
+
+        # Check for FIX tasks and execute them
+        discover_session "$WORK_DIR" 2>/dev/null || true
+        local fix_count
+        fix_count=$(get_pending_fix_count 2>/dev/null || echo "0")
+        if [ "$fix_count" -gt 0 ]; then
+            log_info "Executing $fix_count fix task(s)..." >&2
+            CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" -m "$CW_MODEL" "$WORK_DIR" 2>&1 >&2 || true
+        fi
+    else
+        log_warning "Review had issues" >&2
+    fi
+fi
+
+# ─── Stage 5: Testing (optional) ────────────────────────────────────────────
+if [ "$STAGE_OK" = true ] && [ "$DO_TESTING" = true ]; then
+    log_info "Stage 5: E2E testing..." >&2
+
+    TESTING_PROMPT="Use the Skill tool to invoke 'cw-testing'.
+
+Run E2E tests for demoable unit $UNIT_NUM using the .feature files from the spec directory. Auto-fix failures.
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$TESTING_PROMPT" "$CW_MODEL"; then
+        log_success "Testing completed" >&2
+    else
+        log_warning "Testing had issues" >&2
+    fi
+fi
+
+# ─── Stage 6: PR (optional) ─────────────────────────────────────────────────
+if [ "$STAGE_OK" = true ] && [ "$DO_PR" = true ]; then
+    log_info "Stage 6: Creating PR..." >&2
+
+    PR_PROMPT="Create a pull request for this feature branch. Include spec reference, proof artifact summary, and a test plan.
+
+This is running non-interactively — create the PR without asking for confirmation."
+
+    invoke_claude "$PR_PROMPT" "$CW_MODEL" 2>&1 >&2 || log_warning "PR creation failed" >&2
+fi
+
+# =============================================================================
+# Collect Results
+# =============================================================================
+
+# Gather commits made during this run
+COMMITS=$(git log --oneline main..HEAD 2>/dev/null | head -20 | jq -R . | jq -s .)
+
+# Gather proof files
+PROOF_PATHS=$(find docs/specs/*/[0-9]*-proofs/ -name "*.md" -o -name "*.txt" 2>/dev/null | jq -R . | jq -s . || echo "[]")
+
+# Build final result
+if [ "$STAGE_OK" = true ]; then
+    FINAL_RESULT="completed"
+else
+    FINAL_RESULT="blocked"
+fi
+
+# Update result file
+jq \
+    --arg result "$FINAL_RESULT" \
+    --argjson commits "$COMMITS" \
+    --argjson proofs "$PROOF_PATHS" \
+    '.result = $result | .commits = $commits | .proof_paths = $proofs' \
+    "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+
+if [ "$FINAL_RESULT" = "completed" ]; then
+    log_success "Story completed" >&2
+    exit 0
+else
+    log_error "Story blocked" >&2
+    exit 1
+fi

@@ -1,6 +1,6 @@
 ---
 name: cw-linear-init
-description: "Scaffolds Linear integration for claude-workflow. Creates .claude-workflow/config.yaml with team settings, heartbeat cadence, and label configuration. Run once per project to enable the heartbeat loop."
+description: "Scaffolds Linear integration for claude-workflow. Creates .claude-workflow/config.yaml with team settings, heartbeat cadence, label configuration, and pipeline flags. Run once per project to enable the heartbeat lifecycle."
 user-invocable: true
 allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
 effort: low
@@ -14,7 +14,7 @@ Always begin your response with: **CW-LINEAR-INIT**
 
 ## Overview
 
-You initialize the Linear integration for an existing claude-workflow project. This creates the configuration file and Linear labels needed for the heartbeat loop to pull issues and feed them into the cw pipeline.
+You initialize the Linear integration for an existing claude-workflow project. This creates the configuration file and Linear labels needed for the heartbeat lifecycle — the two-tier system where epics decompose into Linear stories (human-reviewable), and stories execute via the cw pipeline (agent-internal).
 
 ## Your Role
 
@@ -97,12 +97,21 @@ AskUserQuestion({
 
 ### Step 4: Create Linear Labels
 
-Using the Linear MCP tools, create the label group and state labels:
+Using the Linear MCP tools, create the label group and all lifecycle labels:
 
 1. Create parent label group: `claude-workflow`
-2. Create state labels under the group:
-   - `agent-working` — Issue is being processed by the heartbeat
-   - `agent-blocked` — Issue needs human input before agent can continue
+
+2. Create **state labels** under the group:
+   - `agent-working` — Agent is actively processing this issue
+   - `agent-blocked` — Agent needs human input before continuing
+
+3. Create **phase transition labels** under the group:
+   - `needs-research` — Epic needs codebase research before spec generation
+   - `agent-ready-for-spec` — Research done, ready for spec generation
+   - `agent-spec-complete` — Spec generated, stories created in Backlog
+
+4. Create **story label** under the group:
+   - `agent-story` — This issue is an agent-managed story (child of an epic)
 
 If label creation fails (permissions, duplicates), log a warning but don't fail the init.
 
@@ -124,13 +133,23 @@ Output a summary:
 
 ```
 Linear integration initialized:
-  Config:    .claude-workflow/config.yaml
-  Team:      {TEAM}
-  Agent:     {USER_NAME}
-  Labels:    claude-workflow, agent-working, agent-blocked
+
+  Config:  .claude-workflow/config.yaml
+  Team:    {TEAM}
+  Agent:   {USER_NAME}
+
+  Labels created:
+    State:   agent-working, agent-blocked
+    Phase:   needs-research, agent-ready-for-spec, agent-spec-complete
+    Story:   agent-story
+
+  Lifecycle:
+    Epic (Todo) → Research (optional) → Spec + Decompose → Stories (Backlog)
+        ─── HUMAN GATE ─── (move stories to Todo to approve)
+    Story (Todo) → Plan → Execute → Validate → Review → Test → Done
 
 Next steps:
-  1. Assign a Linear issue to "{USER_NAME}"
+  1. Create or assign a Linear issue to "{USER_NAME}"
   2. Run /cw-heartbeat to process the issue queue
   3. Or run /cw-heartbeat --dry-run to preview what would be processed
 ```

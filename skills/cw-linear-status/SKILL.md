@@ -1,12 +1,12 @@
 ---
 name: cw-linear-status
-description: "Shows the current state of the Linear-integrated heartbeat system. Displays issue queue depth, blocked issues, recent heartbeat history, and pipeline configuration."
+description: "Shows the current state of the Linear heartbeat lifecycle. Displays epics with their phases, stories with execution status, queue depth, blocked issues, and recent heartbeat history."
 user-invocable: true
 allowed-tools: Bash, Read, Glob, Grep
 effort: low
 ---
 
-# CW-Linear-Status: Heartbeat Status Dashboard
+# CW-Linear-Status: Lifecycle Status Dashboard
 
 ## Context Marker
 
@@ -14,14 +14,14 @@ Always begin your response with: **CW-LINEAR-STATUS**
 
 ## Overview
 
-You display the current state of the Linear heartbeat integration — what's queued, what's blocked, and what happened recently.
+You display the current state of the Linear heartbeat lifecycle — epics and their phases, stories and their execution status, what's queued, what's blocked, and recent history.
 
 ## Your Role
 
 You are a **status reporter** who:
 - Reads the local config and heartbeat log
 - Queries Linear for current issue state
-- Presents a clear dashboard of system status
+- Presents a clear, phase-aware dashboard
 
 ## Critical Constraints
 
@@ -39,17 +39,20 @@ Linear integration not configured. Run /cw-linear-init first.
 
 ### Step 2: Query Linear
 
-Using Linear MCP tools, fetch issues assigned to the configured `user_name` in the configured `team`:
+Using Linear MCP tools, fetch issues assigned to the configured `user_name` in the configured `team`. Categorize:
 
-1. **Queued** — Issues in "Todo" status (ready for pickup)
-2. **In Progress** — Issues with `agent-working` label
-3. **Blocked** — Issues with `agent-blocked` label
+**Epics** (no `agent-story` label):
+- Detect phase from labels and status (see heartbeat-protocol.md)
+- Count child stories and their statuses
+
+**Stories** (has `agent-story` label):
+- Group by parent epic
+- Show execution status
 
 ### Step 3: Check Lock State
 
 ```bash
 if [ -f .claude-workflow/heartbeat.lock ]; then
-  echo "LOCKED (heartbeat in progress)"
   cat .claude-workflow/heartbeat.lock
 else
   echo "UNLOCKED"
@@ -58,29 +61,11 @@ fi
 
 ### Step 4: Read Heartbeat History
 
-If `--history` is in the args (or always show last 5):
-
 ```bash
-tail -5 .claude-workflow/heartbeat-log.jsonl 2>/dev/null || echo "No heartbeat history"
-```
-
-Each log entry contains:
-```json
-{
-  "timestamp": "2026-04-04T10:30:00Z",
-  "heartbeat_number": 42,
-  "issue_id": "ENG-123",
-  "issue_title": "Add search endpoint",
-  "duration_seconds": 340,
-  "result": "completed",
-  "commits": ["abc1234"],
-  "spec_path": "docs/specs/01-spec-search/01-spec-search.md"
-}
+tail -10 .claude-workflow/heartbeat-log.jsonl 2>/dev/null || echo "No history"
 ```
 
 ### Step 5: Display Dashboard
-
-Format the output as a clear dashboard:
 
 ```
 CW-LINEAR-STATUS
@@ -89,25 +74,38 @@ CW-LINEAR-STATUS
 Config:     .claude-workflow/config.yaml
 Team:       {team}
 Agent:      {user_name}
-Lock:       {UNLOCKED | LOCKED since HH:MM}
+Lock:       {UNLOCKED | LOCKED since HH:MM (phase: STORY_EXECUTE)}
+Strategy:   {direct | integration}
 
-Queue ({N} issues):
-  ENG-123  Add search endpoint          Todo
-  ENG-124  Fix pagination bug           Todo
+EPICS
+─────
+  ENG-100  JWT Authentication         phase: SPEC          [High]
+    Stories: 0 created (spec pending)
 
-In Progress ({N} issues):
-  ENG-120  Refactor auth middleware      agent-working
+  ENG-200  Search redesign            phase: RESEARCH      [Medium]
+    Stories: 0 created (research pending)
 
-Blocked ({N} issues):
-  ENG-118  Database migration strategy   agent-blocked
+  ENG-300  Billing module             phase: WAITING       [Low]
+    Stories: 2/3 done, 1 in progress
+    ├── ENG-456  Add invoice endpoint      Done
+    ├── ENG-457  Add payment webhook       In Progress (agent-working)
+    └── ENG-458  Add billing dashboard     Backlog (not yet approved)
 
-Pipeline Config:
-  auto_spec: {yes/no}  auto_plan: {yes/no}
-  auto_dispatch: {yes/no}  auto_validate: {yes/no}
-  auto_review: {yes/no}  auto_pr: {yes/no}
+BLOCKED ({N})
+─────────────
+  ENG-457  Add payment webhook       agent-blocked  (Gate C failed: missing proof)
+  ENG-200  Search redesign           agent-blocked  (Linear MCP unavailable)
 
-Recent Heartbeats:
-  #42  ENG-123  completed  5m 40s  2026-04-04 10:30
-  #41  ENG-120  completed  3m 12s  2026-04-04 10:15
-  #40  ENG-118  blocked    1m 05s  2026-04-04 10:00
+PIPELINE CONFIG
+───────────────
+  auto_spec: yes    auto_plan: yes     auto_dispatch: yes
+  auto_validate: yes  auto_review: no  auto_pr: no
+  auto_research: no   auto_testing: yes
+  epic_review: no     branch_strategy: direct
+
+RECENT HEARTBEATS
+─────────────────
+  2026-04-05 10:30  ENG-456  STORY_EXECUTE  completed  5m 40s
+  2026-04-05 10:15  ENG-100  SPEC           completed  2m 12s
+  2026-04-05 10:00  ENG-200  RESEARCH       blocked    1m 05s
 ```

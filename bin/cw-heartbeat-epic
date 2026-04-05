@@ -1,0 +1,276 @@
+#!/bin/bash
+#
+# cw-heartbeat-epic - Execute a single epic-level phase in a fresh Claude session
+#
+# Runs one phase (research, spec, or validate) for an epic issue and outputs
+# a JSON result to stdout. Called by the cw-heartbeat skill to keep each phase
+# in its own context window.
+#
+# Usage:
+#   cw-heartbeat-epic --phase research --issue-id ENG-100 --title "JWT Auth"
+#   cw-heartbeat-epic --phase spec --issue-id ENG-100 --title "JWT Auth" --description "..."
+#   cw-heartbeat-epic --phase validate --issue-id ENG-100 --spec docs/specs/01-spec-auth/...
+#
+# Options:
+#   --phase PHASE         Phase to run: research, spec, validate
+#   --issue-id ID         Linear issue identifier
+#   --title TEXT          Issue title
+#   --description TEXT    Issue description (for spec phase)
+#   --spec PATH           Spec file path (for validate phase)
+#   --epic-review BOOL    Run cw-review-team at epic level (for validate phase)
+#   -m, --model MODEL     Claude model to use (default: sonnet)
+#   -v, --verbose         Stream JSON output for real-time visibility
+#   -h, --help            Show this help message
+#
+# Output:
+#   JSON object to stdout with phase results.
+#   All progress logging goes to stderr.
+#
+# Exit Codes:
+#   0  Phase completed successfully
+#   1  Phase failed
+#   4  Missing dependencies or invalid arguments
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+PHASE=""
+ISSUE_ID=""
+TITLE=""
+DESCRIPTION=""
+SPEC_PATH=""
+EPIC_REVIEW=false
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+show_help() {
+    echo "Usage: cw-heartbeat-epic --phase PHASE [OPTIONS]" >&2
+    echo "" >&2
+    echo "Execute a single epic-level phase in a fresh Claude session." >&2
+    echo "" >&2
+    echo "Phases:" >&2
+    echo "  research    Run cw-research for the issue" >&2
+    echo "  spec        Run cw-spec and generate specification" >&2
+    echo "  validate    Run cw-validate on full epic diff" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  --phase PHASE       Phase to run (required)" >&2
+    echo "  --issue-id ID       Linear issue ID (required)" >&2
+    echo "  --title TEXT        Issue title" >&2
+    echo "  --description TEXT  Issue description" >&2
+    echo "  --spec PATH         Spec file path (validate phase)" >&2
+    echo "  --epic-review BOOL  Run epic-level review (validate phase)" >&2
+    echo "  -m, --model MODEL   Claude model (default: $CW_MODEL)" >&2
+    echo "  -v, --verbose       Stream JSON output" >&2
+    echo "  -h, --help          Show this help" >&2
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --phase) require_arg "--phase" "${2:-}"; PHASE="$2"; shift 2 ;;
+        --issue-id) require_arg "--issue-id" "${2:-}"; ISSUE_ID="$2"; shift 2 ;;
+        --title) require_arg "--title" "${2:-}"; TITLE="$2"; shift 2 ;;
+        --description) require_arg "--description" "${2:-}"; DESCRIPTION="$2"; shift 2 ;;
+        --spec) require_arg "--spec" "${2:-}"; SPEC_PATH="$2"; shift 2 ;;
+        --epic-review) require_arg "--epic-review" "${2:-}"; EPIC_REVIEW="$2"; shift 2 ;;
+        -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
+        -v|--verbose) CW_VERBOSE=true; shift ;;
+        -h|--help) show_help; exit 0 ;;
+        -*) log_error "Unknown option: $1" >&2; show_help; exit 4 ;;
+        *) log_error "Unexpected argument: $1" >&2; show_help; exit 4 ;;
+    esac
+done
+
+# =============================================================================
+# Validation
+# =============================================================================
+
+check_jq || exit 4
+check_claude || exit 4
+
+if [ -z "$PHASE" ] || [ -z "$ISSUE_ID" ]; then
+    log_error "Required: --phase and --issue-id" >&2
+    exit 4
+fi
+
+START_TIME=$(date +%s)
+RESULT_FILE=$(mktemp)
+
+# Initialize result
+cat > "$RESULT_FILE" << EOF
+{
+  "phase": "$PHASE",
+  "issue_id": "$ISSUE_ID",
+  "result": "error",
+  "error": null,
+  "duration_seconds": 0
+}
+EOF
+
+cleanup() {
+    local end_time=$(date +%s)
+    local duration=$((end_time - START_TIME))
+    local tmp=$(mktemp)
+    jq --argjson d "$duration" '.duration_seconds = $d' "$RESULT_FILE" > "$tmp" && mv "$tmp" "$RESULT_FILE"
+    cat "$RESULT_FILE"
+    rm -f "$RESULT_FILE"
+}
+
+trap cleanup EXIT
+
+# =============================================================================
+# Phase Execution
+# =============================================================================
+
+case "$PHASE" in
+
+# ─── RESEARCH ────────────────────────────────────────────────────────────────
+research)
+    log_info "Running research for $ISSUE_ID: $TITLE" >&2
+
+    # Slugify the title for the research directory
+    SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-')
+
+    PROMPT="Use the Skill tool to invoke 'cw-research' with args: '$TITLE'.
+
+Explore the codebase for this feature request. This is an automated call from the heartbeat — run non-interactively:
+- Use '$TITLE' as the research topic
+- Skip user confirmation steps — proceed through all 5 dimensions automatically
+- Save the report and exit
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$PROMPT" "$CW_MODEL"; then
+        # Find the research report
+        REPORT_PATH=$(ls -t docs/specs/research-*/research-*.md 2>/dev/null | head -1 || echo "")
+
+        if [ -n "$REPORT_PATH" ]; then
+            jq --arg r "completed" --arg p "$REPORT_PATH" \
+                '.result = $r | .report_path = $p' \
+                "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+            log_success "Research completed: $REPORT_PATH" >&2
+        else
+            jq --arg r "completed" '.result = $r | .report_path = null' \
+                "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+            log_warning "Research completed but no report file found" >&2
+        fi
+    else
+        jq '.error = "cw-research invocation failed"' \
+            "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+        log_error "Research failed" >&2
+        exit 1
+    fi
+    ;;
+
+# ─── SPEC ────────────────────────────────────────────────────────────────────
+spec)
+    log_info "Running spec generation for $ISSUE_ID: $TITLE" >&2
+
+    # Check for existing research
+    RESEARCH_CONTENT=""
+    RESEARCH_PATH=$(ls -t docs/specs/research-*/research-*.md 2>/dev/null | head -1 || echo "")
+    if [ -n "$RESEARCH_PATH" ]; then
+        log_info "Found research report: $RESEARCH_PATH" >&2
+        RESEARCH_CONTENT="Research report path: $RESEARCH_PATH"
+    fi
+
+    # Build the spec prompt with issue context inlined
+    PROMPT="Generate a specification for this feature. Read protocol at: skills/cw-spec/SKILL.md.
+
+This is an automated call from cw-heartbeat — run non-interactively:
+- Skip Step 4 (clarifying questions) — the issue context below IS the requirements
+- Skip Step 6 (review and refinement) — proceed directly after generation
+- Skip 'What Comes Next' — the heartbeat handles the next stage
+- Use '${ISSUE_ID}-$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-')' as the feature name
+
+Issue: $ISSUE_ID
+Title: $TITLE
+
+Description:
+$DESCRIPTION
+
+$RESEARCH_CONTENT
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$PROMPT" "$CW_MODEL"; then
+        # Find the spec
+        SPEC_FOUND=$(ls -t docs/specs/[0-9]*-spec-*/[0-9]*-spec-*.md 2>/dev/null | head -1 || echo "")
+
+        if [ -n "$SPEC_FOUND" ]; then
+            # Count demoable units in spec
+            UNIT_COUNT=$(grep -c "^### Unit [0-9]" "$SPEC_FOUND" 2>/dev/null || echo "0")
+
+            jq --arg r "completed" --arg s "$SPEC_FOUND" --argjson u "$UNIT_COUNT" \
+                '.result = $r | .spec_path = $s | .unit_count = $u' \
+                "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+            log_success "Spec generated: $SPEC_FOUND ($UNIT_COUNT units)" >&2
+        else
+            jq '.error = "Spec generation completed but no spec file found"' \
+                "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+            log_error "No spec file found after generation" >&2
+            exit 1
+        fi
+    else
+        jq '.error = "cw-spec invocation failed"' \
+            "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+        log_error "Spec generation failed" >&2
+        exit 1
+    fi
+    ;;
+
+# ─── VALIDATE ────────────────────────────────────────────────────────────────
+validate)
+    log_info "Running epic validation for $ISSUE_ID" >&2
+
+    if [ -z "$SPEC_PATH" ]; then
+        log_error "--spec is required for validate phase" >&2
+        exit 4
+    fi
+
+    VALIDATE_PROMPT="Use the Skill tool to invoke 'cw-validate'.
+
+Run the 6-gate validation against the spec at $SPEC_PATH. This is the epic-level final validation across all story branches.
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+    if invoke_claude "$VALIDATE_PROMPT" "$CW_MODEL"; then
+        log_success "Epic validation completed" >&2
+
+        # Run epic-level review if requested
+        if [ "$EPIC_REVIEW" = "true" ]; then
+            log_info "Running epic-level review (cw-review-team)..." >&2
+
+            REVIEW_PROMPT="Use the Skill tool to invoke 'cw-review-team'.
+
+Review the full implementation across all story branches. This is the final cross-story review. Create FIX tasks for any blocking issues.
+
+This is running non-interactively — proceed autonomously without using AskUserQuestion."
+
+            invoke_claude "$REVIEW_PROMPT" "$CW_MODEL" || log_warning "Epic review had issues" >&2
+        fi
+
+        jq --arg r "completed" '.result = $r' \
+            "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+    else
+        jq '.error = "cw-validate invocation failed"' \
+            "$RESULT_FILE" > "${RESULT_FILE}.tmp" && mv "${RESULT_FILE}.tmp" "$RESULT_FILE"
+        log_error "Epic validation failed" >&2
+        exit 1
+    fi
+    ;;
+
+*)
+    log_error "Unknown phase: $PHASE" >&2
+    exit 4
+    ;;
+esac

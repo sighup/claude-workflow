@@ -39,13 +39,36 @@ labels:
     - "agent-working"
     - "agent-blocked"
 
+  # Phase transition labels
+  phases:
+    - "needs-research"
+    - "agent-ready-for-spec"
+    - "agent-spec-complete"
+
+  # Applied to child stories created from demoable units
+  story: "agent-story"
+
 pipeline:
-  # Which cw stages run automatically per heartbeat issue
+  # Which cw stages run automatically per heartbeat
   auto_spec: true
   auto_plan: true
   auto_dispatch: true
   auto_validate: true
 
-  # Human gates — disabled by default, enable to require manual approval
+  # Human gates — disabled by default
   auto_review: false
   auto_pr: false
+
+  # Research phase — run cw-research before spec if issue seems vague
+  auto_research: false
+
+  # E2E testing — run cw-testing per story after validation
+  auto_testing: true
+
+  # Epic-level review — run cw-review-team on full diff after all stories complete
+  epic_review: false
+
+  # Branch strategy for story PRs
+  #   "direct"      — each story PR merges to main independently
+  #   "integration" — story branches merge into feature/{epic-slug}, then one PR to main
+  branch_strategy: "direct"
