@@ -110,11 +110,38 @@ For each proof artifact in completed tasks:
    - `Failed` - Proof failed or user rejected
    - `Missing` - No proof file found
 
-### Step 5: Apply Gates
+### Step 5: Adversarial Testing
 
-Check each gate in order (A through F). See [validation-gates.md](references/validation-gates.md).
+After confirming proofs pass, actively try to **break** the implementation. Your goal is to uncover issues that standard proof artifacts miss — boundary conditions, race conditions, and failure modes that weren't anticipated during planning.
 
-### Step 6: Generate Report
+**Mindset shift**: Steps 1-4 confirmed what was *built*. Step 5 tests what was *missed*. Think like an attacker, not a verifier.
+
+Run targeted checks from these categories (skip categories irrelevant to the feature type):
+
+| Category | What to Test | Example |
+|----------|-------------|---------|
+| **Boundary values** | Empty strings, zero, negative, max-length, Unicode, special characters | `curl -X POST /api/login -d '{"email":"","password":""}'` |
+| **Concurrency** | Parallel requests, race conditions, duplicate submissions | Send 3 identical requests simultaneously |
+| **Idempotency** | Same operation twice should be safe | Create → Create again with same data |
+| **Error propagation** | Deep failures surface correctly to caller | Invalid nested input → meaningful error |
+| **State cleanup** | Partial failures don't leave orphan data | Start operation → interrupt → check state |
+| **Input validation** | Malformed input rejected at boundaries | SQL injection, XSS payloads, oversized payloads |
+
+**For each adversarial test:**
+1. Document what you tested and the command/action
+2. Record the actual result
+3. Mark as PASS (correct behavior) or FAIL (unexpected behavior)
+4. Include evidence (command output, error messages)
+
+**Add adversarial findings to the report** in a dedicated section (see Report Format below).
+
+Not all categories apply to every feature. Use judgment: a CLI tool needs boundary/error tests but not concurrency. An API endpoint needs all categories. A file parser needs boundary/error/state but not concurrency.
+
+### Step 6: Apply Gates
+
+Check each gate in order (A through G). See [validation-gates.md](references/validation-gates.md).
+
+### Step 7: Generate Report
 
 Produce the validation report and save to:
 `./docs/specs/[NN]-spec-[feature-name]/[NN]-validation-[feature-name].md`
@@ -127,7 +154,7 @@ Produce the validation report and save to:
 **Validated**: [ISO timestamp]
 **Spec**: [spec path]
 **Overall**: PASS | FAIL
-**Gates**: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F]
+**Gates**: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F] G[P/F]
 
 ## Executive Summary
 
@@ -158,6 +185,14 @@ Produce the validation report and save to:
 | T01 | Curl login endpoint | cli | auto | Verified | 200 + JWT |
 | T01 | Dashboard screenshot | screenshot | manual | Verified (manual) | User confirmed |
 | T01 | Error state visual | visual | skip | Verified (code) | Code evidence |
+
+## Adversarial Testing Results
+
+| Category | Test | Result | Evidence |
+|----------|------|--------|----------|
+| Boundary values | Empty email/password | PASS | Returns 400 with "Email is required" |
+| Concurrency | 3 parallel login requests | PASS | All return correct responses |
+| Idempotency | Duplicate user registration | PASS | Returns 409 Conflict on second attempt |
 
 ## Validation Issues
 
@@ -207,10 +242,11 @@ Always end with this output format:
 VALIDATION COMPLETE
 ===================
 Overall: PASS | FAIL
-Gates: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F]
+Gates: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F] G[P/F]
 
 Requirements: X/Y verified (Z%)
 Proof Artifacts: X/Y working (Z%)
+Adversarial Tests: X/Y passed (Z%)
 
 [If FAIL: List blocking issues with severity]
 

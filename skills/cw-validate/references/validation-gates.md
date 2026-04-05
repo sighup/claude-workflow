@@ -90,6 +90,30 @@ Six mandatory gates that determine PASS/FAIL for implementation validation.
 
 **Note**: `[REDACTED]` placeholders are acceptable and expected.
 
+### GATE G: Adversarial Testing (REQUIRED)
+
+**Rule**: Adversarial tests must not reveal critical or high-severity issues.
+
+**How to check**:
+1. Run targeted adversarial tests appropriate to the feature type:
+   - **Boundary values**: Empty inputs, zero, negative, max-length, Unicode, special characters
+   - **Concurrency**: Parallel requests, race conditions, duplicate submissions
+   - **Idempotency**: Same operation twice should be safe (no duplicate data, no errors)
+   - **Error propagation**: Deep failures surface correctly with meaningful messages
+   - **State cleanup**: Partial failures don't leave orphan data or broken state
+   - **Input validation**: Malformed input rejected at boundaries (SQL injection, XSS, oversized payloads)
+2. Not all categories apply to every feature — skip irrelevant ones
+3. Each test produces PASS or FAIL with evidence
+4. Any FAIL with CRITICAL or HIGH impact = gate FAILS
+
+**Mindset**: Try to break the implementation, not confirm it works. Think like an attacker or a careless user, not a happy-path tester.
+
+**Common triggers**:
+- API endpoint accepts empty required fields without validation
+- Duplicate POST creates duplicate records instead of returning conflict
+- Error messages expose internal stack traces or sensitive paths
+- Concurrent writes corrupt shared state
+
 ## Severity Rubric
 
 | Score | Severity | Meaning |
@@ -109,6 +133,7 @@ Six mandatory gates that determine PASS/FAIL for implementation validation.
 | R4 Git Traceability | No commit-to-task mapping | Incomplete mapping | Minor gaps | Clear mapping |
 | R5 Evidence Quality | No evidence collected | Partial evidence | Minor gaps | Complete evidence |
 | R6 Repository Compliance | Major pattern violations | Some violations | Minor deviations | Full compliance |
+| R7 Adversarial Resilience | Critical boundary/concurrency failures | Some adversarial failures | Minor edge case issues | All adversarial tests pass |
 
 ## Red Flags (Auto-Escalate to CRITICAL/HIGH)
 
