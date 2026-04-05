@@ -170,7 +170,8 @@ Messages from teammates are auto-delivered. Process them as they arrive:
      if intersection(C_files, P_files) is not empty:
        SKIP C (try next candidate)
    ```
-4. If conflict-free task found:
+4. **Context affinity** (soft preference): Among conflict-free candidates, prefer tasks whose `scope.files_to_modify` overlaps with directories the requesting worker previously touched. Workers who just completed `src/auth/login.ts` have warm context for other `src/auth/` tasks. This is a tie-breaker, not a hard rule — conflict-free is always the priority.
+5. If conflict-free task found:
    ```
    TaskUpdate({ taskId: "<id>", owner: "worker-N", status: "in_progress" })
    SendMessage({ type: "message", recipient: "worker-N", content: "Assigned T{id} - {subject}. Proceed with cw-execute.", summary: "Assigned T{id}" })

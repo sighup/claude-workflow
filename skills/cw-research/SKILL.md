@@ -111,9 +111,9 @@ When `lsp_available = true`, pass this flag to subagent prompts so they use LSP 
 
 ## Process
 
-### Step 1: Parse Topic and Scope
+### Step 1: Parse Topic, Scope, and Depth
 
-Parse the user's invocation to determine the research topic.
+Parse the user's invocation to determine the research topic and depth.
 
 **With topic argument:**
 ```
@@ -126,6 +126,18 @@ The topic `authentication` scopes exploration to authentication-related files, p
 /cw-research
 ```
 Perform a general codebase exploration covering all areas without topic filtering.
+
+**Depth levels** (optional `--depth` flag):
+
+| Depth | Behavior | Steps Executed |
+|-------|----------|----------------|
+| `quick` | Auto-explore only — no interactive refinement, no external context, no deep-dive | Steps 1-3, 8-10 (skip 4-7) |
+| `medium` (default) | Full process as documented | All steps |
+| `thorough` | Full process + expanded exploration with 2 passes per dimension | All steps, with repeat auto-explore |
+
+Parse from invocation: `/cw-research --depth quick authentication`
+
+If `--depth` is not specified, default to `medium`.
 
 **Determine topic slug** for the output filename:
 ```
