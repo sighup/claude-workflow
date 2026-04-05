@@ -272,6 +272,23 @@ Each demoable unit must be:
 | Screenshot | `Screenshot: [page] showing [state]` | `Screenshot: /login page showing error state` |
 | File | `File: [path] contains [pattern]` | `File: config.json contains new field` |
 
+## Output Requirements
+
+**CRITICAL**: When spec generation completes, you MUST output a summary so the caller can relay results to the user. Sub-agent results are not automatically visible to users.
+
+Always end with this output format:
+
+```
+CW-SPEC COMPLETE
+=================
+VERDICT: COMPLETED | NEEDS_REVISION
+Spec: docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md
+Demoable units: N
+Functional requirements: N
+Proof artifacts: N
+Gherkin scenarios: N (if generated)
+```
+
 ## What Comes Next
 
 Once the spec is complete and approved, offer next steps based on context.

@@ -344,6 +344,25 @@ See [output-examples.md](references/output-examples.md) for run output format.
 
 ***
 
+## Output Requirements
+
+**CRITICAL**: When a test run completes, you MUST output a summary so the caller can relay results to the user.
+
+Always end with this output format:
+
+```
+CW-TESTING COMPLETE
+====================
+VERDICT: ALL_PASSED | SOME_FAILED | BLOCKED
+Tests: X/Y passed
+  [PASS] Test: scenario title
+  [FAIL] Test: scenario title → FIX task created
+  [BLOCKED] Test: scenario title → reason
+
+Bug fixes attempted: N
+Bug fixes successful: N
+```
+
 ## What Comes Next
 
 After testing:

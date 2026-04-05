@@ -47,8 +47,8 @@ Determine your mode from task metadata:
 - If `task_type: "review-batch"` with `assigned_files` -> file-partitioned mode
 - If `task_type: "review-concern"` with `concern` and `changed_files` -> concern-partitioned mode
 
-**File-partitioned mode**: Follow `skills/cw-review/references/reviewer-protocol.md`
-**Concern-partitioned mode**: Follow `skills/cw-review-team/references/reviewer-team-protocol.md`
+**File-partitioned mode**: Follow [reviewer-protocol.md](../skills/cw-review/references/reviewer-protocol.md)
+**Concern-partitioned mode**: Follow [reviewer-team-protocol.md](../skills/cw-review-team/references/reviewer-team-protocol.md)
 
 Both protocols use the same 3-phase structure:
 1. ORIENT - Load task, extract assignment and review context

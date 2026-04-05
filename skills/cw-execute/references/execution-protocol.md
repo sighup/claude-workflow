@@ -86,7 +86,7 @@ Rules:
    d. Record PASS or FAIL
 3. Create summary file `{task_id}-proofs.md`
 
-See `references/proof-artifact-types.md` for type-specific guidance.
+See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidance.
 
 **Exit criteria**: All proof artifacts collected, all PASS.
 

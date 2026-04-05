@@ -290,6 +290,25 @@ Before presenting to user:
 - [ ] Sub-tasks inherit `demoable_unit` and `demoable_unit_title` from their parent
 - [ ] Model assignments match complexity (`trivial`→haiku, `standard`→sonnet, `complex`→opus)
 
+## Output Requirements
+
+**CRITICAL**: When planning completes, you MUST output a summary so the caller can relay results to the user. Sub-agent results are not automatically visible to users.
+
+The PLANNING SUMMARY in Step 2 serves as the primary output block:
+
+```
+PLANNING SUMMARY
+================
+VERDICT: PLANNED | NEEDS_REVISION
+Parent tasks: N
+  T01 [complexity] — Subject (no blockers)
+  T02 [complexity] — Subject (blocked by T01)
+
+Parallel groups: [T01, T03] can run concurrently | none
+Complex tasks: T01, T03 | none
+Recommendation: Generate sub-tasks | Execute as-is
+```
+
 ## What Comes Next
 
 After the task graph is complete, use AskUserQuestion to let the user choose their execution approach:

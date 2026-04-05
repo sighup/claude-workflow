@@ -229,6 +229,20 @@ Read [e2e-metadata-schema.md](../cw-testing/references/e2e-metadata-schema.md) f
 
 Confirm: `.feature files saved to docs/specs/[NN]-spec-[feature-name]/. Run /cw-testing init later to generate test tasks.`
 
+## Output Requirements
+
+Always end with this output format:
+
+```
+CW-GHERKIN COMPLETE
+====================
+VERDICT: COMPLETED | PARTIAL
+Feature files: N
+Scenarios: N total
+Task stubs created: N (or "skipped")
+Output: docs/specs/[NN]-spec-[feature-name]/*.feature
+```
+
 ## What Comes Next
 
 After Gherkin generation:
