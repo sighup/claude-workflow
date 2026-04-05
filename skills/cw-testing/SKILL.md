@@ -346,8 +346,6 @@ See [output-examples.md](references/output-examples.md) for run output format.
 
 ## Output Requirements
 
-**CRITICAL**: When a test run completes, you MUST output a summary so the caller can relay results to the user.
-
 Always end with this output format:
 
 ```

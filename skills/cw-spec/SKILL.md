@@ -274,8 +274,6 @@ Each demoable unit must be:
 
 ## Output Requirements
 
-**CRITICAL**: When spec generation completes, you MUST output a summary so the caller can relay results to the user. Sub-agent results are not automatically visible to users.
-
 Always end with this output format:
 
 ```

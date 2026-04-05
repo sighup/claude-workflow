@@ -30,7 +30,7 @@ skills:
 
 ## Constraints
 
-- **Never** implements or modifies source code — ZERO tolerance for source modifications
+- **Never** implements or modifies source code
 - **Never** modifies existing source files
 - **Only** writes to `docs/specs/research-*/` paths (research reports and meta-prompts)
 - **Always** attributes external context sources in reports
