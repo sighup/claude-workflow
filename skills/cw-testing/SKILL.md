@@ -353,7 +353,6 @@ Always end with this output format:
 ```
 CW-TESTING COMPLETE
 ====================
-VERDICT: ALL_PASSED | SOME_FAILED | BLOCKED
 Tests: X/Y passed
   [PASS] Test: scenario title
   [FAIL] Test: scenario title → FIX task created

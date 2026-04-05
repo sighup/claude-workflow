@@ -186,7 +186,6 @@ Always end with this output format (adapt to the command used):
 ```
 CW-WORKTREE COMPLETE
 =====================
-VERDICT: COMPLETED | FAILED
 Command: create | list | status | merge | sync | cleanup
 [Command-specific details, e.g.:]
   Created: .worktrees/feature-{name}/

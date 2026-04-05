@@ -339,8 +339,8 @@ Leave pristine state with verified proof trail.
 ```
 CW-EXECUTE COMPLETE
 ====================
-VERDICT: COMPLETED | FAILED | BLOCKED
 Task: T01 - [subject]
+Status: COMPLETED | FAILED | BLOCKED
 Model: [model_used]
 
 Proof Artifacts (committed):

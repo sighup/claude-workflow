@@ -363,7 +363,6 @@ After saving the report with the meta-prompt, present a summary and offer next-s
 ```
 CW-RESEARCH COMPLETE
 =====================
-VERDICT: COMPLETED | PARTIAL
 Topic: {topic}
 Report: docs/specs/research-{topic_slug}/research-{topic_slug}.md
 Dimensions explored: 5/5

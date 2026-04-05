@@ -236,7 +236,6 @@ Always end with this output format:
 ```
 CW-GHERKIN COMPLETE
 ====================
-VERDICT: COMPLETED | PARTIAL
 Feature files: N
 Scenarios: N total
 Task stubs created: N (or "skipped")

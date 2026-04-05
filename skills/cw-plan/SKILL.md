@@ -299,7 +299,6 @@ The PLANNING SUMMARY in Step 2 serves as the primary output block:
 ```
 PLANNING SUMMARY
 ================
-VERDICT: PLANNED | NEEDS_REVISION
 Parent tasks: N
   T01 [complexity] — Subject (no blockers)
   T02 [complexity] — Subject (blocked by T01)

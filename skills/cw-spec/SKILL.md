@@ -281,7 +281,6 @@ Always end with this output format:
 ```
 CW-SPEC COMPLETE
 =================
-VERDICT: COMPLETED | NEEDS_REVISION
 Spec: docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md
 Demoable units: N
 Functional requirements: N
