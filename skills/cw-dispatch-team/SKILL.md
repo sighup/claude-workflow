@@ -272,8 +272,10 @@ See [../cw-dispatch/references/dispatch-common.md](../cw-dispatch/references/dis
 
 See [../cw-dispatch/references/dispatch-common.md](../cw-dispatch/references/dispatch-common.md#pre-exit-verification) for the 3-step verification and hallucination warning.
 
-## Spawning the Validator
+## What Comes Next
 
-See [../cw-dispatch/references/dispatch-common.md](../cw-dispatch/references/dispatch-common.md#spawning-the-validator) for the validator spawn template and result relay protocol.
+### Spawning the Validator
+
+See [dispatch-common.md](../cw-dispatch/references/dispatch-common.md#spawning-the-validator) for the validator spawn template and result relay protocol.
 
 When relaying FAIL results, recommend running `/cw-dispatch-team` again after fixes.
