@@ -256,13 +256,23 @@ This runs silently. Once complete, note in the Step 6 review that `.feature` fil
 
 ### Step 6: Review and Refinement
 
-Present the spec and ask:
-1. Does this accurately capture your requirements?
-2. Are there missing details or unclear sections?
-3. Are the scope boundaries appropriate?
-4. Do the demoable units represent meaningful progress?
+Present the spec summary (demoable units, key decisions) and ask the user to review:
 
-Iterate based on feedback until the user is satisfied.
+```
+AskUserQuestion({
+  questions: [{
+    question: "Does this specification accurately capture your requirements?",
+    header: "Spec Review",
+    options: [
+      { label: "Looks good", description: "Proceed with the spec as written" },
+      { label: "Needs adjustments", description: "Provide feedback on what to change" },
+      { label: "Major rework needed", description: "Significant changes to scope, units, or approach" }
+    ]
+  }]
+})
+```
+
+If the user requests adjustments, iterate until satisfied.
 
 ## Demoable Units Guidelines
 
