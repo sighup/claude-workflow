@@ -147,9 +147,9 @@ Rules:
 
 ### Phase 5: VERIFY-LOCAL
 
-Run pre-commit checks.
+Run pre-commit checks. Phase 5 always executes every `verification.pre` command at least once — cost classes and incremental Phase 4 runs are an *optimization layered on top*, not a replacement.
 
-1. Execute each command in `metadata.verification.pre`
+1. Execute each command in `metadata.verification.pre`. If an entry is an object `{cmd, cost}`, use `cmd`. If you already ran a `fast`-tagged command incrementally during Phase 4 against the **current** working tree state, you may skip its re-run here — otherwise run it now.
 2. Fix any lint or build issues
 3. Max 3 retry attempts per command
 
@@ -167,18 +167,17 @@ grep -E "FAIL|error" /tmp/cw-{task_id}-verify.log
 
 **Only re-execute a verification command when code has actually changed since the last run.** Re-running the same command to grep its output a different way is pure latency — the saved file has the same bytes.
 
-If you find yourself running the same verification command **3+ times** in a single task, stop and ask: am I debugging a real failure, or am I refiltering output? Refiltering should always read the saved log instead.
+**Hard rule (self-enforced, no user prompt):** if you have already run a verification command twice without any code change between runs, you MUST read the existing saved log on every subsequent inspection — do not re-run the command until you have made a code change. This is a behavioral cap, not a stop point. Continue with whatever you were doing using the saved log as your source of truth. Re-running after a real fix is a normal retry and counts toward the 3-retry budget — the cap only applies to refilter-style reruns with no intervening edit.
 
 #### Cost-class awareness (optional)
 
-If `metadata.verification.pre` entries are objects with a `cost` field (`"fast"` or `"slow"`):
+`metadata.verification.pre` entries may be plain strings OR objects with a `cost` field (`"fast"` or `"slow"`). Cost classes are an **opt-in optimization for Phase 4**, not a Phase 5 behavior change:
 
-- **Fast** commands (lint, typecheck, format): safe to run repeatedly during Phase 4 incremental implementation. Run them after each meaningful edit.
-- **Slow** commands (full test suites, builds, integration runs): run **once** when you believe Phase 4 is complete, not after every edit. Phase 9 will run them again post-commit as the safety net.
+- **Fast** commands (lint, typecheck, format): safe to run repeatedly during Phase 4 incremental implementation — run them after each meaningful edit to catch issues early. Phase 5 still runs them as the gate (or skips them per step 1's carve-out if you already ran them against the current tree).
+- **Slow** commands (full test suites, builds, integration runs): do NOT run incrementally during Phase 4 — wait for Phase 5. Phase 5 runs them once; Phase 9 runs them again post-commit as the safety net.
+- **Plain strings** (legacy form): treated as if untagged. Phase 5 runs them normally — same behavior as before this optimization. Workers should NOT pull plain-string commands into Phase 4.
 
-If entries are plain strings, treat them all as `slow` (conservative — run once at the end of Phase 4).
-
-Failure retries still apply equally to both classes — fix the issue and re-run, up to 3 attempts per command.
+Failure retries still apply equally to all forms — fix the issue and re-run, up to 3 attempts per command.
 
 ### Phase 6: PROOF
 

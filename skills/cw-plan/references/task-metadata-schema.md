@@ -126,21 +126,24 @@ Each requirement must be:
 
 Each `verification.pre` and `verification.post` entry may be either:
 
-- A plain string (legacy form): `"npm test"` — treated as `cost: "slow"` for safety
+- A plain string (legacy form): `"npm test"` — untagged, runs in Phase 5 only (preserves pre-optimization behavior)
 - An object: `{ "cmd": "npm test", "cost": "fast" | "slow" }`
+
+Cost class is an **opt-in optimization for Phase 4**. Phase 5 always runs every entry at least once as the gate, regardless of cost class.
 
 | Cost | Meaning | Worker behavior |
 |------|---------|-----------------|
-| `fast` | Completes in seconds (lint, typecheck, format, single-file unit tests) | Safe to run incrementally during Phase 4 implementation |
-| `slow` | Tens of seconds or more (full test suites, multi-package builds, e2e) | Run once at the end of Phase 4; Phase 9 runs it again post-commit |
+| `fast` | Completes in seconds (lint, typecheck, format, single-file unit tests) | MAY run incrementally during Phase 4 implementation. Phase 5 may skip its re-run if the tree hasn't changed since the last Phase 4 run |
+| `slow` | Tens of seconds or more (full test suites, multi-package builds, e2e) | MUST NOT run incrementally during Phase 4. Runs once in Phase 5; Phase 9 runs it again post-commit |
+| (untagged string) | Unknown cost | Runs in Phase 5 only — same as legacy behavior |
 
 **Tagging heuristics:**
 - Lint, format, typecheck → `fast`
 - Single-file or single-package targeted tests → `fast`
 - Full test suite, multi-package builds, e2e suites → `slow`
-- When in doubt → `slow` (conservative)
+- When in doubt → leave as a plain string (legacy Phase-5-only behavior, never wrong)
 
-Failure retries (max 3) apply equally to both classes.
+Failure retries (max 3) apply equally to all forms.
 
 ## Shared Baseline
 

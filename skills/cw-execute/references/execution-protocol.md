@@ -66,14 +66,14 @@ Rules:
 
 ## Phase 5: VERIFY-LOCAL
 
-**Goal**: Confirm your changes don't break anything locally.
+**Goal**: Confirm your changes don't break anything locally. Phase 5 always executes every `verification.pre` command at least once — cost classes are an optimization layered on top, not a replacement for the gate.
 
-1. Run each command in `metadata.verification.pre` (typically lint + build). Each entry may be a string or `{cmd, cost}` object.
+1. Run each command in `metadata.verification.pre` (typically lint + build). Each entry may be a string or `{cmd, cost}` object — extract `cmd`. **Carve-out:** if you already ran a `fast`-tagged command incrementally during Phase 4 against the *current* working tree state, you may skip its re-run here. Plain strings and `slow`-tagged entries always run in Phase 5.
 2. **Capture-once I/O**: redirect each command's full output to `/tmp/cw-{task_id}-verify-{step}.log` on the first invocation. Re-read the saved file to inspect specific results — never re-run the command just to refilter output.
-3. **Cost-aware cadence**: if entries carry a `cost` field, run `fast` commands incrementally during Phase 4, but run `slow` commands only once at the end of Phase 4 (Phase 9 will run them again post-commit). Plain string entries are treated as `slow` for safety.
+3. **Cost-aware Phase 4 cadence** (opt-in optimization): if entries carry a `cost` field, `fast` commands MAY be run incrementally during Phase 4 (e.g., a linter loop after each edit). `slow` commands MUST NOT be run incrementally — they wait until Phase 5. Plain string entries are treated as untagged: do not pull them into Phase 4.
 4. If lint fails: fix issues and re-run
 5. If build fails: fix compilation errors and re-run
-6. Max 3 retry attempts per command. Re-running solely to refilter output does **not** count as a retry — use the saved log instead.
+6. Max 3 retry attempts per command. Re-running solely to refilter output does **not** count as a retry — use the saved log instead. **Hard cap (self-enforced):** after a verification command has been run twice without any code change between runs, all subsequent inspections during the no-edit window MUST read the saved log — do not re-run until the next code change. This is a behavioral rule the worker applies on its own; do not pause execution or ask the user.
 
 **Exit criteria**: All verification.pre commands pass.
 

@@ -183,9 +183,10 @@ TaskCreate({
     },
     commit: { template: "feat(scope): description" },
     verification: {
-      // Entries may be plain strings (treated as cost: "slow") OR objects with cost class.
-      // Cost class lets workers run cheap commands incrementally during implementation
-      // and reserve expensive commands for end-of-phase gates.
+      // Entries may be plain strings (legacy form, untagged) OR objects with cost class.
+      // Cost class is an opt-in optimization: `fast` entries MAY be run incrementally
+      // during Phase 4; `slow` entries wait for Phase 5. Phase 5 always runs every
+      // entry at least once. Plain strings preserve legacy Phase-5-only behavior.
       pre: [
         { cmd: "npm run lint", cost: "fast" },
         { cmd: "npm run build", cost: "fast" }
@@ -295,7 +296,7 @@ Heuristics for tagging:
 - Full test suite, multi-package builds, e2e suites → `slow`
 - When in doubt, prefer `slow` (conservative — workers will still run it, just less often)
 
-Plain string entries (`pre: ["npm test"]`) are accepted for backward compatibility and treated as `slow`. New plans should use the object form so workers can optimize their re-run cadence without sacrificing coverage.
+Plain string entries (`pre: ["npm test"]`) are accepted for backward compatibility — workers run them in Phase 5 only, exactly as they did before this optimization existed. New plans should use the object form so workers can run `fast` commands incrementally during Phase 4 (a strict speedup, since Phase 5 still runs the full set as the gate).
 
 ## Quality Checklist
 
