@@ -139,7 +139,7 @@ See `references/proof-artifact-types.md` for type-specific guidance.
      { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
    ]
    ```
-2. Update task:
+2. Call TaskUpdate with the payload:
    ```
    TaskUpdate({
      taskId: "<native-id>",
@@ -153,8 +153,14 @@ See `references/proof-artifact-types.md` for type-specific guidance.
      }
    })
    ```
+3. **BLOCKING verification** — immediately after the TaskUpdate call, call `TaskGet(<native-id>)` and confirm:
+   - `status == "completed"`
+   - `metadata.commit_sha` matches the sha you just committed
+   - `metadata.proof_results` is present and non-empty
 
-**Exit criteria**: Task marked completed with proof_dir, proof_results, proof_summary, commit_sha, and completed_at in metadata.
+   If any check fails, retry the TaskUpdate call once. If the retry also fails, exit with an error so the dispatcher can escalate. The board is the source of truth; Phase 11 cannot proceed until the board matches your work.
+
+**Exit criteria**: Task marked completed on the board (confirmed via TaskGet), with proof_dir, proof_results, proof_summary, commit_sha, and completed_at in metadata.
 
 ## Phase 11: CLEAN EXIT
 

@@ -58,6 +58,11 @@ When you receive a `shutdown_request`:
 - Never leave uncommitted changes
 - Never push to remote
 
+## Task Board Discipline
+
+- After every TaskUpdate that sets `status: "completed"`, call `TaskGet(taskId)` and verify the board reflects the update (`status == "completed"`, `metadata.commit_sha` matches the commit you just made, `metadata.proof_results` is present). If verification fails, retry the TaskUpdate once; if that also fails, exit with an error so the dispatcher can escalate.
+- For long-running command captures, use `Bash({run_in_background: true})` — the harness manages output capture and notifies you on completion.
+
 ## Constraints
 
 - Only modifies files listed in task scope

@@ -147,6 +147,8 @@ Run pre-commit checks.
 2. Fix any lint or build issues
 3. Max 3 retry attempts per command
 
+**Capturing long-running output:** For commands that take more than a few seconds (full test suites, builds, integration runs), use `Bash({run_in_background: true})`. The harness manages output capture and notifies you when the command completes — inspect results via the completion notification. The same approach applies in Phase 6 (Proof) and Phase 9 (Verify Full) for long capture commands.
+
 ### Phase 6: PROOF
 
 Execute proof artifacts and capture evidence.
@@ -326,6 +328,14 @@ TaskUpdate({
 
 The `proof_dir` and `proof_summary` fields allow cw-validate to locate artifacts.
 The `model_used` field records which model actually executed the task for auditability.
+
+**Post-update verification (BLOCKING):** Immediately after the TaskUpdate call, call `TaskGet(taskId)` and confirm the board reflects the update:
+
+1. `status == "completed"`
+2. `metadata.commit_sha` matches the sha you just committed
+3. `metadata.proof_results` is present and non-empty
+
+If any check fails, retry the TaskUpdate call once with the same payload. If the retry also fails, exit with an error — the parent dispatcher will see the task still in `in_progress` and can escalate. This verification is cheap (one tool call) and confirms the board matches your work before you exit.
 
 ### Phase 11: CLEAN EXIT
 
