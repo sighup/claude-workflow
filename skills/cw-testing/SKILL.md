@@ -39,7 +39,7 @@ You are a **Senior QA Engineer** responsible for:
 
 ## Process
 
-### Step 1: LOCATE source
+### Step 1: Locate Source
 
 Determine the test source in this order:
 
@@ -57,7 +57,7 @@ Determine the test source in this order:
 
 Record the resolved `gherkin_dir` before proceeding. For spec-linked suites, derive `artifacts_dir` as `gherkin_dir + "/testing"` immediately. For prose or ad-hoc suites where there is no spec directory, use `"artifacts"` as the `artifacts_dir`.
 
-### Step 2: CHECK TASK BOARD
+### Step 2: Check Task Board
 
 Call `TaskList`. For each task whose subject starts with `E2E:`, call `TaskGet` to check if `metadata.test_suite == true` and `metadata.gherkin_dir` matches the resolved spec directory.
 
@@ -103,7 +103,7 @@ On reset: update affected step tasks with `test_result: "pending"`, `fix_attempt
 
 ## Setup
 
-### Step 3: DETECT backends
+### Step 3: Detect Backends
 
 Check which tools are available:
 
@@ -118,7 +118,7 @@ command -v bddgen 2>/dev/null || npx bddgen --version 2>/dev/null
 
 Build the list of available backends. Only include `playwright-bdd` if source type is `gherkin` and `bddgen` is found — it requires `.feature` files to function.
 
-### Step 4: SELECT backend
+### Step 4: Select Backend
 
 Present available backends via `AskUserQuestion`:
 
@@ -151,11 +151,11 @@ AskUserQuestion({
 })
 ```
 
-### Step 5: SETUP (playwright-bdd only)
+### Step 5: Setup (playwright-bdd only)
 
 If backend == `playwright-bdd`, follow the setup procedure in `references/playwright-bdd-backend.md#Setup Procedure` before proceeding to Step 6.
 
-### Step 6: PARSE source
+### Step 6: Parse Source
 
 Parse scenarios from the source. What you extract depends on the backend:
 
@@ -182,7 +182,7 @@ Glob all `.feature` files. For each `Scenario:`, map clauses to task fields:
 
 Derive scenarios from the spec text. Map to `action`/`verify` fields as above.
 
-### Step 7: CREATE tasks
+### Step 7: Create Tasks
 
 **Suite task**: call `TaskList` to get all tasks. `TaskList` does not support metadata filtering — for each task whose subject starts with `E2E:`, call `TaskGet` to read its full metadata and check if `metadata.test_suite == true` and `metadata.gherkin_dir` matches the current spec directory.
 
@@ -208,7 +208,7 @@ For `playwright-bdd`, `automation` is:
 **Step tasks**: check `TaskList` for tasks already blocked by the suite task ID.
 
 - **Found** → skip creation. Report the count to the user.
-- **Not found** → create one step task per scenario using the fields extracted in Step 6. Each step task must include `test_result: "pending"` and `fix_attempt: 0` in its metadata so Phase 2's decision table can evaluate correctly on first run. After creating all step tasks, call `TaskUpdate` on each with `addBlockedBy: [<suite_task_id>]`.
+- **Not found** → create one step task per scenario using the fields extracted in Step 6. Each step task must include `test_result: "pending"` and `fix_attempt: 0` in its metadata so the Check Fix Eligibility step's decision table can evaluate correctly on first run. After creating all step tasks, call `TaskUpdate` on each with `addBlockedBy: [<suite_task_id>]`.
 
 ### Step 8: Output summary — see `references/output-examples.md`
 
@@ -238,26 +238,26 @@ For each task with `test_result == "passed"`, verify it still passes:
 
 If any regression is detected, stop immediately and report which test failed before beginning the loop.
 
-### 7-Phase Execution Loop
+### 7-Step Execution Loop
 
-#### Phase 1: SELECT NEXT TEST
+#### Step 1: Select Next Test
 
-Find the next task with `test_result == "pending"` or `"failed"` that is not yet `"blocked"`. Phase 2 determines what to do with it.
+Find the next task with `test_result == "pending"` or `"failed"` that is not yet `"blocked"`. Step 2 determines what to do with it.
 
-#### Phase 2: CHECK FIX ELIGIBILITY
+#### Step 2: Check Fix Eligibility
 
 Check task metadata to determine next action. Use the step task's `max_fix_attempts` if set; otherwise fall back to the suite task's `fix_config.max_attempts`.
 
 | `test_result` | `fix_attempt` | Action |
 |---------------|---------------|--------|
-| `"pending"` | any | → Phase 3 (execute or re-execute after fix) |
-| `"failed"` | `< max_fix_attempts` | → Phase 5 (fix decision gate) |
-| `"failed"` | `>= max_fix_attempts` | mark `BLOCKED`, proceed to Phase 7 |
+| `"pending"` | any | → Step 3 (execute or re-execute after fix) |
+| `"failed"` | `< max_fix_attempts` | → Step 5 (fix decision gate) |
+| `"failed"` | `>= max_fix_attempts` | mark `BLOCKED`, proceed to Step 7 |
 
-#### Phase 3: SPAWN TEST EXECUTOR
+#### Step 3: Spawn Test Executor
 
 > **Check `automation.backend` on the parent suite task first.**
-> - If `automation.backend == "playwright-bdd"` → use **Phase 3b** instead.
+> - If `automation.backend == "playwright-bdd"` → use **Step 3b** instead.
 > - Otherwise → use the standard flow below.
 
 **REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT execute tests inline.
@@ -270,9 +270,9 @@ Task({
 })
 ```
 
-Wait for the sub-agent to complete, then read the task status via TaskGet. Proceed to Phase 4.
+Wait for the sub-agent to complete, then read the task status via TaskGet. Proceed to Step 4.
 
-#### Phase 3b: PLAYWRIGHT RUNNER (playwright-bdd backend only)
+#### Step 3b: Playwright Runner (playwright-bdd only)
 
 Instead of spawning a test-executor, run the current scenario individually via Bash using `--grep`:
 
@@ -288,20 +288,20 @@ After the command completes, read `[artifacts_dir]/results.json` (where `artifac
 
 Extract screenshot paths from `tests[0].results[0].attachments` — filter entries where `contentType == "image/png"` and collect their `path` values.
 
-- **Passed** (`spec.ok == true`): `TaskUpdate` with `test_result: "passed"`, `passed_at: "<ISO timestamp>"`, and `artifacts: { screenshots: [<extracted paths>] }` — proceed to Phase 7
-- **Failed** (`spec.ok == false`): `TaskUpdate` with `test_result: "failed"`, `failed_at: "<ISO timestamp>"`, `failure_reason` from `tests[0].results[0].error.message`, and `artifacts: { screenshots: [<extracted paths>] }` — proceed to Phase 5
+- **Passed** (`spec.ok == true`): `TaskUpdate` with `test_result: "passed"`, `passed_at: "<ISO timestamp>"`, and `artifacts: { screenshots: [<extracted paths>] }` — proceed to Step 7
+- **Failed** (`spec.ok == false`): `TaskUpdate` with `test_result: "failed"`, `failed_at: "<ISO timestamp>"`, `failure_reason` from `tests[0].results[0].error.message`, and `artifacts: { screenshots: [<extracted paths>] }` — proceed to Step 5
 
 Fixes target application code, **not** step definitions.
 
-#### Phase 4: VERIFY RESULT
+#### Step 4: Verify Result
 
-Check task metadata for pass/fail. If passed, proceed to Phase 7. If failed, continue to Phase 5.
+Check task metadata for pass/fail. If passed, proceed to Step 7. If failed, continue to Step 5.
 
-#### Phase 5: FIX DECISION GATE
+#### Step 5: Fix Decision Gate
 
-If `fix_config.enabled` and `fix_attempt < max_fix_attempts` (step-level, falling back to suite `fix_config.max_attempts`), proceed to Phase 6. Otherwise, mark the task `BLOCKED` with a `blocked_reason` explaining max attempts reached or fix disabled, then proceed to Phase 7.
+If `fix_config.enabled` and `fix_attempt < max_fix_attempts` (step-level, falling back to suite `fix_config.max_attempts`), proceed to Step 6. Otherwise, mark the task `BLOCKED` with a `blocked_reason` explaining max attempts reached or fix disabled, then proceed to Step 7.
 
-#### Phase 6: SPAWN BUG FIXER
+#### Step 6: Spawn Bug Fixer
 
 **REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT fix bugs inline.
 
@@ -319,11 +319,11 @@ Wait for the sub-agent to complete, then read fix_result via TaskGet.
 
 After the bug fixer completes (regardless of outcome), reset the test task via `TaskUpdate` with `test_result: "pending"` and increment `fix_attempt`.
 
-Then run a **regression check** against all tasks with `test_result == "passed"` (same procedure as the pre-run regression check). If a regression is detected, stop immediately and report before proceeding to Phase 7.
+Then run a **regression check** against all tasks with `test_result == "passed"` (same procedure as the pre-run regression check). If a regression is detected, stop immediately and report before proceeding to Step 7.
 
-#### Phase 7: PROGRESS CHECK
+#### Step 7: Progress Check
 
-Check stopping conditions (all passed or blocked, max iterations, no selectable tasks). If all tests are complete, output the final status summary (see `references/output-examples.md`) and use the conditional AskUserQuestion from Step 2 (all passed → offer /cw-review; some blocked → offer reset options). If continuing, return to Phase 1.
+Check stopping conditions (all passed or blocked, max iterations, no selectable tasks). If all tests are complete, output the final status summary (see `references/output-examples.md`) and use the conditional AskUserQuestion from Step 2 (all passed → offer /cw-review; some blocked → offer reset options). If continuing, return to Step 1.
 
 ### Output
 
@@ -336,8 +336,8 @@ See [output-examples.md](references/output-examples.md) for run output format.
 | Document | Contents |
 |----------|----------|
 | `references/e2e-metadata-schema.md` | Task metadata schema |
-| `references/test-executor-protocol.md` | Test executor 4-phase protocol |
-| `references/bug-fixer-protocol.md` | Bug fixer 5-phase protocol |
+| `references/test-executor-protocol.md` | Test executor 4-step protocol |
+| `references/bug-fixer-protocol.md` | Bug fixer 5-step protocol |
 | `references/automation-backends.md` | Backend detection and usage |
 | `references/playwright-bdd-backend.md` | playwright-bdd config, setup procedure, step patterns, CLI, result parsing |
 | `references/output-examples.md` | Output format examples |
