@@ -403,7 +403,7 @@ AskUserQuestion({
 
 - **Run /cw-spec with context (Recommended)**: Extract the meta-prompt content (everything between the `---` markers in the Meta-Prompt section) and invoke cw-spec with it:
   ```
-  Skill(cw-spec, "{meta-prompt content}")
+  Skill({ skill: "cw-spec", args: "{meta-prompt content}" })
   ```
   This passes the enriched research context directly into cw-spec, significantly accelerating its Context Assessment step (Step 2).
 

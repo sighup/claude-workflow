@@ -242,7 +242,7 @@ For each parent task, create sub-tasks that:
 - Break implementation into logical steps
 - Use `parent_task` metadata pointing to the parent's task_id
 - Inherit `demoable_unit` and `demoable_unit_title` from the parent task
-- Use `addBlocks: [parent-native-id]` so parent can't complete until sub-tasks finish
+- Use `addBlockedBy: [parent-native-id]` so parent can't complete until sub-tasks finish
 - Have their own scoped requirements and proof artifacts
 - Are sized for a single implementation session
 

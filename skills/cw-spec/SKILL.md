@@ -300,7 +300,7 @@ Per-unit metadata fields:
 | Test | `Test: [file] passes` | `Test: auth.test.ts passes demonstrates login works` |
 | CLI | `CLI: [command] returns [expected]` | `CLI: curl /health returns {"status":"ok"}` |
 | URL | `URL: [url] shows [expected]` | `URL: /dashboard shows welcome message` |
-| Screenshot | `Screenshot: [page] showing [state]` | `Screenshot: /login page showing error state` |
+| Browser | `Browser: [page] interaction and [expected state]` | `Browser: /login page shows dashboard after login` |
 | File | `File: [path] contains [pattern]` | `File: config.json contains new field` |
 
 > **Greenfield note:** For early units in greenfield projects where no test runner exists, use `File` proof artifacts to verify setup (e.g., `File: package.json contains "test" script`). The planner sets `verification.pre` and `verification.post` to empty arrays for these units.
