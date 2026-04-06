@@ -163,7 +163,7 @@ Execute proof artifacts and capture evidence.
    d. Compare result against expected
    e. Record PASS or FAIL
 
-**Visual proofs** (screenshot, browser, visual):
+**Visual proofs** (browser):
 
 Based on `metadata.proof_capture.visual_method`:
 

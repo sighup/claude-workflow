@@ -97,7 +97,7 @@ Each requirement must be:
 |-------|------|----------|-------------|
 | `role` | string | Yes | Worker role: `implementer`, `validator`, `spec-writer` |
 | `complexity` | string | Yes | Task complexity: `trivial`, `standard`, `complex` |
-| `model` | string | Yes | Model for this task: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex) |
+| `model` | string | Yes | Intended model: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex). After execution, the worker records the actual model in `model_used` (see Result Schema). |
 
 ### Proof Artifact Types
 

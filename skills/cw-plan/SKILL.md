@@ -112,10 +112,8 @@ Before creating tasks, determine how visual/screenshot proof artifacts will be c
 
 **1. Identify Visual Proofs**
 
-Scan the spec's proof artifacts for types that require visual capture:
-- `screenshot` - Static image of UI state
-- `browser` - Web page interaction/state
-- `visual` - Any UI verification
+Scan the spec's proof artifacts for the `browser` type (visual capture):
+- `browser` - Browser-based verification (web page interaction, screenshots, UI state)
 
 If no visual proofs exist, skip to Step 2.
 
@@ -185,7 +183,7 @@ TaskCreate({
       { id: "R1.1", text: "...", testable: true }  // Use spec R-IDs verbatim
     ],
     proof_artifacts: [
-      { type: "test|cli|url|file|screenshot|visual", command: "...", expected: "...", capture_method: "auto|manual|skip" }
+      { type: "test|cli|url|file|browser", command: "...", expected: "...", capture_method: "auto|manual|skip" }
     ],
     proof_capture: {
       visual_method: "auto|manual|skip",
