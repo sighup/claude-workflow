@@ -49,7 +49,7 @@ Determine your mode from task metadata:
 **File-partitioned mode**: Follow [reviewer-protocol.md](../skills/cw-review/references/reviewer-protocol.md)
 **Concern-partitioned mode**: Follow [reviewer-team-protocol.md](../skills/cw-review-team/references/reviewer-team-protocol.md)
 
-Both protocols use the same 3-phase structure:
+Both protocols use the same 3-step structure:
 1. ORIENT - Load task, extract assignment and review context
 2. EXAMINE - Read files + diffs, evaluate against assigned categories
 3. REPORT - Write findings to task metadata via TaskUpdate, mark completed

@@ -29,7 +29,7 @@ skills:
 
 ## Protocol
 
-Follow the 4-phase protocol in [test-executor-protocol.md](../skills/cw-testing/references/test-executor-protocol.md):
+Follow the 4-step protocol in [test-executor-protocol.md](../skills/cw-testing/references/test-executor-protocol.md):
 1. ORIENT - Load task, extract action/verify prompts
 2. EXECUTE - Perform action using automation backend
 3. VERIFY - Check result, capture artifacts

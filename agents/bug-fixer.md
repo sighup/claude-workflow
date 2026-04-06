@@ -31,7 +31,7 @@ skills:
 
 ## Protocol
 
-Follow the 5-phase protocol in [bug-fixer-protocol.md](../skills/cw-testing/references/bug-fixer-protocol.md):
+Follow the 5-step protocol in [bug-fixer-protocol.md](../skills/cw-testing/references/bug-fixer-protocol.md):
 1. ORIENT - Load fix task, understand failure vs spec requirement
 2. INVESTIGATE - Search application code, identify root cause
 3. IMPLEMENT - Fix application code (never tests)

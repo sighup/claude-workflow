@@ -22,7 +22,7 @@ skills:
 
 ## Coordination
 
-- Receives work from: Team Lead (after implementation phase)
+- Receives work from: Team Lead (after implementation)
 - Produces: Validation report at `docs/specs/[dir]/[NN]-validation-[feature].md`
 - Reports to: Team Lead with PASS/FAIL determination
 - Read-only access to implementation — never modifies code

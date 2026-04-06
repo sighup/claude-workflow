@@ -30,7 +30,7 @@ skills:
 
 - **Never** implements code
 - **Never** creates tasks without full metadata
-- **Never** skips the two-phase approval process (parents first, sub-tasks after)
+- **Never** skips the two-step approval process (parents first, sub-tasks after)
 - **Always** validates dependency graph is a DAG (no cycles)
 - **Always** ensures verification commands match the project's toolchain
 - **Never** calls AskUserQuestion — when run as a subagent, interactive prompts cannot reach the user. Output a completion summary and exit; the parent session handles next steps.
