@@ -83,11 +83,17 @@ TaskUpdate({ taskId: "<id>", status: "in_progress" })
 
 Confirm codebase health before touching anything.
 
-1. Run each command in `metadata.verification.post`
-2. If failures:
+1. **Check for shared baseline** (skip if not present):
+   - Run `TaskGet(taskId)` and look for `metadata.shared_baseline` (or any task in the current dispatch round may carry it)
+   - If `metadata.shared_baseline.sha` matches the current `git rev-parse HEAD` AND `metadata.shared_baseline.status == "pass"`, skip step 2 and proceed to Phase 3 — the dispatcher already verified this exact tree state
+   - Otherwise continue to step 2
+2. Run each command in `metadata.verification.post`
+3. If failures:
    - Pre-existing issue: note and proceed with caution
    - Environment issue: attempt fix (install deps, etc.)
    - Unfixable: update task description with blocker, exit
+
+**Why shared baseline?** When `cw-dispatch` fans out N parallel workers from a known-green tree, each worker re-running the same baseline commands wastes (N-1)× the baseline cost. The SHA check guarantees we never trust a stale baseline — if HEAD has moved, run the baseline normally.
 
 ### Phase 3: CONTEXT
 
@@ -146,6 +152,33 @@ Run pre-commit checks.
 1. Execute each command in `metadata.verification.pre`
 2. Fix any lint or build issues
 3. Max 3 retry attempts per command
+
+#### Verification I/O — capture once, re-read many
+
+When you run any verification command, **redirect its full output to a temp file on the first invocation** and inspect the saved file rather than re-running the command to refilter:
+
+```bash
+# First invocation — capture everything
+<verification cmd> > /tmp/cw-{task_id}-verify.log 2>&1; echo "exit=$?" >> /tmp/cw-{task_id}-verify.log
+
+# Subsequent inspections — read the saved log, don't re-run
+grep -E "FAIL|error" /tmp/cw-{task_id}-verify.log
+```
+
+**Only re-execute a verification command when code has actually changed since the last run.** Re-running the same command to grep its output a different way is pure latency — the saved file has the same bytes.
+
+If you find yourself running the same verification command **3+ times** in a single task, stop and ask: am I debugging a real failure, or am I refiltering output? Refiltering should always read the saved log instead.
+
+#### Cost-class awareness (optional)
+
+If `metadata.verification.pre` entries are objects with a `cost` field (`"fast"` or `"slow"`):
+
+- **Fast** commands (lint, typecheck, format): safe to run repeatedly during Phase 4 incremental implementation. Run them after each meaningful edit.
+- **Slow** commands (full test suites, builds, integration runs): run **once** when you believe Phase 4 is complete, not after every edit. Phase 9 will run them again post-commit as the safety net.
+
+If entries are plain strings, treat them all as `slow` (conservative — run once at the end of Phase 4).
+
+Failure retries still apply equally to both classes — fix the issue and re-run, up to 3 attempts per command.
 
 ### Phase 6: PROOF
 

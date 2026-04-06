@@ -58,6 +58,13 @@ When you receive a `shutdown_request`:
 - Never leave uncommitted changes
 - Never push to remote
 
+## Verification Discipline
+
+- Capture verification output to a temp file on the first run; re-read the saved file instead of re-running the command to refilter
+- If you have run the same verification command 3+ times in one task, stop: are you debugging a real failure, or refiltering output? Refiltering should always read the saved log
+- Honor `metadata.verification` cost classes when present: run `fast` commands incrementally, run `slow` commands once at the end of Phase 4 (Phase 9 will run them again post-commit)
+- If `metadata.shared_baseline.sha` matches `git rev-parse HEAD` and status is `pass`, skip your own Phase 2 baseline run — the dispatcher already verified this exact tree
+
 ## Constraints
 
 - Only modifies files listed in task scope

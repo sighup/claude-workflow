@@ -183,8 +183,16 @@ TaskCreate({
     },
     commit: { template: "feat(scope): description" },
     verification: {
-      pre: ["npm run lint", "npm run build"],
-      post: ["npm test"]
+      // Entries may be plain strings (treated as cost: "slow") OR objects with cost class.
+      // Cost class lets workers run cheap commands incrementally during implementation
+      // and reserve expensive commands for end-of-phase gates.
+      pre: [
+        { cmd: "npm run lint", cost: "fast" },
+        { cmd: "npm run build", cost: "fast" }
+      ],
+      post: [
+        { cmd: "npm test", cost: "slow" }
+      ]
     },
     role: "implementer",
     complexity: "trivial|standard|complex",
@@ -203,13 +211,18 @@ TaskUpdate({ taskId: "t02-id", addBlockedBy: ["t01-id"] })
 
 After creating all parent tasks, **STOP** and output a `PLANNING SUMMARY`. Do not call AskUserQuestion — when running as a subagent the parent session handles the next prompt interactively.
 
-Evaluate two signals to form a recommendation:
+Evaluate three signals to form a recommendation:
 - **Complexity**: are any tasks marked `complex`?
 - **Parallelization**: are there 2+ tasks that can run concurrently (no dependency between them)?
+- **Variance**: does any single parallel group mix `complex` tasks with `standard`/`trivial` tasks? High variance means barrier-style dispatchers waste parallelism waiting on the long pole.
 
 Recommendation logic:
 - **"Generate sub-tasks"** if complex tasks exist OR parallel groups with 2+ non-trivial tasks exist
 - **"Execute as-is"** if all tasks are standard/trivial AND the dependency chain is purely linear
+
+Dispatcher recommendation:
+- **`cw-dispatch-team`** (continuous monitor loop) when any parallel group has variance OR there are 3+ follow-on batches queued behind the first one — these are the cases where the barrier-style fan-out wastes the most wall-clock time
+- **`cw-dispatch`** (simple fan-out) for small graphs, single-batch dispatches, or when the experimental teams flag is unavailable
 
 Output the summary in this exact format:
 
@@ -223,9 +236,13 @@ Parent tasks: N
 
 Parallel groups: [T01, T03, T04] can run concurrently | none — linear dependency chain
 Complex tasks: T01, T03 | none
+Variance: high (group [T01, T03, T04] mixes complex with standard) | low
 
 Recommendation: Generate sub-tasks | Execute as-is
 Reason: [one sentence — e.g. "T01 and T03 are complex and can run in parallel — sub-tasks enable finer-grained parallelism" or "All tasks are standard in a linear chain — cw-execute handles execution directly"]
+
+Dispatcher: cw-dispatch-team | cw-dispatch
+Reason: [one sentence — e.g. "Group [T01, T03, T04] mixes complex with standard tasks; the team dispatcher avoids barrier waits on the long pole" or "Single small batch with even task sizes — cw-dispatch is sufficient"]
 ```
 
 ### Phase 3: Sub-Task Creation (After User Approval)
@@ -265,6 +282,21 @@ Adapt verification commands to the project:
 
 Read project configuration (package.json, Makefile, etc.) to determine correct commands.
 
+### Cost Class
+
+Tag each verification command with a cost class so workers can decide when to run it:
+
+- **fast**: completes in seconds (lint, typecheck, format, single-file unit tests). Safe to run incrementally during implementation.
+- **slow**: takes tens of seconds or more (full test suites, multi-package builds, integration runs). Workers should run these once at the end of an implementation phase, not after every edit.
+
+Heuristics for tagging:
+- Lint, format, typecheck → `fast`
+- Single-file or single-package targeted tests → `fast`
+- Full test suite, multi-package builds, e2e suites → `slow`
+- When in doubt, prefer `slow` (conservative — workers will still run it, just less often)
+
+Plain string entries (`pre: ["npm test"]`) are accepted for backward compatibility and treated as `slow`. New plans should use the object form so workers can optimize their re-run cadence without sacrificing coverage.
+
 ## Quality Checklist
 
 Before presenting to user:
@@ -284,7 +316,7 @@ Before presenting to user:
 
 ## What Comes Next
 
-After the task graph is complete, use AskUserQuestion to let the user choose their execution approach:
+After the task graph is complete, use AskUserQuestion to let the user choose their execution approach. Order the options so the **Dispatcher recommendation** from the planning summary appears first, with a "(recommended)" suffix on its description:
 
 ```
 AskUserQuestion({
@@ -292,8 +324,8 @@ AskUserQuestion({
     question: "The task graph is ready for execution. How would you like to proceed?",
     header: "Execution",
     options: [
-      { label: "Parallel (/cw-dispatch)", description: "Spawn parallel subagent workers — ready workers run concurrently, no extra setup needed" },
-      { label: "Team (/cw-dispatch-team)", description: "Persistent agent team with lead coordination (requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and CLAUDE_CODE_TASK_LIST_ID)" },
+      { label: "Team (/cw-dispatch-team)", description: "Persistent agent team with continuous monitor loop — best when batches mix complex and standard tasks (requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and CLAUDE_CODE_TASK_LIST_ID)" },
+      { label: "Parallel (/cw-dispatch)", description: "Spawn parallel subagent workers in barrier-style batches — best for small graphs or even task sizes" },
       { label: "Single task (/cw-execute)", description: "Execute one task at a time with full visibility and control" },
       { label: "Done for now", description: "Save the task graph and execute later" }
     ],

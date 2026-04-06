@@ -86,7 +86,7 @@ Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent tea
 
 **Note:** `/cw-worktree create` sets `CLAUDE_CODE_TASK_LIST_ID` automatically in `.claude/settings.local.json` — no manual configuration needed for worktree-based workflows.
 
-`/cw-dispatch` (subagent workers) needs no setup and is the recommended default. `/cw-plan` will offer both options after task graph creation.
+`/cw-dispatch` (subagent workers) needs no setup and is the simplest option. Prefer `/cw-dispatch-team` whenever a parallel batch mixes `complex` tasks with `standard`/`trivial` ones — its continuous monitor loop avoids the barrier waits that fan-out dispatch incurs on the slowest task. `/cw-plan` recommends a dispatcher in its planning summary based on task variance.
 
 `/cw-testing` supports multiple backends. To use the `playwright-bdd` backend (Gherkin → Playwright, CI-friendly):
 

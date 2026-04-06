@@ -64,6 +64,37 @@ TaskUpdate({
 })
 ```
 
+### Step 3b: Record Shared Baseline (once per dispatch round)
+
+Before fanning out workers, run the project's verification commands **once** so every worker can skip its own redundant baseline run. Without this, N parallel workers each pay the full baseline cost on the same tree.
+
+1. Pick any task in the dispatched group and read `metadata.verification.post`
+2. Run each command. If any fails:
+   - Stop and surface the failure to the user — the tree is not green and dispatch should not proceed
+3. If all pass, record the result on every task being dispatched in this round:
+
+```
+HEAD_SHA=$(git rev-parse HEAD)
+```
+
+```
+TaskUpdate({
+  taskId: "<native-id>",
+  metadata: {
+    shared_baseline: {
+      sha: "<HEAD_SHA>",
+      status: "pass",
+      verified_at: "<ISO timestamp>",
+      verified_by: "dispatcher"
+    }
+  }
+})
+```
+
+Workers will check `metadata.shared_baseline.sha` against the current HEAD in their Phase 2 (Baseline) and skip the redundant run if they match.
+
+**Skip this step if** the dispatched group has only one task, or if `verification.post` is empty (greenfield/pre-bootstrap tasks).
+
 ### Step 4: Spawn Workers
 
 Send a **single message** with multiple Task tool calls for parallel execution.
@@ -119,6 +150,17 @@ See [dispatch-common.md](references/dispatch-common.md#conflict-prevention) for 
 - **Default**: Spawn up to 3 workers simultaneously
 - **Reason**: More than 3 parallel agents risk git conflicts and resource contention
 - If more than 3 tasks are ready, dispatch in batches of 3
+
+## When to Prefer cw-dispatch-team
+
+`cw-dispatch` is a barrier-style fan-out: each batch waits for **all** workers to finish before the next batch starts. This wastes parallelism whenever a batch contains tasks of uneven duration — fast workers sit idle until the slowest peer is done.
+
+Prefer `cw-dispatch-team` (which uses a continuous monitor loop) when:
+- The current batch mixes `complex` tasks with `standard`/`trivial` tasks (high duration variance)
+- More than ~2 follow-on batches are queued behind the current one (the long pole compounds)
+- The user has `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` enabled
+
+`cw-dispatch` remains the right choice for: small task graphs, single-batch dispatches, or environments without team support.
 
 ## Error Handling
 

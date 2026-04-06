@@ -46,8 +46,24 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
   },
 
   "verification": {
-    "pre": ["npm run lint", "npm run build"],     // Must pass before commit
-    "post": ["npm test"]                          // Must pass after commit
+    // Entries may be plain strings (treated as cost: "slow") OR objects with cost class.
+    // See "Verification Cost Class" below.
+    "pre": [
+      { "cmd": "npm run lint",  "cost": "fast" },
+      { "cmd": "npm run build", "cost": "fast" }
+    ],
+    "post": [
+      { "cmd": "npm test", "cost": "slow" }
+    ]
+  },
+
+  // Optional: populated by the dispatcher (cw-dispatch / cw-dispatch-team) before fan-out
+  // so workers can skip a redundant Phase 2 baseline run when HEAD has not moved.
+  "shared_baseline": {
+    "sha": "abc1234...",                 // git rev-parse HEAD at time of verification
+    "status": "pass",                    // pass | fail
+    "verified_at": "2026-04-06T20:00:00Z",
+    "verified_by": "dispatcher"          // dispatcher | lead
   },
 
   // Worker Assignment
@@ -105,6 +121,32 @@ Each requirement must be:
 | `url` | `url`, `method`, `expected` | HTTP request verification |
 | `file` | `path`, `contains` | File existence/content check |
 | `browser` | `prompt`, `expected` | Browser-based verification |
+
+## Verification Cost Class
+
+Each `verification.pre` and `verification.post` entry may be either:
+
+- A plain string (legacy form): `"npm test"` — treated as `cost: "slow"` for safety
+- An object: `{ "cmd": "npm test", "cost": "fast" | "slow" }`
+
+| Cost | Meaning | Worker behavior |
+|------|---------|-----------------|
+| `fast` | Completes in seconds (lint, typecheck, format, single-file unit tests) | Safe to run incrementally during Phase 4 implementation |
+| `slow` | Tens of seconds or more (full test suites, multi-package builds, e2e) | Run once at the end of Phase 4; Phase 9 runs it again post-commit |
+
+**Tagging heuristics:**
+- Lint, format, typecheck → `fast`
+- Single-file or single-package targeted tests → `fast`
+- Full test suite, multi-package builds, e2e suites → `slow`
+- When in doubt → `slow` (conservative)
+
+Failure retries (max 3) apply equally to both classes.
+
+## Shared Baseline
+
+The `shared_baseline` field is **optional** and **populated by the dispatcher**, not by `cw-plan`. When `cw-dispatch` or `cw-dispatch-team` fans out N parallel workers from a known-green tree, it runs `verification.post` once and stamps the result onto every dispatched task. Workers check `shared_baseline.sha == git rev-parse HEAD` in Phase 2 (Baseline) and skip the redundant run if it matches.
+
+If HEAD has moved since the stamp (other commits landed), workers fall back to running their own baseline.
 
 ## Dependency Representation
 

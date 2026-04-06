@@ -112,6 +112,36 @@ TaskUpdate({
 
 Apply the same conflict checks as Step 2 — verify no file overlaps between assigned tasks.
 
+### Step 4b: Record Shared Baseline (once per dispatch session)
+
+Before spawning teammates, run the project's verification commands **once** so every teammate can skip its own redundant baseline run.
+
+1. Pick any task in the initial batch and read `metadata.verification.post`
+2. Run each command. If any fails, stop and surface the failure to the user — the tree is not green and dispatch should not proceed
+3. If all pass, record the result on every initially-assigned task:
+
+```
+HEAD_SHA=$(git rev-parse HEAD)
+```
+
+```
+TaskUpdate({
+  taskId: "<native-id>",
+  metadata: {
+    shared_baseline: {
+      sha: "<HEAD_SHA>",
+      status: "pass",
+      verified_at: "<ISO timestamp>",
+      verified_by: "lead"
+    }
+  }
+})
+```
+
+When the lead later assigns a follow-up task to an idle teammate (Step 6), check whether the shared baseline SHA still matches `git rev-parse HEAD`. If teammate commits have moved HEAD, **re-record** the shared baseline before assigning, or omit the field so the next teammate runs its own baseline.
+
+**Skip this step if** the initial batch is a single task, or if `verification.post` is empty.
+
 ### Step 5: Spawn Teammates
 
 Send a **single message** with multiple Task tool calls for parallel launch. Spawn **one teammate per ready task** — no arbitrary cap.

@@ -19,14 +19,15 @@ Detailed phase-by-phase instructions for the implementer worker.
 
 **Goal**: Confirm the codebase is healthy before you touch it.
 
-1. Run each command in `metadata.verification.post` (the full test suite)
-2. If any fail:
+1. **Shared baseline check**: If `metadata.shared_baseline.sha` matches the current `git rev-parse HEAD` AND `metadata.shared_baseline.status == "pass"`, skip step 2 — the dispatcher already verified this exact tree state. Proceed to Phase 3.
+2. Run each command in `metadata.verification.post` (the full test suite). Each entry may be a string or `{cmd, cost}` object — extract `cmd`.
+3. If any fail:
    - Check if failure is pre-existing (not your fault)
    - If pre-existing: note in task description, proceed with caution
    - If environment issue: attempt fix (install deps, etc.)
    - If unfixable: mark task blocked, exit
 
-**Exit criteria**: All verification.post commands pass (or failures are documented pre-existing).
+**Exit criteria**: All verification.post commands pass (or failures are documented pre-existing), OR a valid shared baseline allowed the run to be skipped.
 
 ## Phase 3: CONTEXT
 
@@ -67,10 +68,12 @@ Rules:
 
 **Goal**: Confirm your changes don't break anything locally.
 
-1. Run each command in `metadata.verification.pre` (typically lint + build)
-2. If lint fails: fix issues and re-run
-3. If build fails: fix compilation errors and re-run
-4. Max 3 retry attempts per command
+1. Run each command in `metadata.verification.pre` (typically lint + build). Each entry may be a string or `{cmd, cost}` object.
+2. **Capture-once I/O**: redirect each command's full output to `/tmp/cw-{task_id}-verify-{step}.log` on the first invocation. Re-read the saved file to inspect specific results — never re-run the command just to refilter output.
+3. **Cost-aware cadence**: if entries carry a `cost` field, run `fast` commands incrementally during Phase 4, but run `slow` commands only once at the end of Phase 4 (Phase 9 will run them again post-commit). Plain string entries are treated as `slow` for safety.
+4. If lint fails: fix issues and re-run
+5. If build fails: fix compilation errors and re-run
+6. Max 3 retry attempts per command. Re-running solely to refilter output does **not** count as a retry — use the saved log instead.
 
 **Exit criteria**: All verification.pre commands pass.
 
