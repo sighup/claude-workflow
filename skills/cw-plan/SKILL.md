@@ -222,7 +222,7 @@ Recommendation logic:
 Output the summary in this exact format:
 
 ```
-PLANNING SUMMARY
+CW-PLAN COMPLETE
 ================
 Parent tasks: N
   T01 [complexity] — Subject (no blockers)
@@ -301,10 +301,10 @@ Before presenting to user:
 
 **CRITICAL**: When planning completes, you MUST output a summary so the caller can relay results to the user. Sub-agent results are not automatically visible to users.
 
-The PLANNING SUMMARY in Step 2 serves as the primary output block:
+The CW-PLAN COMPLETE block in Step 2 serves as the primary output block:
 
 ```
-PLANNING SUMMARY
+CW-PLAN COMPLETE
 ================
 Parent tasks: N
   T01 [complexity] — Subject (no blockers)

@@ -240,8 +240,8 @@ These automatically become CRITICAL or HIGH:
 Always end with this output format:
 
 ```
-VALIDATION COMPLETE
-===================
+CW-VALIDATE COMPLETE
+====================
 VERDICT: PASS | FAIL
 Gates: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F] G[P/F]
 
