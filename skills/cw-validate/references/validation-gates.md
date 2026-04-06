@@ -1,6 +1,6 @@
 # Validation Gates Reference
 
-Six mandatory gates that determine PASS/FAIL for implementation validation.
+Seven mandatory gates that determine PASS/FAIL for implementation validation.
 
 ## Gate Definitions
 
