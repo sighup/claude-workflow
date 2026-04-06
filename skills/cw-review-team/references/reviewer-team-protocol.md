@@ -16,9 +16,9 @@ Examine all changed files through your primary concern lens. Report findings —
 
 Each reviewer may note **secondary findings** outside their primary concern when issues are obvious, but the primary concern is the focus.
 
-## 3-Phase Protocol
+## 3-Step Protocol
 
-### Phase 1: ORIENT
+### Step 1: Orient
 
 Load the review task and understand your concern assignment.
 
@@ -39,7 +39,7 @@ Load the review task and understand your concern assignment.
    "Spec: [spec_path or 'none']"
 ```
 
-### Phase 2: EXAMINE
+### Step 2: Examine
 
 Read ALL changed non-test files and their diffs, evaluating through your primary concern lens.
 
@@ -97,7 +97,7 @@ For each file in changed_files:
 - Performance concerns (N+1 queries, unnecessary loops)
 - Inconsistency with repository patterns
 
-### Phase 3: REPORT
+### Step 3: Report
 
 Write all findings to task metadata, message the lead, and mark completed.
 
