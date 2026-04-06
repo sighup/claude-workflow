@@ -29,8 +29,8 @@ You are a **Senior QA Engineer** responsible for:
 
 - **NEVER** modify implementation code - you are read-only
 - **NEVER** mark validation as PASS if any gate fails
-- **ALWAYS** re-execute proof artifacts when possible (don't trust stale results)
-- **ALWAYS** scan for credentials in proof files
+- **NEVER** trust captured proof results when the tree has moved or is dirty — see Step 4a's trust condition. Trust is only valid when HEAD matches the latest implementer commit and the working tree is clean. Any doubt → re-execute.
+- **ALWAYS** scan for credentials in proof files (Gate F runs regardless of freshness)
 - **ALWAYS** produce the full coverage matrix, even for passing validations
 
 ## Validation Gates
@@ -76,9 +76,56 @@ For each functional requirement in the spec:
 3. Check if proof artifacts exist and passed
 4. Mark as: `Verified`, `Failed`, or `Unknown`
 
-### Step 4: Re-Execute Proofs
+### Step 4a: Freshness Check (Skip Re-Execution When Safe)
 
-For each proof artifact in completed tasks:
+Before re-executing any proof commands, check whether the working tree is in the exact state captured during implementation. If it is, the captured proof results are still valid and re-execution would be pure duplication of work the implementer already did.
+
+1. Collect all completed tasks' `metadata.commit_sha` values into a set `TASK_SHAS`. If any completed task has no `commit_sha`, the trust path is unavailable — proceed to Step 4b for the entire run.
+2. Capture the current state:
+
+```bash
+HEAD_SHA=$(git rev-parse HEAD)
+TREE_DIRTY=$(git status --porcelain)
+```
+
+3. **Trust condition** (ALL must be true for the trust path):
+   - `TREE_DIRTY` is empty (working tree is clean — no uncommitted edits)
+   - `HEAD_SHA` is a member of `TASK_SHAS` (HEAD is one of the implementer commits, not something the user pushed afterward)
+   - Every sha in `TASK_SHAS` is reachable from HEAD: `git merge-base --is-ancestor <sha> HEAD` returns exit code 0 for each
+
+The combination of "HEAD is a task commit" + "all task commits reachable from HEAD" means HEAD is at or beyond the latest task commit AND every task's work is in the line of history HEAD points at — without requiring the validator to compute "the latest commit" by topological ordering (which is fragile across rebases and merges).
+4. **If trust condition holds** for all completed tasks:
+   - Mark every task's proofs as `Verified (trusted from capture)` in the coverage matrix
+   - Use the `proof_results` from each task's metadata as-is — do not re-execute
+   - Record the trust decision in the report's evidence appendix: `Trusted N proofs from capture (HEAD = <sha>, tree clean)`
+   - Skip Step 4b entirely and proceed to Step 5
+5. **If trust condition fails** for any reason — proceed to Step 4b and re-execute proofs as normal. Log the reason in the validation report:
+   - "HEAD has moved past implementer commits" → someone committed after dispatch finished
+   - "Working tree has uncommitted changes" → mid-edit state
+   - "Task <id> has no commit_sha" → task completed without proper Step 10 reporting
+
+This is a **fail-closed** check: any doubt → full re-execution. There is no per-proof skip path and no agent state-tracking required — the check is mechanical, binary, and computed once at the start of Step 4.
+
+**Why this is safe:** captured proofs are the output of the *exact* same commands the validator would re-run, against the *exact* same files at the *exact* same git state. If nothing has changed, re-running cannot produce a different result. Gate F (credential safety) still scans the proof files in Step 5 regardless — trust does not bypass any gate.
+
+**When this matters:** the common case of `/cw-validate` immediately after `/cw-dispatch` finishes — HEAD is at the last implementer commit and the tree is clean. In that scenario, the freshness check trusts every proof and the validator skips all re-execution.
+
+### Step 4b: Re-Execute Proofs (when freshness check failed)
+
+For each proof artifact in completed tasks (except those already trusted in Step 4a):
+
+#### Deduplicate commands first
+
+For `test` and `cli` proof types, multiple artifacts often share the same `command` (e.g., several artifacts all run the same test suite). Group them by command **before** executing:
+
+1. Build a map: `command_string` → list of `(task_id, artifact_index)` across all `test` and `cli` artifacts
+2. For each unique `command_string`, execute it **once**
+3. Apply the result to every artifact that maps to it
+4. In the coverage matrix evidence column, note `[deduped from <command>]` for the secondary entries
+
+Deduplication uses exact string match — two artifacts with slightly different commands run separately. This avoids re-running expensive test suites N times when N artifacts all reference the same command. `file`, `url`, and `browser` proof types are not deduplicated (file checks are local and cheap; URL and browser proofs typically have unique targets).
+
+#### Then execute
 
 1. Read the proof type and command from metadata
 2. Check `metadata.proof_capture` for the capture method used
@@ -133,8 +180,9 @@ Produce the validation report and save to:
 
 - **Implementation Ready**: Yes/No - [one-sentence rationale]
 - **Requirements Verified**: X/Y (Z%)
-- **Proof Artifacts Working**: X/Y (Z%)
+- **Proof Artifacts Working**: X/Y (Z%) — [N trusted from capture, M re-executed, K deduped]
 - **Files Changed vs Expected**: X changed, Y in scope
+- **Freshness**: Trusted | Re-executed (reason: <HEAD moved | tree dirty | missing commit_sha>)
 
 ## Coverage Matrix: Functional Requirements
 
@@ -210,7 +258,8 @@ Overall: PASS | FAIL
 Gates: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F]
 
 Requirements: X/Y verified (Z%)
-Proof Artifacts: X/Y working (Z%)
+Proof Artifacts: X/Y working (Z%) — N trusted, M re-executed, K deduped
+Freshness: Trusted | Re-executed (<reason>)
 
 [If FAIL: List blocking issues with severity]
 
