@@ -66,14 +66,24 @@ Six mandatory gates that determine PASS/FAIL for implementation validation.
 
 **Rule**: Implementation must follow identified repository patterns and conventions.
 
+Gate E has two layers: **static checks** (always run) and **build hygiene checks** (skippable when freshness holds).
+
 **How to check**:
+
 1. Read repository standards from the spec
-2. For each standard, verify compliance:
-   - Coding style (linting passes)
-   - Testing patterns (tests follow convention)
-   - File organization (correct directories)
-   - Naming conventions (consistent with codebase)
-   - Build/CI passes
+2. **Static checks — always run:**
+   - File organization (correct directories) — Glob/Read against the spec's structure section
+   - Naming conventions (consistent with codebase) — read sample files and compare
+   - Testing patterns (tests follow convention) — read test files and check structure
+3. **Build hygiene checks — lint, build, full test suite:**
+   - **If Step 4a's freshness check passed** (HEAD ∈ TASK_SHAS, all reachable, tree clean): trust the implementer's `verification.pre`/`verification.post` results from the same SHA. The `cw-execute` 11-phase protocol blocks commits that fail Phase 5 (lint+build) or Phase 9 (test) — a committed task at the trusted SHA is a guarantee that lint, build, and tests passed at exactly that tree state. Do NOT re-run. Record evidence as `Trusted from implementer Phase 5/9 at sha=<HEAD_SHA>`.
+   - **If freshness failed** (HEAD moved, tree dirty, or any task missing `commit_sha`): re-run lint, build, and the test suite as before. Record evidence as `Re-executed: lint=<status> build=<status> test=<status>`.
+
+**Why this trust is valid:** the cw-execute protocol's Phase 5 + Phase 9 are functionally equivalent to Gate E's build hygiene check. Phase 5 cannot proceed past lint/build failure. Phase 9 cannot leave a successful commit if `verification.post` failed (the commit gets amended). Therefore: a task in `completed` state with a `commit_sha` reachable from a clean HEAD is a proof-by-construction that lint/build/test passed at that SHA.
+
+**Trust scope:** the implementer's guarantee covers exactly the commands listed in the task's `metadata.verification.pre` and `metadata.verification.post`. If the spec's repository standards section names additional build hygiene commands not present in `verification.pre`/`verification.post`, those additional commands must still be run regardless of freshness — they were never verified by the implementer protocol. Most projects align these (cw-plan derives both from the same project config), but if you find a mismatch, run only the unaligned subset and still trust the aligned commands.
+
+**Why static checks always run:** file organization, naming, and pattern conformance are static analyses against the spec's standards section. They are not part of `verification.pre`/`verification.post` and therefore have no implementer guarantee to trust. They are also cheap (file reads), so there is no incentive to skip them.
 
 ### GATE F: Credential Safety (REQUIRED)
 

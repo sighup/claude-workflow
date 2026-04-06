@@ -106,9 +106,13 @@ The combination of "HEAD is a task commit" + "all task commits reachable from HE
 
 This is a **fail-closed** check: any doubt → full re-execution. There is no per-proof skip path and no agent state-tracking required — the check is mechanical, binary, and computed once at the start of Step 4.
 
+**Record the freshness decision** in your working state — it is consumed again in Step 5 by Gate E. Use a clear marker like `freshness=trusted` or `freshness=stale` so the gate evaluation knows which path to take.
+
 **Why this is safe:** captured proofs are the output of the *exact* same commands the validator would re-run, against the *exact* same files at the *exact* same git state. If nothing has changed, re-running cannot produce a different result. Gate F (credential safety) still scans the proof files in Step 5 regardless — trust does not bypass any gate.
 
-**When this matters:** the common case of `/cw-validate` immediately after `/cw-dispatch` finishes — HEAD is at the last implementer commit and the tree is clean. In that scenario, the freshness check trusts every proof and the validator skips all re-execution.
+**Gates that share this trust window:** Step 4a's freshness decision is also consumed by **Gate E (Repository Standards)** — the build hygiene checks (lint, build, full test suite) are skippable on the same `freshness=trusted` condition because the cw-execute Phase 5 + Phase 9 protocol guarantees they passed at any committed SHA. See `references/validation-gates.md#gate-e-repository-standards-required` for the gate-side rules. Gate E's static checks (file organization, naming, patterns) always run regardless.
+
+**When this matters:** the common case of `/cw-validate` immediately after `/cw-dispatch` finishes — HEAD is at the last implementer commit and the tree is clean. In that scenario, the freshness check trusts every proof in Step 4 AND lets Gate E skip its build hygiene re-runs. The validator's wall-clock cost drops to roughly the cost of metadata reads, static checks, the Gate F credential scan, and report writing.
 
 ### Step 4b: Re-Execute Proofs (when freshness check failed)
 
@@ -183,6 +187,7 @@ Produce the validation report and save to:
 - **Proof Artifacts Working**: X/Y (Z%) — [N trusted from capture, M re-executed, K deduped]
 - **Files Changed vs Expected**: X changed, Y in scope
 - **Freshness**: Trusted | Re-executed (reason: <HEAD moved | tree dirty | missing commit_sha>)
+- **Gate E build hygiene**: Trusted (lint/build/test from implementer Phase 5/9 at sha=<sha>) | Re-executed (lint=<status> build=<status> test=<status>)
 
 ## Coverage Matrix: Functional Requirements
 
