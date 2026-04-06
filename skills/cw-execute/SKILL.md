@@ -147,9 +147,9 @@ Rules:
 
 ### Phase 5: VERIFY-LOCAL
 
-Run pre-commit checks. Phase 5 always executes every `verification.pre` command at least once — cost classes and incremental Phase 4 runs are an *optimization layered on top*, not a replacement.
+Run pre-commit checks. Phase 5 always executes every `verification.pre` command, no exceptions — any Phase 4 incremental runs are pure feedback for the worker, not a replacement for this gate.
 
-1. Execute each command in `metadata.verification.pre`. If an entry is an object `{cmd, cost}`, use `cmd`. If you already ran a `fast`-tagged command incrementally during Phase 4 against the **current** working tree state, you may skip its re-run here — otherwise run it now.
+1. Execute each command in `metadata.verification.pre`. If an entry is an object `{cmd, cost}`, use `cmd`.
 2. Fix any lint or build issues
 3. Max 3 retry attempts per command
 
@@ -171,11 +171,11 @@ grep -E "FAIL|error" /tmp/cw-{task_id}-verify.log
 
 #### Cost-class awareness (optional)
 
-`metadata.verification.pre` entries may be plain strings OR objects with a `cost` field (`"fast"` or `"slow"`). Cost classes are an **opt-in optimization for Phase 4**, not a Phase 5 behavior change:
+`metadata.verification.pre` entries may be plain strings OR objects with a `cost` field (`"fast"` or `"slow"`). Cost classes are an **opt-in optimization for Phase 4**, not a Phase 5 behavior change. Phase 5 always runs every entry exactly as it would without cost classes.
 
-- **Fast** commands (lint, typecheck, format): safe to run repeatedly during Phase 4 incremental implementation — run them after each meaningful edit to catch issues early. Phase 5 still runs them as the gate (or skips them per step 1's carve-out if you already ran them against the current tree).
+- **Fast** commands (lint, typecheck, format): safe to run repeatedly during Phase 4 incremental implementation — run them after each meaningful edit to catch issues early. Phase 5 still runs them as the gate.
 - **Slow** commands (full test suites, builds, integration runs): do NOT run incrementally during Phase 4 — wait for Phase 5. Phase 5 runs them once; Phase 9 runs them again post-commit as the safety net.
-- **Plain strings** (legacy form): treated as if untagged. Phase 5 runs them normally — same behavior as before this optimization. Workers should NOT pull plain-string commands into Phase 4.
+- **Plain strings** (legacy form): treated as untagged — run them in Phase 5 only, never incrementally during Phase 4. Same behavior as before this optimization existed.
 
 Failure retries still apply equally to all forms — fix the issue and re-run, up to 3 attempts per command.
 

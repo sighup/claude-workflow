@@ -138,10 +138,7 @@ TaskUpdate({
 })
 ```
 
-**Follow-up assignments (Step 6):** the re-stamp behavior depends on the dispatch model.
-
-- **Single shared worktree** (all teammates committing to the same branch in the same tree): the lead's `git rev-parse HEAD` reflects what every teammate sees. Before each follow-up assignment, check whether the stamped SHA still matches HEAD. If teammate commits have moved HEAD, re-record the shared baseline (run `verification.post` again first), or omit the field so the next teammate runs its own baseline.
-- **Multi-worktree dispatch** (each teammate operates in its own worktree, e.g., the `cw-worktree` model): the lead's HEAD does NOT reflect what teammates see — each worktree has its own HEAD. Do **not** re-stamp; the lead has no way to verify any teammate's tree. Omit `shared_baseline` on follow-up assignments so each teammate runs its own baseline. The initial Step 4b stamp is still valid for the *first* batch because it was made before any teammate diverged.
+When the lead later assigns a follow-up task to an idle teammate (Step 6), check whether the stamped SHA still matches `git rev-parse HEAD`. Teammates share the lead's working tree (they are subagents of the same Claude session), so the lead's HEAD is authoritative. If commits have moved HEAD, re-record the shared baseline (run `verification.post` again first) before assigning, or omit the field so the next teammate runs its own baseline.
 
 **Skip this step if** the initial batch is a single task, or if `verification.post` is empty.
 

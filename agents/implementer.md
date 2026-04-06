@@ -62,7 +62,7 @@ When you receive a `shutdown_request`:
 
 - Capture verification output to a temp file on the first run; re-read the saved file instead of re-running the command to refilter
 - After running a verification command twice without any code change between runs, all subsequent inspections in that no-edit window MUST read the saved log instead of re-running the command. Do not pause execution or ask the user — this is a self-applied behavioral cap. Re-running after a real fix is a normal retry and counts toward the 3-retry budget; the cap only applies to refilter-style reruns
-- Honor `metadata.verification` cost classes when present: `fast` commands MAY be run incrementally during Phase 4; `slow` commands MUST wait for Phase 5. Plain string entries are untagged — run them in Phase 5 only, never in Phase 4. Phase 5 always runs every entry at least once
+- Honor `metadata.verification` cost classes when present: `fast` commands MAY be run incrementally during Phase 4 for early feedback; `slow` commands and plain strings MUST NOT run incrementally — they run only in Phase 5. Phase 5 always runs every entry as the gate, regardless of cost class
 - If `metadata.shared_baseline.sha` matches `git rev-parse HEAD` and status is `pass`, skip your own Phase 2 baseline run — the dispatcher already verified this exact tree
 
 ## Constraints
