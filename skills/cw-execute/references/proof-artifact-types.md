@@ -2,6 +2,14 @@
 
 How to collect each type of proof artifact during Phase 6 of the execution protocol.
 
+## Scope
+
+Proofs demonstrate **this task's behavior** — not project health.
+
+Never create proofs for `lint`, `typecheck`, `build`, or the full test suite. Those run in `verification.pre` / `verification.post` already. Rule of thumb: if it would pass for an empty PR, it's not a proof.
+
+Target **1–3 proofs per task**. Bundle related checks into one artifact rather than splitting.
+
 ## File Naming Convention
 
 ```
@@ -165,42 +173,29 @@ Examples: `T01-01-test.txt`, `T01-02-cli.txt`, `T03-01-browser.png`
 
 ## Summary File Template
 
-After all artifacts collected, create `{task_id}-proofs.md`:
+Create `{task_id}-proofs.md` linking to the `.txt` files. **Do not inline their contents** — the `.txt` files are the source of truth.
 
 ```markdown
 # Proof Artifacts: {task_id} - {task_title}
 
-**Task ID**: {task_id}
 **Status**: PASS | FAIL
-**Executed**: {timestamp}
 **Spec**: {spec_path}
 
-## Summary
+## Artifacts
 
 | # | Type | Description | Result | File |
 |---|------|-------------|--------|------|
 | 01 | test | {description} | PASS | [{task_id}-01-test.txt](./{task_id}-01-test.txt) |
-| 02 | cli | {description} | PASS | [{task_id}-02-cli.txt](./{task_id}-02-cli.txt) |
+| 02 | cli  | {description} | PASS | [{task_id}-02-cli.txt](./{task_id}-02-cli.txt)  |
 
 ## Requirements Verified
 
-| Requirement | Description | Verified By | Status |
-|-------------|-------------|-------------|--------|
-| R01.1 | {text} | Artifact 01 | PASS |
-| R01.2 | {text} | Artifact 02 | PASS |
+| Requirement | Verified By | Status |
+|-------------|-------------|--------|
+| R01.1 — {text} | Artifact 01 | PASS |
+| R01.2 — {text} | Artifact 02 | PASS |
 
-## Detailed Results
+## Notes
 
-### 01: test
-{Content from test output file}
-
-### 02: cli
-{Content from CLI output file}
-
-## Verification Checklist
-
-- [x] All proof artifacts executed
-- [x] Output matches expected results
-- [x] No sensitive data (security scan passed)
-- [x] Files staged with implementation commit
+{Optional — pre-existing failures, blocked artifacts, manual context. Omit if empty.}
 ```

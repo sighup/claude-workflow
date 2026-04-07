@@ -272,6 +272,17 @@ Each demoable unit must be:
 | Screenshot | `Screenshot: [page] showing [state]` | `Screenshot: /login page showing error state` |
 | File | `File: [path] contains [pattern]` | `File: config.json contains new field` |
 
+**Aim for 1–2 proof artifacts per demoable unit, max 3.** Each one should demonstrate behavior that would *only* exist after this unit is built.
+
+**Do NOT list these as proof artifacts** — they are project-wide health checks, not feature proofs, and they already run as part of every task's verification step:
+
+- `npm run lint` / `eslint` / `ruff` / `golangci-lint`
+- `tsc --noEmit` / `mypy` / `cargo check` (typecheck)
+- `npm run build` / `cargo build`
+- `npm test` / `pytest` / `go test ./...` with no path filter (full project test suite)
+
+If your proof would pass for an empty PR, it's not a proof — it's a health check. Drop it.
+
 ## What Comes Next
 
 Once the spec is complete and approved, offer next steps based on context.

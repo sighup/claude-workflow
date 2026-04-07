@@ -151,6 +151,8 @@ Run pre-commit checks.
 
 Execute proof artifacts and capture evidence.
 
+**Proofs prove THIS task's behavior.** They are not a re-run of project-wide checks. Typecheck, lint, build, and the full test suite already run in Phase 5 (`verification.pre`) and Phase 9 (`verification.post`) — never re-execute them as proof artifacts. If `metadata.proof_artifacts` contains an entry that duplicates a verification command, skip it and note the skip in the summary's "Notes" section. See `references/proof-artifact-types.md` ("What proofs are NOT for") for the full anti-pattern list.
+
 1. Determine proof directory from spec_path: `./docs/specs/[spec-dir]/[NN]-proofs/`
 2. Create the proof directory if it doesn't exist
 3. Read `metadata.proof_capture` for the capture method decided during planning
@@ -210,7 +212,7 @@ User Notes: {any notes provided}
 Status: PASS|FAIL
 ```
 
-5. Create summary: `{task_id}-proofs.md` (REQUIRED)
+5. Create summary: `{task_id}-proofs.md` (REQUIRED). **Link to the raw `.txt` files — do not inline their contents.** See the Summary File Template in `references/proof-artifact-types.md`.
 
 **Phase 6 Gate Check (BLOCKING):**
 
