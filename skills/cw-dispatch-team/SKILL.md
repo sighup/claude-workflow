@@ -158,6 +158,8 @@ Repeat for each worker with incrementing worker-N identifiers and matching task 
 
 ### Step 6: Monitor Loop
 
+The monitor loop runs until all teammates are idle and no unblocked work remains (Step 7). The lead never pauses for user input mid-loop — failures, blockers, and integration issues are recorded on the board and surfaced in the Step 9 report.
+
 Messages from teammates are auto-delivered. Process them as they arrive:
 
 **On "requesting assignment" from worker-N:**

@@ -128,12 +128,13 @@ See [dispatch-common.md](references/dispatch-common.md#error-handling) for failu
 
 See [dispatch-common.md](references/dispatch-common.md#pre-exit-verification) for the 3-step verification and hallucination warning.
 
-## What Comes Next
+## Continuous Execution
 
-After workers complete, check if more tasks became unblocked:
+The dispatcher loops Step 1 → Step 5 → Step 1 until the count-based termination conditions in [dispatch-common.md](references/dispatch-common.md#survey-task-board) fire (`Ready=0+Pending=0` or `Ready=0+Blocked>0`). These are the only stop conditions. Findings, build breakage, worker failures, and scope discoveries are recorded in the report; the loop continues with whatever remains dispatchable. The user reads findings at natural termination — never call AskUserQuestion mid-loop.
 
-1. **If newly unblocked tasks exist**: Automatically dispatch them (loop back to Step 1)
-2. **If ALL tasks are complete**: Use AskUserQuestion to offer validation
+## What Comes Next (after natural termination)
+
+When the loop terminates, offer the next step via AskUserQuestion:
 
 ```
 AskUserQuestion({
