@@ -10,27 +10,14 @@ A Claude Code plugin that unifies spec-driven development, autonomous task execu
 # Add the marketplace
 claude plugin marketplace add https://github.com/sighup/claude-workflow.git
 
-# Install at project scope (shared with team via .claude/settings.json)
-claude plugin install claude-workflow@claude-workflow --scope project
-
-# Or install at user scope (personal, across all projects)
-claude plugin install claude-workflow@claude-workflow --scope user
-```
-
-### Interactive installation
-
-```bash
-/plugin
-# Navigate to Marketplaces tab → Add → paste the git URL
-# Then go to Discover tab → select claude-workflow → choose scope
+# Install the plugin
+claude plugin install claude-workflow@claude-workflow
 ```
 
 ## Workflow
 
-### Interactive (inside Claude)
-
 ```
-[/cw-research]  →  /cw-spec  →  [/cw-gherkin]  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
+[/cw-research]  →  /cw-spec  →  [+/cw-gherkin]  →  /cw-plan  →  /cw-dispatch  →  /cw-validate
 ```
 
 Each step can also be run independently. `/cw-execute` handles single-task execution for manual or shell-scripted loops. `/cw-review` adds a code review gate and `/cw-testing` generates and runs E2E tests.
@@ -53,16 +40,14 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-review` | Review implementation for bugs, security issues, and quality; creates fix tasks |
 | `/cw-review-team` | Concern-partitioned team review — each reviewer sees all files through a specialized lens (security, correctness, spec compliance) |
 | `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
-| `cw-gherkin` | Generate Gherkin BDD scenarios from spec acceptance criteria; called automatically by cw-spec |
+| `cw-gherkin` | Generate Gherkin BDD scenarios from spec acceptance criteria; opt-in via `--gherkin` on cw-spec, cw-init, or cw-pipeline |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
 
 ## Prerequisites
 
 Shell scripts require `jq`. The `gh` CLI is needed for PR creation in `cw-pipeline`.
 
-Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) which requires two env vars:
-
-1. Enable the experimental feature flag (user-level, applies to all projects):
+Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams), which requires the experimental feature flag (user-level, applies to all projects):
 
 ```json
 // ~/.claude/settings.json
@@ -73,18 +58,7 @@ Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent tea
 }
 ```
 
-2. Set the task list ID (project-level, unique per project):
-
-```json
-// .claude/settings.json
-{
-  "env": {
-    "CLAUDE_CODE_TASK_LIST_ID": "your-project-name"
-  }
-}
-```
-
-**Note:** `/cw-worktree create` sets `CLAUDE_CODE_TASK_LIST_ID` automatically in `.claude/settings.local.json` — no manual configuration needed for worktree-based workflows.
+Team skills also require `CLAUDE_CODE_TASK_LIST_ID` so all teammates share one task list. `/cw-worktree create` sets this automatically in `.claude/settings.local.json`, and a PreToolUse hook will prompt you with setup instructions if you invoke a team skill without it.
 
 `/cw-dispatch` (subagent workers) needs no setup and is the recommended default. `/cw-plan` will offer both options after task graph creation.
 
@@ -97,33 +71,88 @@ npx playwright install
 
 ## Task Metadata
 
-Every task on the board carries self-contained metadata enabling autonomous execution:
+Every task on the board carries self-contained metadata enabling autonomous execution. The following is an example of a typical task — a `standard`-complexity implementer task adding a login session endpoint:
 
 ```json
 {
-  "task_id": "T01",
-  "spec_path": "docs/specs/01-spec-auth/01-spec-auth.md",
-  "scope": {
-    "files_to_create": ["src/auth/login.ts"],
-    "files_to_modify": ["src/routes/index.ts"],
-    "patterns_to_follow": ["src/routes/health.ts"]
-  },
-  "requirements": [
-    { "id": "R01.1", "text": "POST /auth/login accepts credentials", "testable": true }
-  ],
-  "proof_artifacts": [
-    { "type": "test", "command": "npm test -- src/auth/login.test.ts", "expected": "All pass" }
-  ],
-  "commit": { "template": "feat(auth): add login endpoint" },
-  "verification": {
-    "pre": ["npm run lint"],
-    "post": ["npm test"]
-  },
-  "role": "implementer",
-  "complexity": "standard",
-  "model": null
+  "id": "412",
+  "subject": "T03.1: Implement POST /api/sessions login handler",
+  "description": "Add a POST /api/sessions route that accepts {email, password}, validates credentials against the users table via bcrypt.compare, and returns a signed JWT on success or 401 on failure.\n\nFollow the existing route handler pattern in src/routes/health.ts. Use the shared db client from src/lib/db.ts and the JWT_SECRET env var. Rate limiting is handled upstream by middleware and is out of scope.",
+  "activeForm": "Implementing login session handler",
+  "status": "pending",
+  "blocks": ["415", "418"],
+  "blockedBy": ["408"],
+  "metadata": {
+    "task_id": "T03.1",
+    "parent_task": "T03",
+    "demoable_unit": 3,
+    "demoable_unit_title": "User authentication",
+    "spec_path": "docs/specs/07-spec-auth-sessions/07-spec-auth-sessions.md",
+    "scope": {
+      "files_to_create": [
+        "src/routes/sessions.ts",
+        "src/routes/sessions.test.ts"
+      ],
+      "files_to_modify": [
+        "src/routes/index.ts (register sessions router)"
+      ],
+      "patterns_to_follow": [
+        "src/routes/health.ts",
+        "src/lib/db.ts"
+      ]
+    },
+    "requirements": [
+      {
+        "id": "R03.1.1",
+        "text": "POST /api/sessions accepts JSON body {email, password}",
+        "testable": true
+      },
+      {
+        "id": "R03.1.2",
+        "text": "Returns 200 + {token} on valid credentials, 401 on invalid",
+        "testable": true
+      },
+      {
+        "id": "R03.1.3",
+        "text": "Token is a JWT signed with JWT_SECRET, expires in 24h",
+        "testable": true
+      }
+    ],
+    "proof_artifacts": [
+      {
+        "type": "test",
+        "command": "npm test -- src/routes/sessions.test.ts",
+        "expected": "All tests pass (valid login, invalid password, missing fields)",
+        "capture_method": "auto"
+      },
+      {
+        "type": "cli",
+        "command": "curl -sX POST http://localhost:3000/api/sessions -H 'Content-Type: application/json' -d '{\"email\":\"demo@example.com\",\"password\":\"correcthorse\"}'",
+        "expected": "200 response with {\"token\":\"<jwt>\"}",
+        "capture_method": "auto"
+      }
+    ],
+    "proof_capture": {
+      "visual_method": "skip",
+      "tool": null
+    },
+    "commit": {
+      "template": "feat(auth): add POST /api/sessions login handler (T03.1)"
+    },
+    "verification": {
+      "pre": ["npm run lint", "npm run typecheck"],
+      "post": ["npm test", "npm run build"]
+    },
+    "role": "implementer",
+    "complexity": "standard",
+    "model": "sonnet",
+    "proof_results": null,
+    "completed_at": null
+  }
 }
 ```
+
+See [skills/cw-plan/references/task-metadata-schema.md](skills/cw-plan/references/task-metadata-schema.md) for the full schema.
 
 ## Shell Scripts
 
