@@ -1,5 +1,15 @@
 # Proof Artifact Types Reference
 
+## Contents
+- Scope
+- File Naming Convention
+- Type: `test`
+- Type: `cli`
+- Type: `url`
+- Type: `file`
+- Type: `browser`
+- Summary File Template
+
 How to collect each type of proof artifact during Phase 6 of the execution protocol.
 
 ## Scope

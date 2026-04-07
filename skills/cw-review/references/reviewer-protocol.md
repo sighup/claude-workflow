@@ -1,5 +1,10 @@
 # Reviewer Protocol
 
+## Contents
+- Key Principle
+- 3-Phase Protocol
+- Constraints
+
 This protocol is used by the reviewer agent when examining assigned files for a code review batch.
 
 ## Key Principle

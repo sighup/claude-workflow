@@ -2,6 +2,17 @@
 
 Reference document for the `cw-dispatch` team-based parallel execution flow.
 
+## Contents
+- Team Lifecycle
+- Task List Access
+- Message Protocol
+- Task Assignment Protocol
+- Teammate Spawn Prompt Template
+- Multi-Task Loop (Worker Perspective)
+- Dispatcher Monitor Loop (Lead Perspective)
+- Shutdown Flow
+- Error Escalation
+
 ## Team Lifecycle
 
 ```

@@ -1,5 +1,13 @@
 # Regression Checking Protocol
 
+## Contents
+- Overview
+- When Regression Checks Run
+- Regression Check Process
+- What to Check During Regression
+- Output Format
+- Handling Edge Cases
+
 This document describes how regression checking works in `/cw-testing run` to ensure previously passing tests continue to pass.
 
 ## Overview

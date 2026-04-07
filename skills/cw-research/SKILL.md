@@ -372,7 +372,8 @@ AskUserQuestion({
     question: "How would you like to proceed?",
     header: "Next Steps",
     options: [
-      { label: "Run /cw-spec with context (Recommended)", description: "Invoke cw-spec with the generated meta-prompt as enriched context" },
+      { label: "Run /cw-spec (Recommended)", description: "Markdown spec only — fastest path forward" },
+      { label: "Run /cw-spec + Gherkin", description: "Spec plus generated .feature files for BDD tooling" },
       { label: "Review report first", description: "Review and optionally edit the research report before proceeding" },
       { label: "Done for now", description: "Save the report and exit -- you can run /cw-spec later" }
     ],
@@ -383,11 +384,16 @@ AskUserQuestion({
 
 **Handle user selection:**
 
-- **Run /cw-spec with context (Recommended)**: Extract the meta-prompt content (everything between the `---` markers in the Meta-Prompt section) and invoke cw-spec with it:
+- **Run /cw-spec (Recommended)**: Extract the meta-prompt content (everything between the `---` markers in the Meta-Prompt section) and invoke cw-spec, telling it explicitly to skip Gherkin so it doesn't pause to ask:
   ```
-  Skill(cw-spec, "{meta-prompt content}")
+  Skill(cw-spec, "Markdown spec only — skip Gherkin .feature generation. {meta-prompt content}")
   ```
   This passes the enriched research context directly into cw-spec, significantly accelerating its Context Assessment step (Step 2).
+
+- **Run /cw-spec + Gherkin**: Same as above but tell cw-spec to also generate `.feature` files after the markdown spec:
+  ```
+  Skill(cw-spec, "Generate the markdown spec and then include Gherkin .feature files. {meta-prompt content}")
+  ```
 
 - **Review report first**: Display the report path and let the user review or edit the report. After they confirm, re-offer the choice between running cw-spec or exiting:
   ```

@@ -1,5 +1,14 @@
 # Behavioral vs Structural Testing
 
+## Contents
+- The Core Rule
+- Decision Matrix
+- Anti-Patterns to Reject
+- Correct Behavioral Patterns
+- The Self-Check Questions
+- Case Study: The Hook Execution Bug
+- When Structural Checks Are Acceptable
+
 ## The Core Rule
 
 > **"If you can `grep` for it, it's not a behavioral test."**

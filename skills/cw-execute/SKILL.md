@@ -81,13 +81,16 @@ TaskUpdate({ taskId: "<id>", status: "in_progress" })
 
 ### Phase 2: BASELINE
 
-Confirm codebase health before touching anything.
+Confirm a clean starting state before touching anything. **Do not run the full test suite here** — it runs in Phase 9 (VERIFY-FULL) where it actually catches regressions caused by your work. Re-running it pre-edit just to "check current state" wastes 60s+ per task across N parallel workers.
 
-1. Run each command in `metadata.verification.post`
-2. If failures:
-   - Pre-existing issue: note and proceed with caution
+1. `git status --porcelain` — must be empty (clean tree)
+2. `git log --oneline -5` — sanity check recent history
+3. If `metadata.verification.pre` is cheap (lint only, no full test), you may run it for an early signal. Otherwise skip.
+4. If anything looks wrong (dirty tree, missing deps surfaced by Phase 3 reads):
    - Environment issue: attempt fix (install deps, etc.)
    - Unfixable: update task description with blocker, exit
+
+Pre-existing test failures (if any) will surface in Phase 9 and be documented there.
 
 ### Phase 3: CONTEXT
 
@@ -335,8 +338,7 @@ Leave pristine state with verified proof trail.
 
 1. `git status --porcelain` - should be empty
 2. Verify proof files are in commit: `git show --name-only HEAD | grep proofs`
-3. Run `metadata.verification.post` one final time
-4. Output execution summary:
+3. Output execution summary:
 
 ```
 CW-EXECUTE COMPLETE

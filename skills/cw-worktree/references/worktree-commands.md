@@ -2,6 +2,14 @@
 
 Detailed process steps for each `/cw-worktree` command. Referenced from [SKILL.md](../SKILL.md).
 
+## Contents
+- create
+- list
+- status
+- merge
+- sync
+- cleanup
+
 ---
 
 ## create

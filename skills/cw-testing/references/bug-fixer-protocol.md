@@ -2,6 +2,12 @@
 
 This protocol is used by the test-fixer agent when investigating and fixing application bugs detected by E2E tests.
 
+## Contents
+- Key Principle
+- 5-Phase Protocol
+- Common Bug Patterns
+- Constraints
+
 ## Key Principle
 
 **The test is the oracle.** Tests define expected behavior from the spec. When a test fails, the **application code** has a bug - the test is correct by definition. This protocol fixes application bugs, never test code.

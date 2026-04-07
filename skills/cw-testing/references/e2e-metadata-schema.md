@@ -2,6 +2,14 @@
 
 This document defines the metadata structure for E2E test tasks created by `/cw-testing init`. Each test task carries test-specific metadata enabling autonomous execution with regression checking.
 
+## Contents
+- Full Schema
+- Field Definitions
+- Test Result Values
+- Fix Task Schema
+- Fix History Object
+- Regression Failure Object
+
 ## Full Schema
 
 ### Parent Suite Task
@@ -173,7 +181,6 @@ When a test fails, it indicates an application bug. A fix task is created to tra
 ```
 
 **Key Principle**: The test is the oracle. `spec_requirement` describes what the spec says should happen. `failure_reason` describes what the application actually did. The bug is in the application code, not the test.
-```
 
 ### Fix Task Fields
 

@@ -2,6 +2,11 @@
 
 This protocol is used by the test-executor agent when executing a single E2E test step.
 
+## Contents
+- Key Principle
+- 4-Phase Protocol
+- Constraints
+
 ## Key Principle
 
 Execute exactly ONE test step per invocation. The test defines expected behavior from the spec - verify the application meets that expectation.

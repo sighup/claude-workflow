@@ -1,5 +1,16 @@
 # Worktree Lifecycle Reference
 
+## Contents
+- Overview
+- Worktree States
+- State Descriptions
+- Determining Current State
+- State Indicators in `/cw-worktree list`
+- Persistence
+- Handling Interruptions
+- Concurrent Worktrees
+- Best Practices
+
 ## Overview
 
 This document describes the states and transitions of worktrees throughout the feature development lifecycle.

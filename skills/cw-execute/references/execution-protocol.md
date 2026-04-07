@@ -2,6 +2,20 @@
 
 Detailed phase-by-phase instructions for the implementer worker.
 
+## Contents
+- Phase 1: ORIENT
+- Phase 2: BASELINE
+- Phase 3: CONTEXT
+- Phase 4: IMPLEMENT
+- Phase 5: VERIFY-LOCAL
+- Phase 6: PROOF
+- Phase 7: SANITIZE
+- Phase 8: COMMIT
+- Phase 9: VERIFY-FULL
+- Phase 10: REPORT
+- Phase 11: CLEAN EXIT
+- Error Recovery
+
 ## Phase 1: ORIENT
 
 **Goal**: Understand current state without making changes.
@@ -17,16 +31,16 @@ Detailed phase-by-phase instructions for the implementer worker.
 
 ## Phase 2: BASELINE
 
-**Goal**: Confirm the codebase is healthy before you touch it.
+**Goal**: Confirm a clean starting state. **Do not run the full test suite** — Phase 9 will catch any regressions you introduce. Re-running `verification.post` here just to baseline is pure waste (~60s × N parallel workers).
 
-1. Run each command in `metadata.verification.post` (the full test suite)
-2. If any fail:
-   - Check if failure is pre-existing (not your fault)
-   - If pre-existing: note in task description, proceed with caution
-   - If environment issue: attempt fix (install deps, etc.)
-   - If unfixable: mark task blocked, exit
+1. `git status --porcelain` — must be empty
+2. `git log --oneline -5` — sanity-check recent history
+3. Optionally run `metadata.verification.pre` if it's cheap (lint only); skip if it includes a full build or test
+4. If environment looks broken (missing deps, etc.): attempt fix or mark task blocked
 
-**Exit criteria**: All verification.post commands pass (or failures are documented pre-existing).
+Pre-existing test failures are documented in Phase 9 when they surface.
+
+**Exit criteria**: Clean tree, environment usable.
 
 ## Phase 3: CONTEXT
 
@@ -162,10 +176,9 @@ See `references/proof-artifact-types.md` for type-specific guidance.
 
 1. Run `git status --porcelain` - should be empty
 2. If uncommitted changes exist: stash or commit as appropriate
-3. Run final test: `metadata.verification.post`
-4. Output execution summary
+3. Output execution summary
 
-**Exit criteria**: Clean git status, all tests pass, summary output.
+**Exit criteria**: Clean git status, summary output. (Phase 9 already verified `verification.post` post-commit — do not re-run it here.)
 
 ## Error Recovery
 

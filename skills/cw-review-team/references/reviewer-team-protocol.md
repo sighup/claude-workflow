@@ -2,6 +2,13 @@
 
 This protocol is used by the reviewer agent when operating in concern-partitioned mode under `cw-review-team`. Each reviewer examines ALL changed files but through a specialized concern lens.
 
+## Contents
+- Key Principle
+- Concern Assignments
+- 3-Phase Protocol
+- Challenge Round Protocol
+- Constraints
+
 ## Key Principle
 
 Examine all changed files through your primary concern lens. Report findings — never fix code or create tasks. Communicate with the lead when complete.

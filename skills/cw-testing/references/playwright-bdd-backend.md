@@ -2,6 +2,19 @@
 
 Reference for the `playwright-bdd` automation backend in cw-testing.
 
+## Contents
+- Overview
+- Setup Procedure
+- File Layout
+- playwright.config.ts Template
+- Custom Fixtures
+- Step Definition Patterns
+- Console Error Monitoring
+- CLI Commands
+- Result JSON Structure
+- Common Errors
+- .gitignore
+
 ## Overview
 
 The `playwright-bdd` backend compiles `.feature` files into TypeScript test specs before execution. Tests run headlessly via Bash — no AI agent involvement during execution. This makes tests reproducible and CI-compatible.

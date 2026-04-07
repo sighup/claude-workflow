@@ -2,6 +2,12 @@
 
 This document defines the metadata structure for tasks created by `cw-plan`. Each task in the native task board carries self-contained metadata enabling autonomous execution by any worker.
 
+## Contents
+- Full Schema
+- Field Definitions
+- Dependency Representation
+- Result Schema (After Execution)
+
 ## Full Schema
 
 ```json

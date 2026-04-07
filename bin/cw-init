@@ -36,6 +36,7 @@ source "$SCRIPT_DIR/lib/cw-common.sh"
 
 INPUT_MODE=""
 INPUT_VALUE=""
+GHERKIN_ENABLED=false
 
 show_help() {
     echo "Usage: cw-init [OPTIONS]"
@@ -45,6 +46,7 @@ show_help() {
     echo "Options:"
     echo "  --prompt TEXT        Generate spec from prompt, then plan tasks"
     echo "  --spec PATH         Use existing spec, skip to planning"
+    echo "  --gherkin           Also generate Gherkin .feature files (default: off)"
     echo "  -m, --model MODEL   Claude model (default: $CW_MODEL)"
     echo "  -v, --verbose       Stream JSON output for real-time visibility"
     echo "  -h, --help          Show this help"
@@ -67,6 +69,8 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --prompt) require_arg "--prompt" "${2:-}"; INPUT_MODE="prompt"; INPUT_VALUE="$2"; shift 2 ;;
         --spec) require_arg "--spec" "${2:-}"; INPUT_MODE="spec"; INPUT_VALUE="$2"; shift 2 ;;
+        --gherkin) GHERKIN_ENABLED=true; shift ;;
+        --no-gherkin) GHERKIN_ENABLED=false; shift ;;
         -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; shift 2 ;;
         -v|--verbose) CW_VERBOSE=true; shift ;;
         -h|--help) show_help; exit 0 ;;
@@ -104,9 +108,17 @@ elif [ "$INPUT_MODE" = "prompt" ]; then
     log_header "Phase 1: Generating Spec"
     log_info "Prompt: $INPUT_VALUE"
 
+    if [ "$GHERKIN_ENABLED" = "true" ]; then
+        GHERKIN_DIRECTIVE="After saving the markdown spec, also generate Gherkin .feature files."
+    else
+        GHERKIN_DIRECTIVE="Generate the markdown spec only — do NOT generate Gherkin .feature files and do NOT ask about Gherkin."
+    fi
+
     SPEC_PROMPT="Use the Skill tool to invoke 'cw-spec'.
 
 Generate a specification for the following feature. This is running non-interactively, so DO NOT use AskUserQuestion — make reasonable decisions and proceed autonomously.
+
+$GHERKIN_DIRECTIVE
 
 Feature description:
 $INPUT_VALUE

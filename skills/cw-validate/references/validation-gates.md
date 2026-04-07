@@ -2,6 +2,12 @@
 
 Six mandatory gates that determine PASS/FAIL for implementation validation.
 
+## Contents
+- Gate Definitions
+- Severity Rubric
+- Rubric Dimensions
+- Red Flags (Auto-Escalate to CRITICAL/HIGH)
+
 ## Gate Definitions
 
 ### GATE A: Critical Issues (BLOCKER)

@@ -2,6 +2,15 @@
 
 Five exploration dimensions used by cw-research subagents. Each dimension defines what to look for during auto-explore and deep-dive phases.
 
+## Contents
+- LSP Integration
+- Dimension 1: Tech Stack & Project Structure
+- Dimension 2: Architecture & Patterns
+- Dimension 3: Dependencies & Integrations
+- Dimension 4: Test & Quality Patterns
+- Dimension 5: Data Models & API Surface
+- Topic Filtering
+
 ## LSP Integration
 
 When `lsp_available = true` (determined during the LSP Availability Check), append LSP-specific instructions to subagent prompts. LSP tools provide precise code intelligence that complements text-based search -- use them for tracing definitions, references, type hierarchies, and call graphs.

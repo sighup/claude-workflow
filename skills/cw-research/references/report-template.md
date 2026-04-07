@@ -2,6 +2,10 @@
 
 Full markdown template for the structured research report produced by cw-research.
 
+## Contents
+- Template
+- Report Size Guidelines
+
 ## Template
 
 ```markdown

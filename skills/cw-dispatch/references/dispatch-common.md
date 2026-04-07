@@ -2,6 +2,16 @@
 
 Shared protocols for `cw-dispatch` and `cw-dispatch-team`.
 
+## Contents
+- Mandatory First Action
+- Survey Task Board
+- Identify Parallel Groups
+- Conflict Prevention
+- Pre-Exit Verification
+- Error Handling
+- Why Workers Must Invoke cw-execute
+- Spawning the Validator
+
 ## Mandatory First Action
 
 **Call TaskList() immediately before any other action.**

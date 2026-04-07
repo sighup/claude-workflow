@@ -2,6 +2,13 @@
 
 Examples of output formats for `/cw-testing` subcommands.
 
+## Contents
+- Run Output
+- Run Completion
+- Status Icons
+- Init Output
+- Reset Output
+
 ## Run Output
 
 ### Successful Iteration
