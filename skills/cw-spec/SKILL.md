@@ -70,6 +70,7 @@ If working in a pre-existing project, review:
 - Repository standards from: README.md, CONTRIBUTING.md, CLAUDE.md, package.json, config files
 - Testing patterns and quality practices
 - Commit message conventions
+- **Verification commands**: Identify existing lint, build, and test commands from package.json scripts, Makefile targets, pyproject.toml, or equivalent. Classify project maturity as: Established (all exist), Partial (some exist), or Greenfield (none exist)
 
 #### LSP Availability Check
 
@@ -194,19 +195,32 @@ Generate the specification using this structure:
 
 ## Demoable Units of Work
 
+> Requirement IDs use the format **R{unit}.{seq}** (R1.1, R1.2 for Unit 1; R2.1 for Unit 2). These IDs are referenced directly by the planner — do not renumber after approval.
+
 ### Unit 1: [Title]
 
 **Purpose:** [What this slice accomplishes]
+**Depends on:** [Unit N, Unit M | None]
+**Affected areas:** `[dir/]`, `[file.ts]` [(new) for greenfield paths]
 
 **Functional Requirements:**
-- The system shall [requirement: clear, testable, unambiguous]
-- The system shall [requirement: clear, testable, unambiguous]
+- **R1.1**: The system shall [requirement: clear, testable, unambiguous]
+- **R1.2**: The system shall [requirement: clear, testable, unambiguous]
 
 **Proof Artifacts:**
 - [Type]: [description] demonstrates [what it proves]
 
 ### Unit 2: [Title]
-[Same structure as Unit 1]
+
+**Purpose:** [What this slice accomplishes]
+**Depends on:** [Unit 1 | None]
+**Affected areas:** `[dir/]`, `[file.ts]` [(new) for greenfield paths]
+
+**Functional Requirements:**
+- **R2.1**: The system shall [requirement]
+
+**Proof Artifacts:**
+- [Type]: [description] demonstrates [what it proves]
 
 ## Non-Goals (Out of Scope)
 [What this feature will NOT include]
@@ -216,6 +230,19 @@ Generate the specification using this structure:
 
 ## Repository Standards
 [Existing patterns implementation should follow]
+
+## Verification
+
+**Project maturity:** [Established | Partial | Greenfield]
+
+**Available commands:**
+| Check | Command |
+|-------|---------|
+| Lint  | `[command or "none"]` |
+| Build | `[command or "none"]` |
+| Test  | `[command or "none"]` |
+
+**Greenfield bootstrapping:** [Which unit establishes missing commands, or "N/A — all commands available"]
 
 ## Technical Considerations
 [Implementation constraints, dependencies, plannerural decisions]
@@ -238,7 +265,7 @@ After saving the spec, automatically generate Gherkin BDD scenarios as a subagen
 Task({
   subagent_type: "claude-workflow:spec-writer",
   description: "Generate Gherkin scenarios for [NN]-spec-[feature-name]",
-  prompt: "Generate Gherkin BDD scenarios for this spec. --spec docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md. Read protocol at: skills/cw-gherkin/SKILL.md. This is an automated call from cw-spec — skip Phase 4 (task stubs offer) and return after saving .feature files."
+  prompt: "Generate Gherkin BDD scenarios for this spec: docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md. Read protocol at: skills/cw-gherkin/SKILL.md. This is an automated call from cw-spec — skip Step 4 (task stubs offer) and return after saving .feature files."
 })
 ```
 
@@ -262,6 +289,10 @@ Each demoable unit must be:
 - **Appropriately sized**: 2-4 units per spec is typical
 - **Sequentially buildable**: Later units can depend on earlier ones
 
+Per-unit metadata fields:
+- **Depends on** is optional. Write "None" for independent units, or omit the line. When specified, the planner uses it directly for task dependency ordering (`addBlockedBy`). When omitted, the planner infers from context.
+- **Affected areas** lists directories and key files the unit will touch. For greenfield, mark new paths with `(new)`. This is directional guidance — the planner determines exact file scope from the codebase.
+
 ## Proof Artifact Types
 
 | Type | Format | Example |
@@ -269,8 +300,24 @@ Each demoable unit must be:
 | Test | `Test: [file] passes` | `Test: auth.test.ts passes demonstrates login works` |
 | CLI | `CLI: [command] returns [expected]` | `CLI: curl /health returns {"status":"ok"}` |
 | URL | `URL: [url] shows [expected]` | `URL: /dashboard shows welcome message` |
-| Screenshot | `Screenshot: [page] showing [state]` | `Screenshot: /login page showing error state` |
+| Browser | `Browser: [page] interaction and [expected state]` | `Browser: /login page shows dashboard after login` |
 | File | `File: [path] contains [pattern]` | `File: config.json contains new field` |
+
+> **Greenfield note:** For early units in greenfield projects where no test runner exists, use `File` proof artifacts to verify setup (e.g., `File: package.json contains "test" script`). The planner sets `verification.pre` and `verification.post` to empty arrays for these units.
+
+## Output Requirements
+
+Always end with this output format:
+
+```
+CW-SPEC COMPLETE
+=================
+Spec: docs/specs/[NN]-spec-[feature-name]/[NN]-spec-[feature-name].md
+Demoable units: N
+Functional requirements: N
+Proof artifacts: N
+Gherkin scenarios: N (if generated)
+```
 
 ## What Comes Next
 
@@ -283,8 +330,6 @@ pwd | grep -q '\.worktrees/feature-' && echo "IN_WORKTREE"
 ```
 
 **If IN a worktree (recommended flow):**
-
-The spec is committed to the feature branch along with implementation. Offer to proceed:
 
 ```
 AskUserQuestion({
@@ -303,8 +348,6 @@ AskUserQuestion({
 
 **If NOT in a worktree:**
 
-For isolated, parallel-friendly development, recommend creating a worktree first:
-
 ```
 AskUserQuestion({
   questions: [{
@@ -322,66 +365,7 @@ AskUserQuestion({
 
 **Handle user selection:**
 
-- **Run /cw-plan**: Two-pass planning flow:
-
-  **Pass 1 — Parent task creation:**
-  ```
-  Task({ subagent_type: "claude-workflow:planner", description: "Create parent tasks (Phase 1+2)", prompt: "The spec is ready. Run /cw-plan to complete Phase 1 and Phase 2 (parent task creation) only. Output the PLANNING SUMMARY and exit — do not proceed to Phase 3." })
-  ```
-  Relay the PLANNING SUMMARY to the user, then present the decomposition question. Use the planner's `Recommendation` field to mark the suggested option:
-  ```
-  AskUserQuestion({
-    questions: [{
-      question: "I've created [N] parent tasks. [Planner's Reason sentence]. How would you like to proceed?",
-      header: "Tasks",
-      options: [
-        { label: "Generate sub-tasks (Recommended)", description: "Decompose parent tasks into atomic implementation steps" },
-        { label: "Execute as-is", description: "Run parent tasks directly — workers handle internal decomposition via cw-execute" },
-        { label: "Adjust tasks", description: "Provide feedback to revise the task graph before proceeding" }
-      ],
-      multiSelect: false
-    }]
-  })
-  ```
-  > Mark `(Recommended)` on whichever option matches the planner's `Recommendation` field. If "Execute as-is" is recommended, move the label to that option instead.
-
-  **Based on user selection:**
-
-  - **Generate sub-tasks**: spawn planner for Phase 3:
-    ```
-    Task({ subagent_type: "claude-workflow:planner", description: "Generate sub-tasks (Phase 3)", prompt: "The parent tasks are already on the board. Run /cw-plan Phase 3 only — create sub-tasks for each parent task, then exit." })
-    ```
-
-  - **Execute as-is**: proceed directly to execution options below.
-
-  - **Adjust tasks**: ask the user for their feedback, then re-run Pass 1 with that feedback:
-    ```
-    Task({ subagent_type: "claude-workflow:planner", description: "Revise parent tasks (Phase 1+2)", prompt: "Revise the parent task graph based on this feedback: [user feedback]. Clear existing tasks if needed, recreate them, output an updated PLANNING SUMMARY, and exit." })
-    ```
-    Then re-present the decomposition question with the updated summary.
-
-  **After Phase 3 completes (or if executing as-is)**, present execution options:
-  ```
-  AskUserQuestion({
-    questions: [{
-      question: "The task graph is ready for execution. How would you like to proceed?",
-      header: "Execution",
-      options: [
-        { label: "Parallel (/cw-dispatch)", description: "Spawn parallel subagent workers — ready workers run concurrently, no extra setup needed" },
-        { label: "Team (/cw-dispatch-team)", description: "Persistent agent team with lead coordination (requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and CLAUDE_CODE_TASK_LIST_ID)" },
-        { label: "Single task (/cw-execute)", description: "Execute one task at a time with full visibility and control" },
-        { label: "Done for now", description: "Save the task graph and execute later" }
-      ],
-      multiSelect: false
-    }]
-  })
-  ```
-  Based on user selection:
-  - **Parallel**: `Skill({ skill: "cw-dispatch" })`
-  - **Team**: `Skill({ skill: "cw-dispatch-team" })`
-  - **Single task**: `Skill({ skill: "cw-execute" })`
-  - **Done for now**: Confirm task graph is saved and exit
-
+- **Run /cw-plan**: Follow the two-pass planning orchestration in [planning-orchestration.md](references/planning-orchestration.md)
 - **Create worktree**: Inform user to create worktree and move spec there:
   ```
   To develop this feature in isolation:
@@ -396,7 +380,5 @@ AskUserQuestion({
 
   Note: The spec will be part of the feature branch, included in the PR.
   ```
-
 - **Review spec again**: Return to Step 6 for refinement
-
 - **Done for now**: Summarize what was created and exit

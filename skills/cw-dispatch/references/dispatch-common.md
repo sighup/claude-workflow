@@ -90,6 +90,49 @@ Before outputting any completion or "no tasks" message, verify:
 
 **WARNING**: If you find yourself writing a detailed "completion report" with stats like "151 proof artifacts" or "63 library files" that you did NOT just count from TaskList, you are hallucinating. STOP and re-run TaskList.
 
+## Post-Completion Synthesis
+
+After all workers in a batch complete, **synthesize** their outputs before reporting. Your job is not to relay — it is to understand. Never delegate understanding.
+
+### Integration Check
+
+Read the completed tasks' metadata and git commits, then check for:
+
+1. **Cross-worker imports**: Did Worker-1 create a type/module that Worker-2's code should reference? Check for missing imports or unresolved references.
+   ```bash
+   # Check for build/type errors that suggest integration gaps
+   # Run the project's build command (from task verification.pre)
+   ```
+
+2. **Conflicting patterns**: Did workers use different conventions for the same concern? (e.g., different error handling styles, naming conventions, or API response shapes)
+   ```bash
+   # Review git log for the batch
+   git log --oneline -N  # N = number of workers
+   ```
+
+3. **Missed connections**: New endpoints without route registration, new components without exports, new schemas without migration files.
+
+4. **Scope leakage**: Files modified that weren't in any task's declared scope.
+
+### When to Flag
+
+- **CRITICAL**: Build/type errors after merging worker outputs → must fix before next batch
+- **WARNING**: Pattern inconsistencies → note in report, let review catch details
+- **INFO**: Minor integration observations → include in report for awareness
+
+### Synthesis Output
+
+Add to the dispatch completion report:
+
+```
+Integration Check:
+  Build: PASS | FAIL [command output if failed]
+  Cross-worker issues: [none | list of issues found]
+  Pattern consistency: [consistent | list of divergences]
+```
+
+If the build fails after workers complete, attempt to fix obvious integration issues (missing imports, registration). If the fix is non-trivial, report it as a blocking issue.
+
 ## Error Handling
 
 If a worker fails (task remains in_progress or goes back to pending):
@@ -100,10 +143,10 @@ If a worker fails (task remains in_progress or goes back to pending):
 
 ## Why Workers Must Invoke cw-execute
 
-The `cw-execute` skill contains the 11-phase protocol including:
-- Phase 10 (REPORT): Calls `TaskUpdate({ status: "completed" })` to mark tasks done
-- Phase 6 (PROOF): Creates proof artifacts for validation
-- Phase 8 (COMMIT): Creates atomic commits with implementation + proofs
+The `cw-execute` skill contains the 11-step protocol including:
+- Step 10 (Report): Calls `TaskUpdate({ status: "completed" })` to mark tasks done
+- Step 6 (Proof): Creates proof artifacts for validation
+- Step 8 (Commit): Creates atomic commits with implementation + proofs
 
 **If workers receive direct prompts instead of invoking cw-execute, the task board will NOT be updated and progress tracking breaks.**
 
@@ -135,3 +178,18 @@ Gates: A[P/F] B[P/F] C[P/F] D[P/F] E[P/F] F[P/F]
 Output this summary directly to the user, then:
 - **If PASS**: Inform user implementation is ready for review/merge
 - **If FAIL**: Show blocking issues and recommend running the dispatch skill again after fixes
+
+## Recommended Quality Gate Order
+
+After all tasks complete, the user can run quality gates in any order. When presenting options, recommend this sequence:
+
+```
+/cw-validate  →  /cw-testing  →  /cw-review  →  PR
+```
+
+**Why this order:**
+1. **Validate first**: Catches workflow-level issues (missing proofs, scope violations, credential leaks) before investing time in E2E tests or code review. Fast and cheap.
+2. **Test second**: E2E tests verify behavioral correctness against the spec. Catches application bugs that validation's static analysis can't.
+3. **Review last**: Human-quality code review is most valuable after known bugs are fixed. Reviewers focus on design and maintainability rather than chasing test failures.
+
+Each gate is optional — the user may skip any of them. But when offering next steps, present them in this order and mark the next recommended gate.

@@ -1,6 +1,6 @@
 ---
 name: cw-execute
-description: "Executes a single task from the task board using the 11-phase implementation protocol. This skill should be used after cw-plan or cw-dispatch assigns a task, or when manually implementing a specific task by ID."
+description: "Executes a single task from the task board using the 11-step implementation protocol. This skill should be used after cw-plan or cw-dispatch assigns a task, or when manually implementing a specific task by ID."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, LSP
 effort: high
@@ -12,19 +12,9 @@ effort: high
 
 Always begin your response with: **CW-EXECUTE**
 
-## MANDATORY FIRST ACTION
-
-**Call TaskList() immediately before any other action.**
-
-```
-TaskList()
-```
-
-If TaskList() returns "No tasks found", report that and exit.
-
 ## Overview
 
-You are the **Implementer** role in the Claude Workflow system. You execute exactly ONE task from the native task board, following an 11-phase protocol that ensures consistent, verifiable, autonomous execution. Each invocation leaves the codebase in a clean, committable state.
+You are the **Implementer** role in the Claude Workflow system. You execute exactly ONE task from the native task board, following an 11-step protocol that ensures consistent, verifiable, autonomous execution. Each invocation leaves the codebase in a clean, committable state.
 
 ## Your Role
 
@@ -38,13 +28,23 @@ You have no memory of previous executions.
 
 ## Critical Constraints
 
-- **Execute exactly ONE task** per invocation
-- **Never skip verification steps** - they prevent regressions
-- **Always commit on success** - partial work is lost between sessions
-- **Update task status** via TaskUpdate - next worker depends on it
-- **Leave codebase clean** - no uncommitted changes after completion
-- **Proof artifacts are BLOCKING** - cannot proceed to commit without proof files
-- **Security sanitization is BLOCKING** - cannot commit unsanitized proofs
+- **ALWAYS** execute exactly ONE task per invocation
+- **NEVER** skip verification steps — they prevent regressions
+- **ALWAYS** commit on success — partial work is lost between sessions
+- **ALWAYS** update task status via TaskUpdate — next worker depends on it
+- **ALWAYS** leave codebase clean — no uncommitted changes after completion
+- **NEVER** proceed to commit without proof files — proof artifacts are BLOCKING
+- **NEVER** commit unsanitized proofs — security sanitization is BLOCKING
+
+## MANDATORY FIRST ACTION
+
+**Call TaskList() immediately before any other action.**
+
+```
+TaskList()
+```
+
+If TaskList() returns "No tasks found", report that and exit.
 
 ## Proof File Requirements (MANDATORY)
 
@@ -58,11 +58,11 @@ docs/specs/[spec-dir]/[NN]-proofs/
 └── ...
 ```
 
-**The commit in Phase 8 MUST include proof files.** A commit without proof artifacts is incomplete and will fail validation.
+**The commit in Step 8 MUST include proof files.** A commit without proof artifacts is incomplete and will fail validation.
 
-## The 11-Phase Protocol
+## The 11-Step Protocol
 
-### Phase 1: ORIENT
+### Step 1: Orient
 
 Understand current state without making changes.
 
@@ -79,7 +79,7 @@ Understand current state without making changes.
 TaskUpdate({ taskId: "<id>", status: "in_progress" })
 ```
 
-### Phase 2: BASELINE
+### Step 2: Baseline
 
 Confirm codebase health before touching anything.
 
@@ -89,7 +89,7 @@ Confirm codebase health before touching anything.
    - Environment issue: attempt fix (install deps, etc.)
    - Unfixable: update task description with blocker, exit
 
-### Phase 3: CONTEXT
+### Step 3: Context
 
 Load patterns and understand conventions.
 
@@ -114,12 +114,12 @@ LSP({
 - **LSP available**: The operation returned symbols. Set `lsp_available = true`.
 - **LSP unavailable**: The operation returned an error. Set `lsp_available = false`.
 
-When `lsp_available = true`, use LSP alongside Glob/Grep/Read in this phase and Phase 4:
+When `lsp_available = true`, use LSP alongside Glob/Grep/Read in this step and Step 4:
 - `documentSymbol` on pattern files to understand their structure and exported symbols
 - `goToDefinition` to trace types and interfaces referenced in files being modified
 - `findReferences` to understand how modified functions/exports are consumed elsewhere
 
-### Phase 4: IMPLEMENT
+### Step 4: Implement
 
 Create/modify files to satisfy requirements.
 
@@ -139,7 +139,7 @@ Rules:
 - If unclear, implement most reasonable interpretation and note it
 - Max 3 retry attempts for failing tests
 
-### Phase 5: VERIFY-LOCAL
+### Step 5: Verify Local
 
 Run pre-commit checks.
 
@@ -147,7 +147,7 @@ Run pre-commit checks.
 2. Fix any lint or build issues
 3. Max 3 retry attempts per command
 
-### Phase 6: PROOF
+### Step 6: Proof
 
 Execute proof artifacts and capture evidence.
 
@@ -163,7 +163,7 @@ Execute proof artifacts and capture evidence.
    d. Compare result against expected
    e. Record PASS or FAIL
 
-**Visual proofs** (screenshot, browser, visual):
+**Visual proofs** (browser):
 
 Based on `metadata.proof_capture.visual_method`:
 
@@ -212,9 +212,9 @@ Status: PASS|FAIL
 
 5. Create summary: `{task_id}-proofs.md` (REQUIRED)
 
-**Phase 6 Gate Check (BLOCKING):**
+**Step 6 Gate Check (BLOCKING):**
 
-Before proceeding to Phase 7, verify:
+Before proceeding to Step 7, verify:
 
 ```bash
 # Check proof directory exists
@@ -232,16 +232,16 @@ ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-proofs.md
 | `{task_id}-proofs.md` summary | Yes | Create summary |
 | All proof artifacts have status | Yes | Re-run failed proofs |
 
-**BLOCK**: Do not proceed to Phase 7 until all proof files exist.
+**BLOCK**: Do not proceed to Step 7 until all proof files exist.
 
 If proof artifacts cannot be executed (e.g., environment issues):
 1. Create proof file with status `BLOCKED` and reason
 2. Document workaround or manual steps needed
 3. Still create the summary file
 
-See `references/proof-artifact-types.md` for type-specific instructions.
+See [proof-artifact-types.md](references/proof-artifact-types.md) for type-specific instructions.
 
-### Phase 7: SANITIZE (BLOCKING)
+### Step 7: Sanitize (Blocking)
 
 Remove sensitive data from proof files. **Cannot proceed until clean.**
 
@@ -253,9 +253,9 @@ Remove sensitive data from proof files. **Cannot proceed until clean.**
    - Private keys (PEM blocks, SSH keys)
 2. Replace found values with `[REDACTED]`
 3. Re-scan to confirm clean
-4. **BLOCK**: Do not proceed to Phase 8 until scan is clean
+4. **BLOCK**: Do not proceed to Step 8 until scan is clean
 
-### Phase 8: COMMIT
+### Step 8: Commit
 
 Create atomic commit with implementation AND proof artifacts.
 
@@ -271,7 +271,7 @@ ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*.txt >/dev/null 2>&1 || { echo "
 grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proofs/{task_id}-* && { echo "ERROR: Unsanitized secrets"; exit 1; }
 ```
 
-**If pre-commit checks fail:** Return to the blocking phase (Phase 6 or 7) and complete it.
+**If pre-commit checks fail:** Return to the blocking step (Step 6 or 7) and complete it.
 
 **Commit Steps:**
 
@@ -286,7 +286,7 @@ grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proof
 4. Create commit using `metadata.commit.template`
 5. Verify commit includes proof files: `git show --name-only HEAD | grep proofs`
 
-### Phase 9: VERIFY-FULL
+### Step 9: Verify Full
 
 Post-commit verification.
 
@@ -296,13 +296,13 @@ Post-commit verification.
    - Amend commit
    - Re-verify (max 3 attempts)
 
-### Phase 10: REPORT
+### Step 10: Report
 
 Update task board with proof artifact locations.
 
 **Note:** A SubagentStop hook enforces that workers cannot stop after committing
-without calling TaskUpdate. If you attempt to exit after Phase 8 but before completing
-this phase, you will be prompted to call TaskUpdate before stopping.
+without calling TaskUpdate. If you attempt to exit after Step 8 but before completing
+this step, you will be prompted to call TaskUpdate before stopping.
 
 **Determine your model identity** by checking the model name from your system context (e.g. `sonnet`, `opus`, `haiku`). Record this in `model_used`.
 
@@ -327,7 +327,7 @@ TaskUpdate({
 The `proof_dir` and `proof_summary` fields allow cw-validate to locate artifacts.
 The `model_used` field records which model actually executed the task for auditability.
 
-### Phase 11: CLEAN EXIT
+### Step 11: Clean Exit
 
 Leave pristine state with verified proof trail.
 
@@ -340,7 +340,7 @@ Leave pristine state with verified proof trail.
 CW-EXECUTE COMPLETE
 ====================
 Task: T01 - [subject]
-Status: COMPLETED
+Status: COMPLETED | FAILED | BLOCKED
 Model: [model_used]
 
 Proof Artifacts (committed):
@@ -365,7 +365,7 @@ git ls-files docs/specs/*/[NN]-proofs/{task_id}-*
 
 ### Retry Logic
 
-Each phase allows max 3 retries before failure:
+Each step allows max 3 retries before failure:
 
 1. Identify the error
 2. Attempt fix
@@ -385,12 +385,12 @@ Each phase allows max 3 retries before failure:
        last_failure: "2026-01-24T15:30:00Z",
        failure_count: N,
        failure_reason: "...",
-       failed_phase: "PROOF|SANITIZE|COMMIT|etc",
+       failed_step: "Proof|Sanitize|Commit|etc",
        proof_status: "none|partial|complete"
      }
    })
    ```
-4. Exit with error summary including which phase failed
+4. Exit with error summary including which step failed
 
 ### Proof Creation Failures
 
@@ -410,9 +410,9 @@ If proof artifacts cannot be created:
 If a task has `status: "in_progress"` when you start:
 
 1. Check git status for partial work
-2. If uncommitted changes: review and continue from Phase 5
-3. If stashed work: pop stash, review, continue from Phase 5
-4. If clean: start fresh from Phase 4
+2. If uncommitted changes: review and continue from Step 5
+3. If stashed work: pop stash, review, continue from Step 5
+4. If clean: start fresh from Step 4
 
 ## Security Notes
 

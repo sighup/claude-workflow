@@ -17,12 +17,13 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
   "scope": {
     "files_to_create": ["src/auth/login.ts", "src/auth/login.test.ts"],
     "files_to_modify": ["src/routes/index.ts"],
-    "patterns_to_follow": ["src/routes/health.ts"]  // Reference files for style/structure
+    "patterns_to_follow": ["src/routes/health.ts"],  // Reference files for style/structure
+    "affected_areas": ["src/auth/", "src/routes/index.ts"]  // Optional — directional hints from spec
   },
 
   "requirements": [
     {
-      "id": "R01.1",                     // Unique requirement ID
+      "id": "R1.1",                      // Spec R-ID format: R{unit}.{seq}
       "text": "POST /auth/login accepts {email, password}",
       "testable": true                   // Must be verifiable
     }
@@ -46,8 +47,9 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
   },
 
   "verification": {
-    "pre": ["npm run lint", "npm run build"],     // Must pass before commit
-    "post": ["npm test"]                          // Must pass after commit
+    "pre": ["npm run lint", "npm run build"],     // Must pass before commit (empty [] for greenfield pre-bootstrap tasks)
+    "post": ["npm test"],                         // Must pass after commit (empty [] for greenfield pre-bootstrap tasks)
+    "greenfield_note": null                       // Optional: e.g. "Unit 1 establishes toolchain — earlier tasks use empty arrays"
   },
 
   // Worker Assignment
@@ -80,11 +82,12 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
 | `scope.files_to_create` | string[] | Yes | New files this task will create |
 | `scope.files_to_modify` | string[] | Yes | Existing files this task will modify |
 | `scope.patterns_to_follow` | string[] | No | Reference files demonstrating conventions |
+| `scope.affected_areas` | string[] | Yes | Directories and key files the unit touches, from the spec's Affected areas field. Greenfield paths marked `(new)`. |
 
 ### Requirements
 
 Each requirement must be:
-- **Unique**: ID format `R{task_number}.{seq}` (e.g., R01.1, R01.2)
+- **Unique**: Format `R{unit}.{seq}` (e.g., R1.1, R1.2, R2.1) — carried from the spec's requirement IDs
 - **Testable**: Can be verified through proof artifacts
 - **Atomic**: One requirement per entry
 
@@ -94,7 +97,7 @@ Each requirement must be:
 |-------|------|----------|-------------|
 | `role` | string | Yes | Worker role: `implementer`, `validator`, `spec-writer` |
 | `complexity` | string | Yes | Task complexity: `trivial`, `standard`, `complex` |
-| `model` | string | Yes | Model for this task: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex) |
+| `model` | string | Yes | Intended model: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex). After execution, the worker records the actual model in `model_used` (see Result Schema). |
 
 ### Proof Artifact Types
 

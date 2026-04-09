@@ -1,6 +1,6 @@
 # Proof Artifact Types Reference
 
-How to collect each type of proof artifact during Phase 6 of the execution protocol.
+How to collect each type of proof artifact during Step 6 of the execution protocol.
 
 ## File Naming Convention
 

@@ -183,7 +183,7 @@ PATH                          BRANCH              STATE           STATUS
 - Proof artifacts in `docs/specs/*-proofs/`
 
 **What does NOT persist (unless configured):**
-- Task board — session-scoped by default, but persists via `~/.claude/tasks/{task-list-id}/` when `CLAUDE_CODE_TASK_LIST_ID` is set (see `/cw-plan` Phase 0)
+- Task board — session-scoped by default, but persists via `~/.claude/tasks/{task-list-id}/` when `CLAUDE_CODE_TASK_LIST_ID` is set (see `/cw-plan` Step 0)
 - In-progress state markers
 - Worker assignments
 

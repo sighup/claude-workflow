@@ -46,10 +46,10 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-research` | Explore codebase across 5 dimensions and produce a structured research report with `/cw-spec` meta-prompt |
 | `/cw-spec` | Generate structured specification with demoable units and proof artifacts |
 | `/cw-plan` | Transform spec into native task graph with dependencies and metadata |
-| `/cw-execute` | Execute one task using the 11-phase protocol (orient → commit → clean exit) |
+| `/cw-execute` | Execute one task using the 11-step protocol (orient → commit → clean exit) |
 | `/cw-dispatch` | Spawn parallel subagent workers for independent tasks (no setup required) |
 | `/cw-dispatch-team` | Persistent agent team with lead coordination for parallel task execution |
-| `/cw-validate` | Run 6 validation gates and produce a coverage matrix report |
+| `/cw-validate` | Run 7 validation gates and produce a coverage matrix report |
 | `/cw-review` | Review implementation for bugs, security issues, and quality; creates fix tasks |
 | `/cw-review-team` | Concern-partitioned team review — each reviewer sees all files through a specialized lens (security, correctness, spec compliance) |
 | `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |

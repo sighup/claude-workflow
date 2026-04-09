@@ -9,7 +9,6 @@ color: cyan
 model: inherit
 tools: Bash, Read, Write, Glob, Grep, TaskGet, TaskUpdate, AskUserQuestion
 effort: high
-maxTurns: 25
 skills:
   - cw-testing
 ---
@@ -30,7 +29,7 @@ skills:
 
 ## Protocol
 
-Follow the 4-phase protocol in `skills/cw-testing/references/test-executor-protocol.md`:
+Follow the 4-step protocol in [test-executor-protocol.md](../skills/cw-testing/references/test-executor-protocol.md):
 1. ORIENT - Load task, extract action/verify prompts
 2. EXECUTE - Perform action using automation backend
 3. VERIFY - Check result, capture artifacts
@@ -38,9 +37,9 @@ Follow the 4-phase protocol in `skills/cw-testing/references/test-executor-proto
 
 ## Constraints
 
-- Execute exactly ONE step per invocation
-- Always update task status before exiting
-- Never proceed to next step (orchestrator handles that)
-- Never modify other tasks
-- Use test credentials only (never real credentials)
-- Capture artifacts appropriate to the application type
+- Executes exactly **one** step per invocation
+- **Always** updates task status before exiting
+- **Never** proceeds to next step (orchestrator handles that)
+- **Never** modifies other tasks
+- Uses test credentials **only** (never real credentials)
+- Captures artifacts appropriate to the application type
