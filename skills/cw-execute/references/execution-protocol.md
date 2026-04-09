@@ -6,7 +6,7 @@ Detailed step-by-step instructions for the implementer worker.
 
 **Goal**: Understand current state without making changes.
 
-1. Verify working directory matches project root
+1. `cd "$(git rev-parse --show-toplevel)"` — all metadata paths are repo-root-relative
 2. Run `TaskList` to see all tasks and their statuses
 3. Identify your assigned task (by owner or next unblocked pending task)
 4. Run `TaskGet(taskId)` to load full task metadata
@@ -77,7 +77,7 @@ Rules:
 
 **Goal**: Execute proof artifacts and capture evidence.
 
-1. Create proof directory: `./docs/specs/[spec-dir]/[NN]-proofs/`
+1. Create proof directory: `docs/specs/[spec-dir]/[NN]-proofs/` (repo-root-relative)
 2. For each item in `metadata.proof_artifacts`:
    a. Execute the command/check
    b. Capture output to `{task_id}-{index+1:02d}-{type}.txt`

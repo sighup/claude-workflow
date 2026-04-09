@@ -66,13 +66,14 @@ Sanitize in Step 7 before exit — proofs live on disk and could leak if inspect
 
 Understand current state without making changes.
 
-1. Run `TaskList` to see all tasks
-2. Identify your task:
+1. `cd "$(git rev-parse --show-toplevel)"` — always operate from the repo root. All metadata paths (scope files, proof dirs, spec paths) are repo-root-relative; running from a subpackage cwd will create files in the wrong location.
+2. Run `TaskList` to see all tasks
+3. Identify your task:
    - If assigned (owner matches): use that task
    - Otherwise: find first unblocked pending task
-3. Run `TaskGet(taskId)` to load full metadata
-4. Verify git status is clean: `git status --porcelain`
-5. Read recent history: `git log --oneline -10`
+4. Run `TaskGet(taskId)` to load full metadata
+5. Verify git status is clean: `git status --porcelain`
+6. Read recent history: `git log --oneline -10`
 
 **Mark task as in_progress:**
 ```
@@ -153,7 +154,7 @@ Run pre-commit checks.
 
 Execute proof artifacts and capture evidence.
 
-1. Determine proof directory from spec_path: `./docs/specs/[spec-dir]/[NN]-proofs/`
+1. Determine proof directory from `spec_path`: `docs/specs/[spec-dir]/[NN]-proofs/` (repo-root-relative)
 2. Create the proof directory if it doesn't exist
 3. Read `metadata.proof_capture` for the capture method decided during planning
 4. For each proof artifact in `metadata.proof_artifacts`:
