@@ -165,42 +165,25 @@ Examples: `T01-01-test.txt`, `T01-02-cli.txt`, `T03-01-browser.png`
 
 ## Summary File Template
 
-After all artifacts collected, create `{task_id}-proofs.md`:
+Create `{task_id}-proofs.md` linking to the `.txt` files. Do not inline their contents — the `.txt` files are the source of truth.
 
 ```markdown
 # Proof Artifacts: {task_id} - {task_title}
 
-**Task ID**: {task_id}
 **Status**: PASS | FAIL
-**Executed**: {timestamp}
 **Spec**: {spec_path}
 
-## Summary
+## Artifacts
 
 | # | Type | Description | Result | File |
 |---|------|-------------|--------|------|
 | 01 | test | {description} | PASS | [{task_id}-01-test.txt](./{task_id}-01-test.txt) |
-| 02 | cli | {description} | PASS | [{task_id}-02-cli.txt](./{task_id}-02-cli.txt) |
+| 02 | cli  | {description} | PASS | [{task_id}-02-cli.txt](./{task_id}-02-cli.txt)  |
 
 ## Requirements Verified
 
-| Requirement | Description | Verified By | Status |
-|-------------|-------------|-------------|--------|
-| R01.1 | {text} | Artifact 01 | PASS |
-| R01.2 | {text} | Artifact 02 | PASS |
-
-## Detailed Results
-
-### 01: test
-{Content from test output file}
-
-### 02: cli
-{Content from CLI output file}
-
-## Verification Checklist
-
-- [x] All proof artifacts executed
-- [x] Output matches expected results
-- [x] No sensitive data (security scan passed)
-- [x] Files staged with implementation commit
+| Requirement | Verified By | Status |
+|-------------|-------------|--------|
+| R01.1 — {text} | Artifact 01 | PASS |
+| R01.2 — {text} | Artifact 02 | PASS |
 ```
