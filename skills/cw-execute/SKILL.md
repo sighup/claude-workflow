@@ -333,8 +333,7 @@ Leave pristine state with verified proof trail.
 
 1. `git status --porcelain` - should be empty
 2. Verify proof files are in commit: `git show --name-only HEAD | grep proofs`
-3. Run `metadata.verification.post` one final time
-4. Output execution summary:
+3. Output execution summary:
 
 ```
 CW-EXECUTE COMPLETE

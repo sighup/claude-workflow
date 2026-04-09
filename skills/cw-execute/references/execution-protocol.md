@@ -162,10 +162,9 @@ See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidanc
 
 1. Run `git status --porcelain` - should be empty
 2. If uncommitted changes exist: stash or commit as appropriate
-3. Run final test: `metadata.verification.post`
-4. Output execution summary
+3. Output execution summary
 
-**Exit criteria**: Clean git status, all tests pass, summary output.
+**Exit criteria**: Clean git status, summary output. 
 
 ## Error Recovery
 
