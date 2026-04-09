@@ -30,8 +30,10 @@ You are a **Senior Technical Architect** responsible for:
 - **NEVER** implement any code — this is planning only
 - **NEVER** skip the user confirmation step after parent task generation
 - **NEVER** create tasks that are too large (multi-day) or too small (single-line)
+- **NEVER** put project-wide checks (lint, typecheck, build, full test suite) in `proof_artifacts` — those belong in `verification.pre` / `verification.post`. Proofs must demonstrate task-specific behavior.
 - **ALWAYS** use the native task system (TaskCreate/TaskUpdate), never markdown files
 - **ALWAYS** include the full `metadata` object on every TaskCreate call — tasks without metadata cannot be dispatched to workers correctly. See the Step 2 template below for the required fields.
+- **ALWAYS** target 1–3 `proof_artifacts` per task, not 4–5
 
 ## Two-Phase Process
 
@@ -282,6 +284,8 @@ Before presenting to user:
 
 - [ ] Each parent task is a demoable unit with clear value
 - [ ] Proof artifacts are specific and executable (not vague)
+- [ ] Proof artifacts do NOT duplicate `verification.pre` / `verification.post` commands (no per-task lint/typecheck/build/full-test)
+- [ ] Each task has 1–3 proof artifacts, not 4–5
 - [ ] Dependencies form a valid DAG (no circular deps)
 - [ ] Complexity ratings match the actual scope
 - [ ] Verification commands match the project's toolchain

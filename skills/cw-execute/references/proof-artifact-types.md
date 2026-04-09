@@ -2,6 +2,12 @@
 
 How to collect each type of proof artifact during Step 6 of the execution protocol.
 
+## Scope
+
+Proofs demonstrate **this task's behavior**, not project health. Never create proofs for `lint`, `typecheck`, `build`, or the full test suite — those run in `verification.pre` / `verification.post` already. Rule of thumb: if it would pass for an empty PR, it's not a proof.
+
+Target 1–3 proofs per task. Bundle related checks into one artifact rather than splitting.
+
 ## File Naming Convention
 
 ```

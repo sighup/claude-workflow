@@ -311,6 +311,17 @@ Per-unit metadata fields:
 
 > **Greenfield note:** For early units in greenfield projects where no test runner exists, use `File` proof artifacts to verify setup (e.g., `File: package.json contains "test" script`). The planner sets `verification.pre` and `verification.post` to empty arrays for these units.
 
+Aim for 1–2 proof artifacts per demoable unit, max 3. Each must demonstrate behavior that only exists after this unit is built.
+
+**Do NOT list these as proof artifacts** — they are project-wide health checks, not feature proofs, and already run as `verification.pre` / `verification.post`:
+
+- `npm run lint` / `eslint` / `ruff` / `golangci-lint`
+- `tsc --noEmit` / `mypy` / `cargo check`
+- `npm run build` / `cargo build`
+- `npm test` / `pytest` / `go test ./...` with no path filter
+
+If your proof would pass for an empty PR, it's a health check, not a proof. Drop it.
+
 ## Output Requirements
 
 Always end with this output format:
