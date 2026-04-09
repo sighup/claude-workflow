@@ -112,9 +112,11 @@ Newly unblocked:
   T05 (was blocked by T04) -> now READY
 
 Progress: X/Y tasks complete
-
-Run /cw-dispatch again to execute the next parallel group.
 ```
+
+## Continuous Execution
+
+Loop Step 1 → Step 5 → Step 1 until termination conditions fire (`Ready=0+Pending=0` or `Ready=0+Blocked>0`). These are the only stop conditions. Findings, build failures, worker errors, and scope discoveries go in the report — the loop continues with whatever remains dispatchable. Never call AskUserQuestion mid-loop.
 
 ## Conflict Prevention
 
@@ -134,12 +136,9 @@ See [dispatch-common.md](references/dispatch-common.md#error-handling) for failu
 
 See [dispatch-common.md](references/dispatch-common.md#pre-exit-verification) for the 3-step verification and hallucination warning.
 
-## What Comes Next
+## What Comes Next (after natural termination)
 
-After workers complete, check if more tasks became unblocked:
-
-1. **If newly unblocked tasks exist**: Automatically dispatch them (loop back to Step 1)
-2. **If ALL tasks are complete**: Use AskUserQuestion to offer validation
+When the loop terminates, offer the next step via AskUserQuestion:
 
 ```
 AskUserQuestion({
