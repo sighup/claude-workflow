@@ -14,63 +14,22 @@ Always begin your response with: **CW-REVIEW-TEAM**
 
 ## Overview
 
-You are the **Code Review Orchestrator** in the Claude Workflow system, using a **concern-partitioned** team approach. Unlike `cw-review` (which splits files across reviewers), you spawn 3 specialized reviewers that each examine ALL changed files through a different lens: security, correctness, and spec compliance. This catches cross-file issues that file-partitioned review can miss.
+Concern-partitioned code review: spawn 3 specialized reviewers that each examine ALL changed files through a different lens (security, correctness, spec compliance). Unlike `cw-review` (file-partitioned), this catches cross-file issues. For small diffs (≤200 line change) review inline; for larger diffs spawn the team.
 
-For small diffs you review inline (same as `cw-review`). For larger diffs you spawn the concern-partitioned team.
+## Constraints
 
-## Your Role
-
-You are a **Senior Staff Engineer** leading a review team. You:
-- Assess diff size to choose inline review or team review
-- Spawn and coordinate 3 concern-focused reviewers
-- Optionally run a challenge round for cross-validation
-- Consolidate and deduplicate findings across concerns
-- Create FIX tasks for blocking issues
-- Produce a structured review report with methodology details
-
-## Critical Constraints
-
-- **NEVER** modify implementation code - you are read-only
-- **NEVER** create FIX tasks for stylistic preferences or nitpicks
+- **NEVER** modify implementation code — you are read-only
+- **NEVER** create FIX tasks for stylistic nitpicks
 - **NEVER** review test code for correctness (tests are the oracle)
 - **ALWAYS** reference specific files and line numbers in findings
-- **ALWAYS** distinguish severity levels (blocking vs advisory)
 - **ALWAYS** check for security issues (OWASP top 10, credential leaks)
-- **ONLY** create FIX tasks for issues that would block a merge
 - **ALWAYS** clean up the team after review (TeamDelete)
 
 ## Prerequisite: Task List ID
 
-Before starting, verify that `CLAUDE_CODE_TASK_LIST_ID` is configured. This env var is **required** so that all teammates share the project's task list.
+Verify `CLAUDE_CODE_TASK_LIST_ID` is set in `.claude/settings.json` or `settings.local.json` so all teammates share one task list. If missing, **exit immediately** with this message and suggest the user run `/cw-plan` to auto-configure or use `/cw-review` instead (which has no env-var requirement). Env vars are captured at session startup, so the user must restart Claude Code after setting it.
 
-1. Read `.claude/settings.json` and `.claude/settings.local.json` — look for `env.CLAUDE_CODE_TASK_LIST_ID`
-2. **If NOT set**: Exit immediately with this error:
-
-```
-ERROR: CLAUDE_CODE_TASK_LIST_ID is not set.
-
-/cw-review-team requires this env var so all teammates share the project task list.
-Without it, teammates will use a separate team-scoped list and tasks will diverge.
-
-Tip: Use /cw-review instead for zero-config parallel sub-agent reviewers.
-
-Run /cw-plan to auto-configure it, or add it manually to .claude/settings.json:
-{
-  "env": {
-    "CLAUDE_CODE_TASK_LIST_ID": "your-project-name"
-  }
-}
-
-Then restart your Claude Code session (env vars are captured at startup).
-```
-
-3. **If set**: Report the value and the derived team name:
-```
-CLAUDE_CODE_TASK_LIST_ID = {value}
-Review team name: {value}-review-team
-```
-
-**The review team name is always `{CLAUDE_CODE_TASK_LIST_ID}-review-team`** — this ensures it never collides with the task list ID or dispatch team name.
+The review team name is always `{CLAUDE_CODE_TASK_LIST_ID}-review-team` — never collides with the task list ID or dispatch team name.
 
 ## MANDATORY FIRST ACTION
 
@@ -133,83 +92,15 @@ After reviewing all files, skip to **Step 10: Create FIX Tasks**.
 
 ### Step 3: Create Team
 
-```
-TeamCreate({ team_name: "{task-list-id}-review-team", description: "Concern-partitioned code review team" })
-```
+`TeamCreate({ team_name: "{task-list-id}-review-team", description: "Concern-partitioned code review team" })`
 
 ### Step 4: Create Concern Tasks
 
-Create 3 `REVIEW-CONCERN:` tasks, one per reviewer:
-
-```
-TaskCreate({
-  subject: "REVIEW-CONCERN: Security review (Category B)",
-  description: "Security-focused review of all changed files. See reviewer-team-protocol.md for concern checklist.",
-  activeForm: "Reviewing security concerns"
-})
-```
-
-Then set metadata on each concern task:
-
-```
-TaskUpdate({
-  taskId: "<concern-task-id>",
-  metadata: {
-    task_type: "review-concern",
-    concern: "security",
-    primary_category: "B",
-    changed_files: ["path/to/file1.ts", "path/to/file2.ts", ...],
-    spec_path: "<path-to-spec or null>",
-    standards_summary: "<brief summary of repo conventions>",
-    base_branch: "main"
-  }
-})
-```
-
-Repeat for correctness (concern: "correctness", primary_category: "A") and spec compliance (concern: "spec-compliance", primary_category: "C+D").
+Create 3 `REVIEW-CONCERN:` tasks (security/correctness/spec-compliance) and populate their metadata. Templates and concern → category mapping in [team-setup.md](references/team-setup.md#create-concern-tasks).
 
 ### Step 5: Assign Ownership and Spawn Reviewers
 
-Assign ownership on each concern task, then send a **single message** with 3 Task tool calls for parallel launch:
-
-```
-TaskUpdate({ taskId: "<security-task-id>", owner: "security-reviewer", status: "in_progress" })
-TaskUpdate({ taskId: "<correctness-task-id>", owner: "correctness-reviewer", status: "in_progress" })
-TaskUpdate({ taskId: "<spec-task-id>", owner: "spec-reviewer", status: "in_progress" })
-```
-
-Then spawn all 3 in one message:
-
-```
-Task({
-  subagent_type: "claude-workflow:reviewer",
-  team_name: "{task-list-id}-review-team",
-  name: "security-reviewer",
-  description: "Security concern review",
-  prompt: "You are security-reviewer on the {task-list-id}-review-team team.
-
-YOUR ASSIGNED TASK: <task-id> - Security review (Category B)
-
-PROTOCOL:
-1. Read the concern-partitioned protocol at: skills/cw-review-team/references/reviewer-team-protocol.md
-2. Follow the 3-phase protocol (ORIENT, EXAMINE, REPORT)
-3. Focus primarily on security concerns (Category B) across ALL changed files
-4. Note obvious secondary findings from other categories
-5. Write findings to task metadata via TaskUpdate
-6. Message the lead via SendMessage when complete
-
-CONSTRAINTS:
-- Never modify implementation code
-- Never create FIX tasks or new tasks
-- Always include file paths and line numbers
-- Set is_primary=true for security findings, is_primary=false for secondary findings
-
-SHUTDOWN:
-- Approve shutdown_request when received"
-})
-```
-
-Repeat for correctness-reviewer and spec-reviewer with matching concern descriptions.
+Assign ownership on each concern task, then spawn all 3 reviewers in a **single message** with 3 parallel `Task()` calls. See [team-setup.md](references/team-setup.md#spawn-reviewers) for the exact reviewer prompt template.
 
 ### Step 6: Monitor Loop
 
@@ -322,78 +213,9 @@ TeamDelete()
 
 ### Step 12: Generate Review Report
 
-Produce a structured review report from the consolidated findings:
+Produce a structured review report from the consolidated findings, following the markdown template and field guidance in [review-report-template.md](references/review-report-template.md).
 
-```markdown
-# Code Review Report
-
-**Reviewed**: [ISO timestamp]
-**Branch**: [branch name]
-**Base**: main
-**Commits**: [count] commits, [files changed] files
-**Overall**: APPROVED | CHANGES REQUESTED
-
-## Summary
-
-- **Blocking Issues**: X (A: Y correctness, B: Z security, C: W spec compliance)
-- **Advisory Notes**: X
-- **Files Reviewed**: X / Y changed files
-- **FIX Tasks Created**: [list of task IDs]
-
-## Review Methodology
-
-**Approach**: Concern-partitioned team review
-**Reviewers**: 3 specialized agents
-| Reviewer | Concern | Primary Category | Status |
-|----------|---------|-----------------|--------|
-| security-reviewer | Security | B | Completed / Partial |
-| correctness-reviewer | Correctness | A | Completed / Partial |
-| spec-reviewer | Spec Compliance | C + D | Completed / Partial |
-
-**Challenge Round**: [Triggered / Not triggered (< 3 blocking findings)]
-[If triggered: N findings reviewed, M challenged, K additions]
-
-## Blocking Issues
-
-### [ISSUE-1] [Category A/B/C]: [Title]
-- **File**: `path/to/file.ts:42`
-- **Severity**: Blocking
-- **Concern**: [Primary reviewer who found it]
-- **Description**: [What is wrong]
-- **Fix**: [What to do]
-- **Task**: FIX-REVIEW-[id]
-[If challenged: **Challenge Status**: Upheld / Downgraded]
-
-### [ISSUE-2] ...
-
-## Advisory Notes
-
-### [NOTE-1] [Category D]: [Title]
-- **File**: `path/to/file.ts:88`
-- **Description**: [Observation]
-- **Suggestion**: [Optional improvement]
-
-## Files Reviewed
-
-| File | Status | Issues |
-|------|--------|--------|
-| `src/auth/login.ts` | Modified | 1 blocking |
-| `src/utils/hash.ts` | New | Clean |
-| `tests/auth.test.ts` | Modified | (not reviewed - test code) |
-
-## Checklist
-
-- [ ] No hardcoded credentials or secrets
-- [ ] Error handling at system boundaries
-- [ ] Input validation on user-facing endpoints
-- [ ] Changes match spec requirements
-- [ ] Follows repository patterns and conventions
-- [ ] No obvious performance regressions
-```
-
-Save the report to: `./docs/specs/[NN]-spec-[feature-name]/[NN]-review-[feature-name].md`
-
-If no spec directory is found, output the report directly.
+Save to: `./docs/specs/[NN]-spec-[feature-name]/[NN]-review-[feature-name].md`. If no spec directory is found, output the report directly.
 
 ### Step 13: Output Summary
 
