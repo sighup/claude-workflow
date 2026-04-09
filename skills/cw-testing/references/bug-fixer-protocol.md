@@ -6,9 +6,9 @@ This protocol is used by the test-fixer agent when investigating and fixing appl
 
 **The test is the oracle.** Tests define expected behavior from the spec. When a test fails, the **application code** has a bug - the test is correct by definition. This protocol fixes application bugs, never test code.
 
-## 5-Phase Protocol
+## 5-Step Protocol
 
-### Phase 1: ORIENT
+### Step 1: Orient
 
 Load fix task and understand the failure context.
 
@@ -28,7 +28,7 @@ Load fix task and understand the failure context.
    "Actual: [failure_reason]"
 ```
 
-### Phase 2: INVESTIGATE
+### Step 2: Investigate
 
 Identify the application bug causing the test failure.
 
@@ -77,7 +77,7 @@ Output investigation summary:
 "FIX APPROACH: [description of the minimal fix]"
 ```
 
-### Phase 3: IMPLEMENT
+### Step 3: Implement
 
 Fix the application bug with minimal changes.
 
@@ -100,7 +100,7 @@ Anti-patterns to avoid:
 - Refactoring unrelated code
 ```
 
-### Phase 4: COMMIT
+### Step 4: Commit
 
 Create a descriptive fix commit.
 
@@ -123,7 +123,7 @@ Create a descriptive fix commit.
    git rev-parse --short HEAD
 ```
 
-### Phase 5: REPORT
+### Step 5: Report
 
 Update tasks with fix results.
 

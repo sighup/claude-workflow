@@ -92,7 +92,7 @@ Uses natural language prompts for action and verification:
 | `test_suite` | boolean | Yes | True for parent suite task |
 | `base_url` | string | Yes | Application URL for testing |
 | `gherkin_dir` | string | No | Directory containing the `.feature` files used to generate this suite; `cw-testing init` globs `*.feature` from here; omitted when derived from prose |
-| `artifacts_dir` | string | No | Directory for screenshots and logs; defaults to `artifacts` for ad-hoc suites, `docs/specs/<spec-name>/testing` for spec-linked suites |
+| `artifacts_dir` | string | No | Directory for E2E test screenshots and logs (analogous to `proof_dir` in cw-execute, but for test artifacts rather than implementation proofs). Defaults to `artifacts` for ad-hoc suites, `docs/specs/<spec-name>/testing` for spec-linked suites |
 | `database.setup` | string | No | Command to setup test database |
 | `database.teardown` | string | No | Command to reset database after tests |
 | `regression_check` | boolean | Yes | Enable regression checking between steps |

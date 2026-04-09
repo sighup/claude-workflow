@@ -1,8 +1,8 @@
 # Execution Protocol Reference
 
-Detailed phase-by-phase instructions for the implementer worker.
+Detailed step-by-step instructions for the implementer worker.
 
-## Phase 1: ORIENT
+## Step 1: Orient
 
 **Goal**: Understand current state without making changes.
 
@@ -15,7 +15,7 @@ Detailed phase-by-phase instructions for the implementer worker.
 
 **Exit criteria**: You know which task to execute and the codebase is clean.
 
-## Phase 2: BASELINE
+## Step 2: Baseline
 
 **Goal**: Confirm the codebase is healthy before you touch it.
 
@@ -28,7 +28,7 @@ Detailed phase-by-phase instructions for the implementer worker.
 
 **Exit criteria**: All verification.post commands pass (or failures are documented pre-existing).
 
-## Phase 3: CONTEXT
+## Step 3: Context
 
 **Goal**: Understand conventions before writing code.
 
@@ -44,7 +44,7 @@ Detailed phase-by-phase instructions for the implementer worker.
 
 **Exit criteria**: You understand the patterns and can write consistent code.
 
-## Phase 4: IMPLEMENT
+## Step 4: Implement
 
 **Goal**: Create/modify files to satisfy all requirements.
 
@@ -63,7 +63,7 @@ Rules:
 
 **Exit criteria**: All requirements have corresponding implementation and tests.
 
-## Phase 5: VERIFY-LOCAL
+## Step 5: Verify Local
 
 **Goal**: Confirm your changes don't break anything locally.
 
@@ -74,7 +74,7 @@ Rules:
 
 **Exit criteria**: All verification.pre commands pass.
 
-## Phase 6: PROOF
+## Step 6: Proof
 
 **Goal**: Execute proof artifacts and capture evidence.
 
@@ -86,11 +86,11 @@ Rules:
    d. Record PASS or FAIL
 3. Create summary file `{task_id}-proofs.md`
 
-See `references/proof-artifact-types.md` for type-specific guidance.
+See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidance.
 
 **Exit criteria**: All proof artifacts collected, all PASS.
 
-## Phase 7: SANITIZE
+## Step 7: Sanitize
 
 **Goal**: Remove sensitive data from proof artifacts. THIS IS BLOCKING.
 
@@ -105,7 +105,7 @@ See `references/proof-artifact-types.md` for type-specific guidance.
 
 **Exit criteria**: No sensitive data in any proof file. CANNOT proceed until clean.
 
-## Phase 8: COMMIT
+## Step 8: Commit
 
 **Goal**: Create atomic commit with implementation + proofs.
 
@@ -116,7 +116,7 @@ See `references/proof-artifact-types.md` for type-specific guidance.
 
 **Exit criteria**: Commit created with all implementation and proof files.
 
-## Phase 9: VERIFY-FULL
+## Step 9: Verify Full
 
 **Goal**: Confirm nothing broke after commit.
 
@@ -128,7 +128,7 @@ See `references/proof-artifact-types.md` for type-specific guidance.
 
 **Exit criteria**: All verification.post commands pass.
 
-## Phase 10: REPORT
+## Step 10: Report
 
 **Goal**: Update task board with results.
 
@@ -156,7 +156,7 @@ See `references/proof-artifact-types.md` for type-specific guidance.
 
 **Exit criteria**: Task marked completed with proof_dir, proof_results, proof_summary, commit_sha, and completed_at in metadata.
 
-## Phase 11: CLEAN EXIT
+## Step 11: Clean Exit
 
 **Goal**: Leave codebase in pristine state for next worker.
 
@@ -169,7 +169,7 @@ See `references/proof-artifact-types.md` for type-specific guidance.
 
 ## Error Recovery
 
-### Retry Logic (Max 3 per phase)
+### Retry Logic (Max 3 per step)
 
 ```
 attempt = 0

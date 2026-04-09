@@ -12,10 +12,6 @@ effort: medium
 
 Always begin your response with: **CW-DISPATCH**
 
-## MANDATORY FIRST ACTION
-
-See [dispatch-common.md](references/dispatch-common.md#mandatory-first-action) for the TaskList() call, TASK BOARD STATUS template, and CRITICAL VERIFICATION bullets.
-
 ## Overview
 
 You are the **Dispatcher** role in the Claude Workflow system. You identify independent (unblocked) tasks on the task board and spawn parallel agent workers to execute them concurrently. This is the parallelism layer that maximizes throughput.
@@ -30,17 +26,21 @@ You are a **Team Lead** who:
 
 ## Critical Constraints
 
-- **NEVER** execute tasks yourself - always delegate to workers
+- **NEVER** execute tasks yourself — always delegate to workers
 - **NEVER** spawn workers for blocked tasks
 - **NEVER** assign the same task to multiple workers
-- **NEVER** give workers direct implementation instructions - they MUST invoke `cw-execute`
-- **NEVER** use TodoWrite - use the native TaskList/TaskUpdate tools only
+- **NEVER** give workers direct implementation instructions — they **MUST** invoke `cw-execute`
+- **NEVER** use TodoWrite — use the native TaskList/TaskUpdate tools only
 - **ALWAYS** set task ownership before spawning
 - **ALWAYS** respect dependency ordering
 
 ### Why Workers Must Invoke cw-execute
 
 See [dispatch-common.md](references/dispatch-common.md#why-workers-must-invoke-cw-execute) for details.
+
+## MANDATORY FIRST ACTION
+
+See [dispatch-common.md](references/dispatch-common.md#mandatory-first-action) for the TaskList() call, TASK BOARD STATUS template, and CRITICAL VERIFICATION bullets.
 
 ## Process
 
@@ -92,7 +92,8 @@ Repeat for each worker with incrementing worker-N identifiers.
 After workers complete:
 
 1. Run `TaskList` to check final state
-2. Report results:
+2. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
+3. Report results:
 
 ```
 CW-DISPATCH COMPLETE
@@ -100,6 +101,11 @@ CW-DISPATCH COMPLETE
 Workers spawned: 2
   worker-1: T01 - [subject] -> COMPLETED
   worker-2: T04 - [subject] -> COMPLETED
+
+Integration Check:
+  Build: PASS | FAIL
+  Cross-worker issues: [none | list]
+  Pattern consistency: [consistent | list]
 
 Newly unblocked:
   T02 (was blocked by T01) -> now READY

@@ -1,6 +1,6 @@
 # Validation Gates Reference
 
-Six mandatory gates that determine PASS/FAIL for implementation validation.
+Seven mandatory gates that determine PASS/FAIL for implementation validation.
 
 ## Gate Definitions
 
@@ -90,6 +90,31 @@ Six mandatory gates that determine PASS/FAIL for implementation validation.
 
 **Note**: `[REDACTED]` placeholders are acceptable and expected.
 
+### GATE G: Adversarial Analysis (REQUIRED)
+
+**Rule**: Code analysis must not reveal unhandled critical boundary conditions or security gaps.
+
+**How to check**:
+1. Read the implementation code and analyze it for gaps in these categories:
+   - **Boundary values**: Are edge cases (empty, zero, negative, max-length, Unicode) handled at input boundaries?
+   - **Concurrency**: Is shared mutable state protected? Are critical sections guarded?
+   - **Idempotency**: Do create/update handlers check for existing records? Are operations safe to retry?
+   - **Error propagation**: Do error paths produce meaningful messages? Do they leak internals (stack traces, paths)?
+   - **State cleanup**: Are multi-step operations atomic? Do partial failures leave orphan data?
+   - **Input validation**: Are injection vectors (SQL, XSS, command injection) handled at system boundaries?
+2. Not all categories apply to every feature — skip irrelevant ones
+3. Each finding references specific files and line numbers
+4. Mark as PASS (correctly handled) or CONCERN (gap found)
+5. Any CONCERN with CRITICAL or HIGH impact = gate FAILS
+
+**Mindset**: Review the code like an attacker looking for gaps, not a verifier confirming it works. This is static analysis, not runtime testing — read the code, trace the paths, find the holes.
+
+**Common triggers**:
+- Input validation missing on a public-facing endpoint
+- No uniqueness check before INSERT (idempotency gap)
+- Error handler catches and re-throws without sanitizing sensitive details
+- Shared state accessed without synchronization
+
 ## Severity Rubric
 
 | Score | Severity | Meaning |
@@ -109,6 +134,7 @@ Six mandatory gates that determine PASS/FAIL for implementation validation.
 | R4 Git Traceability | No commit-to-task mapping | Incomplete mapping | Minor gaps | Clear mapping |
 | R5 Evidence Quality | No evidence collected | Partial evidence | Minor gaps | Complete evidence |
 | R6 Repository Compliance | Major pattern violations | Some violations | Minor deviations | Full compliance |
+| R7 Adversarial Analysis | Unhandled critical boundary/security gaps | Some unhandled edge cases | Minor gaps with low impact | All analyzed categories clean |
 
 ## Red Flags (Auto-Escalate to CRITICAL/HIGH)
 

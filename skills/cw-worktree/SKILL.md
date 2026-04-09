@@ -179,6 +179,20 @@ git worktree remove --force .worktrees/feature-{name}     # Force remove worktre
 git branch -D feature/{name}                              # Delete orphaned branch
 ```
 
+## Output Requirements
+
+Always end with this output format (adapt to the command used):
+
+```
+CW-WORKTREE COMPLETE
+=====================
+Command: create | list | status | merge | sync | cleanup
+[Command-specific details, e.g.:]
+  Created: .worktrees/feature-{name}/
+  Branch: feature/{name}
+  Task list: {name} (auto-configured)
+```
+
 ## What Comes Next
 
 After creating a worktree (keep main session open as control center):

@@ -6,9 +6,9 @@ This protocol is used by the reviewer agent when examining assigned files for a 
 
 Examine only your assigned files. Report findings — never fix code or create tasks.
 
-## 3-Phase Protocol
+## 3-Step Protocol
 
-### Phase 1: ORIENT
+### Step 1: Orient
 
 Load the review task and understand what to examine.
 
@@ -26,7 +26,7 @@ Load the review task and understand what to examine.
    "Spec: [spec_path or 'none']"
 ```
 
-### Phase 2: EXAMINE
+### Step 2: Examine
 
 For each file in `assigned_files`, read the full file and its diff, then evaluate.
 
@@ -82,7 +82,7 @@ For each file in assigned_files:
 - Performance concerns (N+1 queries, unnecessary loops)
 - Inconsistency with repository patterns
 
-### Phase 3: REPORT
+### Step 3: Report
 
 Write all findings to task metadata and mark completed.
 

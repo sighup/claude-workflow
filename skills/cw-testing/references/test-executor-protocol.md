@@ -6,9 +6,9 @@ This protocol is used by the test-executor agent when executing a single E2E tes
 
 Execute exactly ONE test step per invocation. The test defines expected behavior from the spec - verify the application meets that expectation.
 
-## 4-Phase Protocol
+## 4-Step Protocol
 
-### Phase 1: ORIENT
+### Step 1: Orient
 
 Load the test task and understand what to execute.
 
@@ -29,7 +29,7 @@ Load the test task and understand what to execute.
    "Verify: [verify.expected]"
 ```
 
-### Phase 2: EXECUTE ACTION
+### Step 2: Execute Action
 
 Perform the action described in `action.prompt` using the configured `automation.backend`.
 
@@ -52,7 +52,7 @@ The action prompt is natural language - interpret it and execute the appropriate
 - "Click the Submit button" → Find and click the submit button
 - "Wait for the dashboard to load" → Wait for expected content
 
-### Phase 3: VERIFY & CAPTURE
+### Step 3: Verify and Capture
 
 Check the result and capture proof artifacts.
 
@@ -72,7 +72,7 @@ Check the result and capture proof artifacts.
    - FAIL: Actual state does not match (indicates application bug)
 ```
 
-### Phase 4: REPORT
+### Step 4: Report
 
 Update task status and exit.
 
