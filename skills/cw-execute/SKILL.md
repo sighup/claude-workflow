@@ -81,13 +81,15 @@ TaskUpdate({ taskId: "<id>", status: "in_progress" })
 
 ### Step 2: Baseline
 
-Confirm codebase health before touching anything.
+Confirm a clean starting state. **Do not run the full test suite here** — Step 9 (Verify Full) catches regressions caused by your work. 
 
-1. Run each command in `metadata.verification.post`
-2. If failures:
-   - Pre-existing issue: note and proceed with caution
+1. `git status --porcelain` — must be empty (clean tree)
+2. `git log --oneline -5` — sanity check recent history
+3. If anything looks wrong (dirty tree, missing deps surfaced by Step 3 reads):
    - Environment issue: attempt fix (install deps, etc.)
    - Unfixable: update task description with blocker, exit
+
+Pre-existing test failures (if any) will surface in Step 9 and be documented there.
 
 ### Step 3: Context
 

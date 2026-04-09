@@ -17,16 +17,15 @@ Detailed step-by-step instructions for the implementer worker.
 
 ## Step 2: Baseline
 
-**Goal**: Confirm the codebase is healthy before you touch it.
+**Goal**: Confirm a clean starting state. **Do not run the full test suite** 
 
-1. Run each command in `metadata.verification.post` (the full test suite)
-2. If any fail:
-   - Check if failure is pre-existing (not your fault)
-   - If pre-existing: note in task description, proceed with caution
-   - If environment issue: attempt fix (install deps, etc.)
-   - If unfixable: mark task blocked, exit
+1. `git status --porcelain` — must be empty
+2. `git log --oneline -5` — sanity-check recent history
+3. If environment looks broken (missing deps, etc.): attempt fix or mark task blocked
 
-**Exit criteria**: All verification.post commands pass (or failures are documented pre-existing).
+Pre-existing test failures are documented in Step 9 when they surface.
+
+**Exit criteria**: Clean tree, environment usable.
 
 ## Step 3: Context
 
