@@ -31,6 +31,12 @@ Path: `./docs/specs/[NN]-spec-[feature-name]/` where `NN` is the next zero-padde
 
 **Reuse research directory if present**: if invocation args contain a `**Research:**` field with a `docs/specs/research-{slug}/` path that exists, rename it to become the spec directory (`mv research-{slug}/ [NN]-spec-[feature-name]/`). Otherwise `mkdir -p` the new directory.
 
+**Ensure `docs/specs/` is gitignored** — the workflow's working artifacts live there and are local-only. Append if missing:
+
+```bash
+grep -qxF 'docs/specs/' .gitignore 2>/dev/null || echo 'docs/specs/' >> .gitignore
+```
+
 ### Step 2: Context assessment
 
 Skim the project for: existing patterns relevant to the feature, integration points, repository standards (`README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `package.json`/equivalent), testing conventions, and commit message style.

@@ -43,12 +43,12 @@ You have no memory of previous executions.
 - **Always commit on success** - partial work is lost between sessions
 - **Update task status** via TaskUpdate - next worker depends on it
 - **Leave codebase clean** - no uncommitted changes after completion
-- **Proof artifacts are BLOCKING** - cannot proceed to commit without proof files
-- **Security sanitization is BLOCKING** - cannot commit unsanitized proofs
+- **Proof artifacts are BLOCKING** - cannot proceed to commit without proof files on disk
+- **Security sanitization is BLOCKING** - cannot proceed until proofs are scrubbed (proofs live in `docs/specs/` which is `.gitignore`d, but still scan)
 
 ## Proof File Requirements (MANDATORY)
 
-Every task execution MUST produce proof artifacts in the repository:
+Every task execution MUST produce proof artifacts on disk under:
 
 ```
 docs/specs/[spec-dir]/[NN]-proofs/
@@ -58,7 +58,7 @@ docs/specs/[spec-dir]/[NN]-proofs/
 └── ...
 ```
 
-**The commit in Phase 8 MUST include proof files.** A commit without proof artifacts is incomplete and will fail validation.
+**`docs/specs/` is `.gitignore`d** (set up by cw-spec). Files there never appear in `git status` and can't be staged. cw-validate reads proof files directly from disk via `proof_dir`. Sanitization (Phase 7) still applies — proofs live on disk and could leak if inspected.
 
 ## The 11-Phase Protocol
 
@@ -71,7 +71,7 @@ Understand current state without making changes.
    - If assigned (owner matches): use that task
    - Otherwise: find first unblocked pending task
 3. Run `TaskGet(taskId)` to load full metadata
-4. Verify git status is clean: `git status --porcelain`
+4. Verify git status is clean: `git status --porcelain` (`docs/specs/` is `.gitignore`d so it won't appear)
 5. Read recent history: `git log --oneline -10`
 
 **Mark task as in_progress:**
@@ -83,10 +83,10 @@ TaskUpdate({ taskId: "<id>", status: "in_progress" })
 
 Confirm a clean starting state before touching anything. **Do not run the full test suite here** — it runs in Phase 9 (VERIFY-FULL) where it actually catches regressions caused by your work. Re-running it pre-edit just to "check current state" wastes 60s+ per task across N parallel workers.
 
-1. `git status --porcelain` — must be empty (clean tree)
+1. `git status --porcelain` — should be empty
 2. `git log --oneline -5` — sanity check recent history
 3. If `metadata.verification.pre` is cheap (lint only, no full test), you may run it for an early signal. Otherwise skip.
-4. If anything looks wrong (dirty tree, missing deps surfaced by Phase 3 reads):
+4. If the tree is dirty or deps look missing:
    - Environment issue: attempt fix (install deps, etc.)
    - Unfixable: update task description with blocker, exit
 
@@ -262,12 +262,12 @@ Remove sensitive data from proof files. **Cannot proceed until clean.**
 
 ### Phase 8: COMMIT
 
-Create atomic commit with implementation AND proof artifacts.
+Create an atomic commit containing only your implementation files.
 
 **Pre-Commit Checklist (all must pass):**
 
 ```bash
-# 1. Verify proof files exist (BLOCKING)
+# 1. Verify proof files exist on disk (BLOCKING)
 test -d "docs/specs/[spec-dir]/[NN]-proofs" || { echo "ERROR: Proof directory missing"; exit 1; }
 test -f "docs/specs/[spec-dir]/[NN]-proofs/{task_id}-proofs.md" || { echo "ERROR: Proof summary missing"; exit 1; }
 ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*.txt >/dev/null 2>&1 || { echo "ERROR: No proof artifacts"; exit 1; }
@@ -278,18 +278,15 @@ grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proof
 
 **If pre-commit checks fail:** Return to the blocking phase (Phase 6 or 7) and complete it.
 
-**Commit Steps:**
+**Commit Steps (path-mode, parallel-safe):**
 
-1. Stage implementation files:
-   - All files from `metadata.scope.files_to_create`
-   - All files from `metadata.scope.files_to_modify`
-2. Stage proof files: `git add docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*`
-3. Verify staged files include both implementation AND proofs:
-   ```bash
-   git diff --cached --name-only | grep -E "(src/|lib/|proof)"
-   ```
-4. Create commit using `metadata.commit.template`
-5. Verify commit includes proof files: `git show --name-only HEAD | grep proofs`
+Use **path-mode commits** so you only commit files in your declared scope. Path-mode ignores whatever else is staged in the index — critical when parallel workers share a worktree and each one's `git add` would otherwise leak into another worker's `git commit`.
+
+1. Enumerate your files: `FILES="<file1> <file2> ..."` from `metadata.scope.files_to_create` + `metadata.scope.files_to_modify`
+2. Stage your files: `git add -- $FILES`
+3. Commit in path-mode: `git commit -m "<metadata.commit.template>" -- $FILES`
+   - The trailing `-- $FILES` makes git commit **only these paths** regardless of what else is in the index. Other workers' staged files are untouched.
+4. Verify your files landed in HEAD: `git show --name-only HEAD -- $FILES`
 
 ### Phase 9: VERIFY-FULL
 
@@ -334,10 +331,8 @@ The `model_used` field records which model actually executed the task for audita
 
 ### Phase 11: CLEAN EXIT
 
-Leave pristine state with verified proof trail.
-
-1. `git status --porcelain` - should be empty
-2. Verify proof files are in commit: `git show --name-only HEAD | grep proofs`
+1. `git status --porcelain` — should be empty
+2. Verify your files landed in HEAD: `git log -1 --name-only -- $FILES`
 3. Output execution summary:
 
 ```
@@ -347,22 +342,21 @@ Task: T01 - [subject]
 Status: COMPLETED
 Model: [model_used]
 
-Proof Artifacts (committed):
+Proof Artifacts (on disk, not committed):
   [PASS] docs/specs/.../01-proofs/T01-01-test.txt
   [PASS] docs/specs/.../01-proofs/T01-02-cli.txt
   [SUMM] docs/specs/.../01-proofs/T01-proofs.md
 
 Commit: abc1234 feat(scope): description
   - Implementation files: X
-  - Proof files: Y
 
 Progress: X/Y tasks complete
 ```
 
 **Final Verification:**
 ```bash
-# Confirm proof files exist in repository
-git ls-files docs/specs/*/[NN]-proofs/{task_id}-*
+# Confirm proof files exist on disk (they're untracked — don't use git ls-files)
+ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*
 ```
 
 ## Error Handling
@@ -378,8 +372,8 @@ Each phase allows max 3 retries before failure:
 
 ### Failure Handler
 
-1. Stash partial work: `git stash push -m "cw-execute: {task_id} partial"`
-2. Clean working tree: `git checkout -- .`
+1. Stash your files only: `git stash push -m "cw-execute: {task_id} partial" -- $FILES`
+2. Restore your files: `git checkout -- $FILES`
 3. Update task (keep as pending, add failure info):
    ```
    TaskUpdate({
@@ -423,7 +417,7 @@ If a task has `status: "in_progress"` when you start:
 - Never execute commands that could leak credentials
 - Replace real tokens with placeholders in proof artifacts
 - Never push to remote during execution
-- Proof files are committed - they must be safe for version control
+- Proof files are gitignored but still scrub them — they live on disk and could leak if inspected
 
 ## What Comes Next
 

@@ -113,7 +113,7 @@ If a worker fails (task remains in_progress or goes back to pending):
 The `cw-execute` skill contains the 11-phase protocol including:
 - Phase 10 (REPORT): Calls `TaskUpdate({ status: "completed" })` to mark tasks done
 - Phase 6 (PROOF): Creates proof artifacts for validation
-- Phase 8 (COMMIT): Creates atomic commits with implementation + proofs
+- Phase 8 (COMMIT): Atomic path-mode commits for implementation files (`docs/specs/` is gitignored)
 
 **If workers receive direct prompts instead of invoking cw-execute, the task board will NOT be updated and progress tracking breaks.**
 

@@ -121,14 +121,14 @@ See `references/proof-artifact-types.md` for type-specific guidance.
 
 ## Phase 8: COMMIT
 
-**Goal**: Create atomic commit with implementation + proofs.
+**Goal**: Atomic path-mode commit containing only your implementation files.
 
-1. Stage implementation files (from `metadata.scope.files_to_create` + `files_to_modify`)
-2. Stage proof artifact files
-3. Create commit using `metadata.commit.template`
-4. Verify commit exists: `git log --oneline -1`
+1. Enumerate your scope: `FILES="<files_to_create + files_to_modify>"`
+2. Stage: `git add -- $FILES`
+3. Path-mode commit: `git commit -m "<metadata.commit.template>" -- $FILES` — the trailing `-- $FILES` commits only these paths regardless of what else is in the index, which keeps parallel workers from leaking into each other's commits.
+4. Verify: `git show --name-only HEAD -- $FILES`
 
-**Exit criteria**: Commit created with all implementation and proof files.
+**Exit criteria**: Your implementation files committed.
 
 ## Phase 9: VERIFY-FULL
 
@@ -172,13 +172,13 @@ See `references/proof-artifact-types.md` for type-specific guidance.
 
 ## Phase 11: CLEAN EXIT
 
-**Goal**: Leave codebase in pristine state for next worker.
+**Goal**: Leave the codebase clean.
 
-1. Run `git status --porcelain` - should be empty
-2. If uncommitted changes exist: stash or commit as appropriate
+1. `git status --porcelain` — should be empty
+2. Verify your files are in HEAD: `git log -1 --name-only -- $FILES`
 3. Output execution summary
 
-**Exit criteria**: Clean git status, summary output. (Phase 9 already verified `verification.post` post-commit — do not re-run it here.)
+**Exit criteria**: Clean tree, your files committed, summary output. Phase 9 already verified `verification.post` post-commit — do not re-run it here.
 
 ## Error Recovery
 

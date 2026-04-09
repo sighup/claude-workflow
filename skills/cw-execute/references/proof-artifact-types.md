@@ -20,6 +20,8 @@ Never create proofs for `lint`, `typecheck`, `build`, or the full test suite. Th
 
 Target **1–3 proofs per task**. Bundle related checks into one artifact rather than splitting.
 
+Proof files live in `docs/specs/[spec-dir]/[NN]-proofs/` which is `.gitignore`d (see cw-spec Step 1). cw-validate reads them directly from disk via `proof_dir`.
+
 ## File Naming Convention
 
 ```
