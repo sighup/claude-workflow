@@ -60,6 +60,12 @@ If the invocation args contain a `**Research:**` field with a directory path (e.
    mkdir -p docs/specs/[NN]-spec-[feature-name]/
    ```
 
+Ensure `docs/specs/` is in `.gitignore` — workflow artifacts are local-only:
+
+```bash
+grep -qxF 'docs/specs/' .gitignore 2>/dev/null || echo 'docs/specs/' >> .gitignore
+```
+
 ### Step 2: Context Assessment
 
 If working in a pre-existing project, review:

@@ -48,7 +48,7 @@ If TaskList() returns "No tasks found", report that and exit.
 
 ## Proof File Requirements (MANDATORY)
 
-Every task execution MUST produce proof artifacts in the repository:
+Every task execution MUST produce proof artifacts on disk under:
 
 ```
 docs/specs/[spec-dir]/[NN]-proofs/
@@ -58,7 +58,7 @@ docs/specs/[spec-dir]/[NN]-proofs/
 └── ...
 ```
 
-**The commit in Step 8 MUST include proof files.** A commit without proof artifacts is incomplete and will fail validation.
+Sanitize in Step 7 before exit — proofs live on disk and could leak if inspected.
 
 ## The 11-Step Protocol
 
@@ -259,34 +259,23 @@ Remove sensitive data from proof files. **Cannot proceed until clean.**
 
 ### Step 8: Commit
 
-Create atomic commit with implementation AND proof artifacts.
+Atomic path-mode commit of implementation files.
 
-**Pre-Commit Checklist (all must pass):**
+**Pre-Commit Checklist:**
 
 ```bash
-# 1. Verify proof files exist (BLOCKING)
 test -d "docs/specs/[spec-dir]/[NN]-proofs" || { echo "ERROR: Proof directory missing"; exit 1; }
 test -f "docs/specs/[spec-dir]/[NN]-proofs/{task_id}-proofs.md" || { echo "ERROR: Proof summary missing"; exit 1; }
 ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*.txt >/dev/null 2>&1 || { echo "ERROR: No proof artifacts"; exit 1; }
-
-# 2. Verify sanitization complete
 grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proofs/{task_id}-* && { echo "ERROR: Unsanitized secrets"; exit 1; }
 ```
 
-**If pre-commit checks fail:** Return to the blocking step (Step 6 or 7) and complete it.
-
 **Commit Steps:**
 
-1. Stage implementation files:
-   - All files from `metadata.scope.files_to_create`
-   - All files from `metadata.scope.files_to_modify`
-2. Stage proof files: `git add docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*`
-3. Verify staged files include both implementation AND proofs:
-   ```bash
-   git diff --cached --name-only | grep -E "(src/|lib/|proof)"
-   ```
-4. Create commit using `metadata.commit.template`
-5. Verify commit includes proof files: `git show --name-only HEAD | grep proofs`
+1. Enumerate your files: `FILES="<file1> <file2> ..."` from `metadata.scope.files_to_create` + `files_to_modify`
+2. Stage: `git add -- $FILES`
+3. Commit: `git commit -m "<metadata.commit.template>" -- $FILES`
+4. Verify: `git show --name-only HEAD -- $FILES`
 
 ### Step 9: Verify Full
 
@@ -331,10 +320,8 @@ The `model_used` field records which model actually executed the task for audita
 
 ### Step 11: Clean Exit
 
-Leave pristine state with verified proof trail.
-
-1. `git status --porcelain` - should be empty
-2. Verify proof files are in commit: `git show --name-only HEAD | grep proofs`
+1. `git status --porcelain` — should be empty
+2. Verify your files in HEAD: `git log -1 --name-only -- $FILES`
 3. Output execution summary:
 
 ```
@@ -344,22 +331,20 @@ Task: T01 - [subject]
 Status: COMPLETED | FAILED | BLOCKED
 Model: [model_used]
 
-Proof Artifacts (committed):
+Proof Artifacts (on disk):
   [PASS] docs/specs/.../01-proofs/T01-01-test.txt
   [PASS] docs/specs/.../01-proofs/T01-02-cli.txt
   [SUMM] docs/specs/.../01-proofs/T01-proofs.md
 
 Commit: abc1234 feat(scope): description
   - Implementation files: X
-  - Proof files: Y
 
 Progress: X/Y tasks complete
 ```
 
 **Final Verification:**
 ```bash
-# Confirm proof files exist in repository
-git ls-files docs/specs/*/[NN]-proofs/{task_id}-*
+ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*
 ```
 
 ## Error Handling
