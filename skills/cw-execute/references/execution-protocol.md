@@ -6,7 +6,7 @@ Detailed step-by-step instructions for the implementer worker.
 
 **Goal**: Understand current state without making changes.
 
-1. Verify working directory matches project root
+1. `cd "$(git rev-parse --show-toplevel)"` — all metadata paths are repo-root-relative
 2. Run `TaskList` to see all tasks and their statuses
 3. Identify your assigned task (by owner or next unblocked pending task)
 4. Run `TaskGet(taskId)` to load full task metadata
@@ -17,16 +17,15 @@ Detailed step-by-step instructions for the implementer worker.
 
 ## Step 2: Baseline
 
-**Goal**: Confirm the codebase is healthy before you touch it.
+**Goal**: Confirm a clean starting state. **Do not run the full test suite** 
 
-1. Run each command in `metadata.verification.post` (the full test suite)
-2. If any fail:
-   - Check if failure is pre-existing (not your fault)
-   - If pre-existing: note in task description, proceed with caution
-   - If environment issue: attempt fix (install deps, etc.)
-   - If unfixable: mark task blocked, exit
+1. `git status --porcelain` — must be empty
+2. `git log --oneline -5` — sanity-check recent history
+3. If environment looks broken (missing deps, etc.): attempt fix or mark task blocked
 
-**Exit criteria**: All verification.post commands pass (or failures are documented pre-existing).
+Pre-existing test failures are documented in Step 9 when they surface.
+
+**Exit criteria**: Clean tree, environment usable.
 
 ## Step 3: Context
 
@@ -78,7 +77,7 @@ Rules:
 
 **Goal**: Execute proof artifacts and capture evidence.
 
-1. Create proof directory: `./docs/specs/[spec-dir]/[NN]-proofs/`
+1. Create proof directory: `docs/specs/[spec-dir]/[NN]-proofs/` (repo-root-relative)
 2. For each item in `metadata.proof_artifacts`:
    a. Execute the command/check
    b. Capture output to `{task_id}-{index+1:02d}-{type}.txt`
@@ -107,14 +106,14 @@ See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidanc
 
 ## Step 8: Commit
 
-**Goal**: Create atomic commit with implementation + proofs.
+**Goal**: Atomic path-mode commit of implementation files.
 
-1. Stage implementation files (from `metadata.scope.files_to_create` + `files_to_modify`)
-2. Stage proof artifact files
-3. Create commit using `metadata.commit.template`
-4. Verify commit exists: `git log --oneline -1`
+1. Enumerate: `FILES="<files_to_create + files_to_modify>"`
+2. Stage: `git add -- $FILES`
+3. Commit: `git commit -m "<metadata.commit.template>" -- $FILES`
+4. Verify: `git show --name-only HEAD -- $FILES`
 
-**Exit criteria**: Commit created with all implementation and proof files.
+**Exit criteria**: Implementation files committed.
 
 ## Step 9: Verify Full
 
@@ -162,10 +161,9 @@ See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidanc
 
 1. Run `git status --porcelain` - should be empty
 2. If uncommitted changes exist: stash or commit as appropriate
-3. Run final test: `metadata.verification.post`
-4. Output execution summary
+3. Output execution summary
 
-**Exit criteria**: Clean git status, all tests pass, summary output.
+**Exit criteria**: Clean git status, summary output. 
 
 ## Error Recovery
 

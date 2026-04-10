@@ -60,6 +60,12 @@ If the invocation args contain a `**Research:**` field with a directory path (e.
    mkdir -p docs/specs/[NN]-spec-[feature-name]/
    ```
 
+Ensure `docs/specs/` is in `.gitignore` — workflow artifacts are local-only:
+
+```bash
+grep -qxF 'docs/specs/' .gitignore 2>/dev/null || echo 'docs/specs/' >> .gitignore
+```
+
 ### Step 2: Context Assessment
 
 If working in a pre-existing project, review:
@@ -304,6 +310,17 @@ Per-unit metadata fields:
 | File | `File: [path] contains [pattern]` | `File: config.json contains new field` |
 
 > **Greenfield note:** For early units in greenfield projects where no test runner exists, use `File` proof artifacts to verify setup (e.g., `File: package.json contains "test" script`). The planner sets `verification.pre` and `verification.post` to empty arrays for these units.
+
+Aim for 1–2 proof artifacts per demoable unit, max 3. Each must demonstrate behavior that only exists after this unit is built.
+
+**Do NOT list these as proof artifacts** — they are project-wide health checks, not feature proofs, and already run as `verification.pre` / `verification.post`:
+
+- `npm run lint` / `eslint` / `ruff` / `golangci-lint`
+- `tsc --noEmit` / `mypy` / `cargo check`
+- `npm run build` / `cargo build`
+- `npm test` / `pytest` / `go test ./...` with no path filter
+
+If your proof would pass for an empty PR, it's a health check, not a proof. Drop it.
 
 ## Output Requirements
 
