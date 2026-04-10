@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.11.1 (2026-04-10)
+
+### Bug Fixes
+
+- **cw-execute**: Harden execution protocol and proof handling
+  ([#28](https://github.com/sighup/claude-workflow/pull/28),
+  [`232eca1`](https://github.com/sighup/claude-workflow/commit/232eca1911add7af23ee2aa678c904caf7ba3438))
+
+### Refactoring
+
+- Standardize and harden skill/agent prompts
+  ([#27](https://github.com/sighup/claude-workflow/pull/27),
+  [`216ea7f`](https://github.com/sighup/claude-workflow/commit/216ea7fba75b5e398d1759b0f26d73ffb9b19069))
+
+
 ## v2.11.0 (2026-03-31)
 
 ### Features
