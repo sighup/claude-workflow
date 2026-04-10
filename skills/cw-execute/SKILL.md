@@ -48,7 +48,7 @@ If TaskList() returns "No tasks found", report that and exit.
 
 ## Proof File Requirements (MANDATORY)
 
-Every task execution MUST produce proof artifacts in the repository:
+Every task execution MUST produce proof artifacts on disk under:
 
 ```
 docs/specs/[spec-dir]/[NN]-proofs/
@@ -58,7 +58,7 @@ docs/specs/[spec-dir]/[NN]-proofs/
 └── ...
 ```
 
-**The commit in Step 8 MUST include proof files.** A commit without proof artifacts is incomplete and will fail validation.
+Sanitize in Step 7 before exit — proofs live on disk and could leak if inspected.
 
 ## The 11-Step Protocol
 
@@ -66,13 +66,14 @@ docs/specs/[spec-dir]/[NN]-proofs/
 
 Understand current state without making changes.
 
-1. Run `TaskList` to see all tasks
-2. Identify your task:
+1. `cd "$(git rev-parse --show-toplevel)"` — always operate from the repo root. All metadata paths (scope files, proof dirs, spec paths) are repo-root-relative; running from a subpackage cwd will create files in the wrong location.
+2. Run `TaskList` to see all tasks
+3. Identify your task:
    - If assigned (owner matches): use that task
    - Otherwise: find first unblocked pending task
-3. Run `TaskGet(taskId)` to load full metadata
-4. Verify git status is clean: `git status --porcelain`
-5. Read recent history: `git log --oneline -10`
+4. Run `TaskGet(taskId)` to load full metadata
+5. Verify git status is clean: `git status --porcelain`
+6. Read recent history: `git log --oneline -10`
 
 **Mark task as in_progress:**
 ```
@@ -81,13 +82,15 @@ TaskUpdate({ taskId: "<id>", status: "in_progress" })
 
 ### Step 2: Baseline
 
-Confirm codebase health before touching anything.
+Confirm a clean starting state. **Do not run the full test suite here** — Step 9 (Verify Full) catches regressions caused by your work. 
 
-1. Run each command in `metadata.verification.post`
-2. If failures:
-   - Pre-existing issue: note and proceed with caution
+1. `git status --porcelain` — must be empty (clean tree)
+2. `git log --oneline -5` — sanity check recent history
+3. If anything looks wrong (dirty tree, missing deps surfaced by Step 3 reads):
    - Environment issue: attempt fix (install deps, etc.)
    - Unfixable: update task description with blocker, exit
+
+Pre-existing test failures (if any) will surface in Step 9 and be documented there.
 
 ### Step 3: Context
 
@@ -151,7 +154,7 @@ Run pre-commit checks.
 
 Execute proof artifacts and capture evidence.
 
-1. Determine proof directory from spec_path: `./docs/specs/[spec-dir]/[NN]-proofs/`
+1. Determine proof directory from `spec_path`: `docs/specs/[spec-dir]/[NN]-proofs/` (repo-root-relative)
 2. Create the proof directory if it doesn't exist
 3. Read `metadata.proof_capture` for the capture method decided during planning
 4. For each proof artifact in `metadata.proof_artifacts`:
@@ -257,34 +260,23 @@ Remove sensitive data from proof files. **Cannot proceed until clean.**
 
 ### Step 8: Commit
 
-Create atomic commit with implementation AND proof artifacts.
+Atomic path-mode commit of implementation files.
 
-**Pre-Commit Checklist (all must pass):**
+**Pre-Commit Checklist:**
 
 ```bash
-# 1. Verify proof files exist (BLOCKING)
 test -d "docs/specs/[spec-dir]/[NN]-proofs" || { echo "ERROR: Proof directory missing"; exit 1; }
 test -f "docs/specs/[spec-dir]/[NN]-proofs/{task_id}-proofs.md" || { echo "ERROR: Proof summary missing"; exit 1; }
 ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*.txt >/dev/null 2>&1 || { echo "ERROR: No proof artifacts"; exit 1; }
-
-# 2. Verify sanitization complete
 grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proofs/{task_id}-* && { echo "ERROR: Unsanitized secrets"; exit 1; }
 ```
 
-**If pre-commit checks fail:** Return to the blocking step (Step 6 or 7) and complete it.
-
 **Commit Steps:**
 
-1. Stage implementation files:
-   - All files from `metadata.scope.files_to_create`
-   - All files from `metadata.scope.files_to_modify`
-2. Stage proof files: `git add docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*`
-3. Verify staged files include both implementation AND proofs:
-   ```bash
-   git diff --cached --name-only | grep -E "(src/|lib/|proof)"
-   ```
-4. Create commit using `metadata.commit.template`
-5. Verify commit includes proof files: `git show --name-only HEAD | grep proofs`
+1. Enumerate your files: `FILES="<file1> <file2> ..."` from `metadata.scope.files_to_create` + `files_to_modify`
+2. Stage: `git add -- $FILES`
+3. Commit: `git commit -m "<metadata.commit.template>" -- $FILES`
+4. Verify: `git show --name-only HEAD -- $FILES`
 
 ### Step 9: Verify Full
 
@@ -329,12 +321,9 @@ The `model_used` field records which model actually executed the task for audita
 
 ### Step 11: Clean Exit
 
-Leave pristine state with verified proof trail.
-
-1. `git status --porcelain` - should be empty
-2. Verify proof files are in commit: `git show --name-only HEAD | grep proofs`
-3. Run `metadata.verification.post` one final time
-4. Output execution summary:
+1. `git status --porcelain` — should be empty
+2. Verify your files in HEAD: `git log -1 --name-only -- $FILES`
+3. Output execution summary:
 
 ```
 CW-EXECUTE COMPLETE
@@ -343,22 +332,20 @@ Task: T01 - [subject]
 Status: COMPLETED | FAILED | BLOCKED
 Model: [model_used]
 
-Proof Artifacts (committed):
+Proof Artifacts (on disk):
   [PASS] docs/specs/.../01-proofs/T01-01-test.txt
   [PASS] docs/specs/.../01-proofs/T01-02-cli.txt
   [SUMM] docs/specs/.../01-proofs/T01-proofs.md
 
 Commit: abc1234 feat(scope): description
   - Implementation files: X
-  - Proof files: Y
 
 Progress: X/Y tasks complete
 ```
 
 **Final Verification:**
 ```bash
-# Confirm proof files exist in repository
-git ls-files docs/specs/*/[NN]-proofs/{task_id}-*
+ls docs/specs/[spec-dir]/[NN]-proofs/{task_id}-*
 ```
 
 ## Error Handling
