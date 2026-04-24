@@ -224,9 +224,59 @@ Persist the rendered roadmap to a zero-padded, sequenced directory under `docs/r
 
 ### Step 5: Validate Sequencing and Traceability
 
-[filled by T02.1–T02.3 — DAG validation, sequencing principles, maturity checkpoints]
+#### 5a. DAG Validation (R2.1)
 
-Behavior summary: build the dependency graph from each slice's `Depends on:` field and abort on any cycle or dangling reference. Generate 4–6 Sequencing Principles, populate the Maturity Checkpoints table (≥3 rows tied to Success Metrics), and fill "What We're Deliberately Not Building" with ≥3 entries each carrying a rationale.
+Build the dependency graph from the candidate slices produced in Step 2:
+
+1. **Graph construction.** Assign each slice a node identified by its slice
+   number `N`. For each `Depends on: Slice M [, Slice K, ...]` field, add
+   directed edges `N → M`, `N → K` (read: "N depends on M"). `Depends on:
+   None` produces no edges.
+
+2. **Dangling reference check.** Before cycle detection, verify that every
+   edge target exists in the defined slice set. If `Slice N` references
+   `Slice M` and `M` is not defined:
+
+   ```
+   ABORT: Slice N depends on Slice M, which does not exist
+          (slices defined: 1, 2, 3, …)
+   ```
+
+   Include the referrer ID, the missing target ID, and the full list of
+   defined IDs in the error. Do not proceed to cycle detection until this
+   check passes.
+
+3. **Cycle detection (DFS with recursion stack).** Run a depth-first search
+   over the graph. Track each node's state: WHITE (unvisited), GRAY (on the
+   current DFS path), BLACK (fully explored). Maintain a path stack — the
+   list of node IDs from the DFS root to the current node.
+
+   When a neighbor is already GRAY, a back-edge (cycle) has been found:
+   - Recover the cycle path: slice the path stack from the first occurrence
+     of the neighbor to the current position, then append the neighbor again
+     to close the loop.
+   - Report the full path and abort:
+
+   ```
+   ABORT: Cycle detected: Slice 1 → Slice 3 → Slice 5 → Slice 1
+   ```
+
+   Self-cycles (`Slice 2 → Slice 2`) are a special case of the same
+   algorithm and must be reported in the same format.
+
+4. **Success.** If both checks pass, the graph is a valid DAG. Proceed to
+   5b. The reference implementation and full unit tests are in
+   `tests/dag_validator.py` and `tests/test_dag_validator.py`.
+
+#### 5b. Sequencing Principles and Maturity Checkpoints
+
+[filled by T02.2 — sequencing principles, maturity checkpoints, scope exclusions]
+
+Behavior summary: Generate 4–6 Sequencing Principles anchored to
+`references/decomposition-rules.md` §1 heuristics. Populate the Maturity
+Checkpoints table (≥3 rows tied to §7 Success Metrics). Fill "What We're
+Deliberately Not Building" with ≥3 entries each carrying a rationale derived
+from §4 capabilities not covered by the slice set.
 
 ### Step 6: Meta-Prompt Handoff
 
