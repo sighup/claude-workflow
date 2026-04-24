@@ -39,9 +39,94 @@ You are a **Senior Engineering Lead** responsible for:
 
 ### Step 1: Locate and Parse the PRD
 
-[filled by T01.2 — PRD parser + path discovery + never-modify guarantee]
+#### 1a. Path Discovery
 
-Behavior summary: accept either an explicit PRD path argument or, with no argument, discover the most recent file under `docs/prds/*.md`. Parse the PRD into a structured intermediate covering §1 Vision/Problem/Users, §3 Core Workflow stages, §4 Primary Capabilities, §6 Domain Concepts, §7 Success Metrics, and §8 Open Questions. Treat the source PRD as read-only.
+**If a PRD path argument was provided:** use that path directly. Verify it exists with `Glob` before proceeding.
+
+**If no argument was provided:** use `Glob` to list all files matching `docs/prds/*.md`. Sort the matches by the leading zero-padded numeric prefix (e.g. `01-`, `02-`). If no numeric prefix exists, fall back to lexicographic order. Use the last entry (highest prefix = most recently created). If no files match, invoke `AskUserQuestion` with the prompt: "No PRD files found under docs/prds/. Please provide the path to the PRD you want to decompose:" and use the user-supplied path.
+
+#### 1b. Read the PRD (Read-Only Contract)
+
+Open the PRD with `Read`. This is the **only** access mode used — no Write or Edit on this file under any circumstance. The read-only invariant is unconditional: it applies even when the file would appear to need correction.
+
+#### 1c. Parse into Structured Intermediate
+
+Split the PRD text into sections by scanning for H2 headings (`^## `). Strip any leading numeric prefix from the heading text before matching against canonical section names. The normalization rule:
+
+```
+raw_heading → strip leading whitespace → strip "^\d+(\.\d+)*\.?\s*" → canonical_name
+```
+
+Examples of headings that normalize to the same canonical name:
+- `## 1. Executive Summary` → `Executive Summary`
+- `## Executive Summary` → `Executive Summary`
+- `## 1 Executive Summary` → `Executive Summary`
+
+Extract these six sections (skip all others, including §2 Positioning and §5 Integrations):
+
+| Canonical Name | Alias | Output field |
+|---|---|---|
+| Executive Summary | — | `vision_block` |
+| Core Workflow | — | `workflow_stages` |
+| Primary Capabilities | — | `capabilities` |
+| Domain Concepts | — | `domain_concepts` |
+| Success Metrics | — | `success_metrics` |
+| Open Questions | — | `open_questions` |
+
+If any of these six sections is absent from the PRD, report the missing section names and abort rather than guessing.
+
+#### 1d. Extract Within Each Section
+
+Build the following structured intermediate (record this in your working context — it feeds Steps 2–4 and is pasted into `references/decomposition-prompt.md` at the `<!-- Insert PRD intermediate below this line -->` marker):
+
+```
+## PRD Intermediate
+
+### §1 Vision / Problem / Users
+**Vision:** <H3 1.1 content — 1–3 sentences>
+**Problem:** <H3 1.2 content — 1–3 sentences>
+**Users:**
+| Persona | Primary Need |
+|...|
+
+### §3 Core Workflow Stages
+1. <Stage name> — <1-sentence summary>
+2. <Stage name> — <1-sentence summary>
+...
+
+### §4 Primary Capabilities
+- <capability name>: <one-line description>
+- ...
+
+### §6 Domain Concepts
+- **<Concept>** — <definition>
+- ...
+
+### §7 Success Metrics
+| Metric | Target |
+|...|
+
+### §8 Open Questions
+1. <question text>
+2. ...
+
+---
+PRD path: <relative path to PRD file>
+```
+
+**Extraction rules by section:**
+
+- **§1 (Executive Summary):** Look for H3 sub-headings `1.1`, `1.2`, `1.3` (or normalized equivalents). Extract Vision as the content under `1.1 Vision`, Problem as content under `1.2 Problem`, and the Target Users table from `1.3 Target Users`. If sub-headings are absent, treat the full section as Vision.
+
+- **§3 (Core Workflow):** Extract the numbered list items directly. Preserve the stage numbering. Each item becomes one workflow stage entry.
+
+- **§4 (Primary Capabilities):** Extract the bulleted list. Each bullet produces one capability entry. Strip the leading `- ` and split on the first `.` or `:` if a name/description pattern is present; otherwise keep the full bullet text.
+
+- **§6 (Domain Concepts):** Extract bold-dash items (`**Term** — definition`) and/or any code block showing the entity hierarchy. Preserve entity names verbatim — downstream slices must use these exact names.
+
+- **§7 (Success Metrics):** Extract the Markdown table rows. Preserve the `Metric | Target` columns.
+
+- **§8 (Open Questions):** Extract the numbered list items verbatim.
 
 ### Step 2: Build the Slice Decomposition
 

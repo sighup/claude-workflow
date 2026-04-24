@@ -146,7 +146,7 @@ Given the parsed PRD intermediate below, produce a complete roadmap document.
 
 ## Inputs
 
-Provide the following before the `---` delimiter below. The model reads everything after `---` as the PRD intermediate.
+Provide the following context block, followed by the PRD intermediate produced by Step 1c–1d of SKILL.md. The model reads everything after the `---` delimiter as the PRD intermediate.
 
 ```
 Starting state: <greenfield | brownfield | hybrid — describe>
@@ -154,6 +154,46 @@ Build model: <solo builder | small team | etc.>
 Maturity target: <rapid prototype | MVP | production>
 PRD path: <relative path>
 ```
+
+### PRD Intermediate Format
+
+The PRD intermediate pasted below the `---` delimiter must conform to this schema (produced by SKILL.md Step 1d):
+
+```
+## PRD Intermediate
+
+### §1 Vision / Problem / Users
+**Vision:** <1–3 sentences>
+**Problem:** <1–3 sentences>
+**Users:**
+| Persona | Primary Need |
+|...|
+
+### §3 Core Workflow Stages
+1. <Stage name> — <1-sentence summary>
+...
+
+### §4 Primary Capabilities
+- <capability name>: <one-line description>
+...
+
+### §6 Domain Concepts
+- **<Concept>** — <definition>
+...
+
+### §7 Success Metrics
+| Metric | Target |
+|...|
+
+### §8 Open Questions
+1. <question text>
+...
+
+---
+PRD path: <relative path to PRD file>
+```
+
+If any of the six required fields (§1, §3, §4, §6, §7, §8) are absent from the intermediate, halt and report the missing section rather than producing a roadmap.
 
 ---
 
