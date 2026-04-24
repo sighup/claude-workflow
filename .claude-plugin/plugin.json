@@ -2,6 +2,21 @@
   "name": "claude-workflow",
   "version": "2.11.1",
   "description": "Unified spec-to-execution workflow system. Combines spec rigor, autonomous execution, and native task orchestration with parallel agent dispatch. Swarms-ready architecture.",
+  "skills": [
+    "cw-dispatch",
+    "cw-dispatch-team",
+    "cw-execute",
+    "cw-gherkin",
+    "cw-plan",
+    "cw-research",
+    "cw-review",
+    "cw-review-team",
+    "cw-roadmap",
+    "cw-spec",
+    "cw-testing",
+    "cw-validate",
+    "cw-worktree"
+  ],
   "hooks": {
     "SessionStart": [
       {
