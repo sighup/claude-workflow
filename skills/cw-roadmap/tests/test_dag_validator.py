@@ -25,7 +25,6 @@ import pytest
 from dag_validator import (
     CycleError,
     DanglingDependencyError,
-    SliceParseError,
     parse_slices,
     validate_dag,
 )
