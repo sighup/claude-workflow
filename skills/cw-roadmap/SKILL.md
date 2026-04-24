@@ -306,9 +306,111 @@ Generate the content for §2 (Sequencing Principles), §4 (What We're Deliberate
 
 ### Step 6: Meta-Prompt Handoff
 
-[filled by T02.3 — /cw-spec Meta-Prompt appender]
+Append a ready-to-use `/cw-spec` Meta-Prompt block to the saved roadmap, then ask the user how to proceed. See [meta-prompt-template.md](references/meta-prompt-template.md) for the field derivation table, the markdown template, and the greenfield/brownfield adaptation rules.
 
-Behavior summary: append a `/cw-spec` Meta-Prompt block between `---` markers at the end of the saved roadmap, then present a next-step `AskUserQuestion` offering "Run /cw-spec with this Meta-Prompt (Recommended) / Review roadmap first / Done for now".
+#### 6a. Compose the Meta-Prompt
+
+Using the PRD intermediate from Step 1 and the slice list from Step 3, derive each field following the rules in `references/meta-prompt-template.md`:
+
+1. **Feature name** — slugified PRD §1.1 Vision (3–5 meaningful words, lowercase, hyphens). Fall back to PRD filename slug if the vision block is empty.
+2. **Problem** — PRD §1.2 Problem verbatim (1–3 sentences). Fall back to the first sentence(s) of the Vision block if §1.2 is absent.
+3. **Key components** — the §3 Thin Slices list from the rendered roadmap: one line per slice formatted as `Slice N — <Goal sentence>`.
+4. **Architectural constraints** — derived from PRD §2 Positioning (if present) and PRD §6 Domain Concepts. For greenfield projects with no §2, use §6 only and prefix with "Greenfield — no existing boundaries."
+5. **Patterns to follow** — for brownfield/hybrid: naming, error handling, and test idioms from PRD §5 Integrations. For greenfield: write "Establish in /cw-spec — no existing codebase patterns."
+6. **Suggested demoable units** — the slices that fall within the **MVP boundary** (§6 Maturity Checkpoints, "MVP — Achieved After Slices 1–M"). List each as a candidate demoable unit with a one-line rationale. If maturity target is "rapid prototype", use that boundary; if "production", use all slices.
+7. **Key code references** — for brownfield/hybrid: file paths from PRD §5/§6. For greenfield: "N/A — greenfield project. File paths will be established during /cw-spec."
+
+#### 6b. Append the Meta-Prompt to the Roadmap File
+
+Read the saved roadmap file from Step 4. Append the following block after the `_End of Document_` line:
+
+```markdown
+
+## /cw-spec Meta-Prompt
+
+> Ready-to-use starter prompt for `/cw-spec`. Copy the content between the
+> `---` markers below, or select "Run /cw-spec with this Meta-Prompt" when prompted.
+
+---
+
+Build **{feature name}**.
+
+**Problem:** {problem — 1–3 sentences from PRD §1.2}
+
+**Key components:**
+- Slice 1 — {Goal sentence}
+- Slice 2 — {Goal sentence}
+- Slice N — {Goal sentence}
+
+**Architectural constraints:**
+- {constraint 1}
+- {constraint 2}
+- {constraint 3}
+
+**Patterns to follow:**
+- {pattern 1}
+- {pattern 2}
+- {pattern 3}
+
+**Suggested demoable units (MVP-bounded):**
+1. {Slice N name} — {one-line rationale}
+2. {Slice M name} — {rationale}
+3. {Slice K name} — {rationale}
+
+**Key code references:**
+- {path/to/entry-point} — {purpose}
+- {path/to/domain-model} — {purpose}
+- {path/to/config} — {purpose}
+
+Run: `/cw-spec {feature-name}`
+
+---
+```
+
+After appending, `Write` the updated file. Then verify: the file must contain exactly two `---` lines after `_End of Document_` — one opening and one closing the meta-prompt block. These are the extraction markers used by the "Run /cw-spec" branch below.
+
+#### 6c. Present Next-Step Options
+
+After the file is saved, present the following `AskUserQuestion`:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "How would you like to proceed?",
+    header: "Next Steps",
+    options: [
+      { label: "Run /cw-spec with this Meta-Prompt (Recommended)", description: "Extract the Meta-Prompt and invoke /cw-spec now" },
+      { label: "Review roadmap first", description: "Open the roadmap path so you can edit it, then return to this choice" },
+      { label: "Done for now", description: "Save and exit — you can run /cw-spec later using the Meta-Prompt in the roadmap file" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+**Handle user selection:**
+
+- **Run /cw-spec with this Meta-Prompt (Recommended)**: Extract the content between the **last two** `---` lines in the roadmap file (this is always the meta-prompt block, because the roadmap body's `---` separators all appear before `_End of Document_`). Pass the extracted content verbatim as `args`:
+  ```
+  Skill({ skill: "cw-spec", args: "{extracted meta-prompt content}" })
+  ```
+
+- **Review roadmap first**: Display the roadmap path and instruct the user to review or edit it. After they confirm, re-present the same three-option `AskUserQuestion` so the user can still choose to run `/cw-spec` or exit:
+  ```
+  The roadmap is saved at: {roadmap path}
+
+  Review and edit as needed, then confirm to continue.
+  ```
+  Once confirmed, loop back to step 6c and re-present the three options.
+
+- **Done for now**: Confirm the roadmap is saved and exit:
+  ```
+  Roadmap saved: {roadmap path}
+
+  To continue later:
+  - Run /cw-spec and paste the Meta-Prompt from the bottom of the roadmap file
+  - Or run /cw-roadmap again to regenerate
+  ```
 
 ### Step 7: Lint Subcommand
 
