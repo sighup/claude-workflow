@@ -17,7 +17,6 @@ from the claude-workflow/skills/cw-roadmap/ directory.
 from __future__ import annotations
 
 import hashlib
-import os
 import tempfile
 from pathlib import Path
 
