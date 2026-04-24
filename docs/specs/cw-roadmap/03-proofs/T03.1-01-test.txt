@@ -1,0 +1,94 @@
+Type: test
+Command: cd ~/Projects/claude-workflow/skills/cw-roadmap && python3 -m pytest tests/test_assertions.py -v
+Expected: 81 tests pass (>=1 pass + >=1 fail per assertion, 17 assertions)
+Timestamp: 2026-04-23T00:00:00Z
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0
+collected 81 items
+
+tests/test_assertions.py::TestAssertionsContract::test_assertions_list_exists PASSED
+tests/test_assertions.py::TestAssertionsContract::test_assertions_count_at_least_15 PASSED
+tests/test_assertions.py::TestAssertionsContract::test_all_assertions_callable PASSED
+tests/test_assertions.py::TestAssertionsContract::test_all_assertions_have_docstring PASSED
+tests/test_assertions.py::TestAssertionsContract::test_all_assertions_accept_one_str_param PASSED
+tests/test_assertions.py::TestAssertionsContract::test_all_assertions_return_bool_on_good_roadmap PASSED
+tests/test_assertions.py::TestAssertionsContract::test_good_roadmap_passes_all_assertions PASSED
+tests/test_assertions.py::TestAssertSectionOrder::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertSectionOrder::test_wrong_order_fails PASSED
+tests/test_assertions.py::TestAssertSectionOrder::test_missing_section_fails PASSED
+tests/test_assertions.py::TestAssertSectionOrder::test_empty_string_fails PASSED
+tests/test_assertions.py::TestAssertLineCount::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertLineCount::test_too_few_lines_fails PASSED
+tests/test_assertions.py::TestAssertLineCount::test_too_many_lines_fails PASSED
+tests/test_assertions.py::TestAssertLineCount::test_exactly_150_passes PASSED
+tests/test_assertions.py::TestAssertLineCount::test_exactly_250_passes PASSED
+tests/test_assertions.py::TestAssertLineCount::test_149_fails PASSED
+tests/test_assertions.py::TestAssertLineCount::test_251_fails PASSED
+tests/test_assertions.py::TestAssertSliceCardinality::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertSliceCardinality::test_too_few_slices_fails PASSED
+tests/test_assertions.py::TestAssertSliceCardinality::test_too_many_slices_fails PASSED
+tests/test_assertions.py::TestAssertSliceCardinality::test_no_thin_slices_section_fails PASSED
+tests/test_assertions.py::TestAssertSliceRequiredFields::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertSliceRequiredFields::test_missing_goal_fails PASSED
+tests/test_assertions.py::TestAssertSliceRequiredFields::test_missing_delivers_fails PASSED
+tests/test_assertions.py::TestAssertSliceRequiredFields::test_missing_depends_on_fails PASSED
+tests/test_assertions.py::TestAssertSliceRequiredFields::test_missing_lifecycle_fails PASSED
+tests/test_assertions.py::TestAssertSliceTracesLine::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertSliceTracesLine::test_missing_traces_fails PASSED
+tests/test_assertions.py::TestAssertSliceTracesLine::test_empty_roadmap_fails PASSED
+tests/test_assertions.py::TestAssertExitSignalVerb::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertExitSignalVerb::test_no_verb_fails PASSED
+tests/test_assertions.py::TestAssertExitSignalVerb::test_returns_verb_passes PASSED
+tests/test_assertions.py::TestAssertExitSignalVerb::test_passes_verb_works PASSED
+tests/test_assertions.py::TestAssertDeliversBulletCount::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertDeliversBulletCount::test_too_few_bullets_fails PASSED
+tests/test_assertions.py::TestAssertDeliversBulletCount::test_too_many_bullets_fails PASSED
+tests/test_assertions.py::TestAssertDeliversBulletCount::test_exactly_3_passes PASSED
+tests/test_assertions.py::TestAssertDeliversBulletCount::test_exactly_6_passes PASSED
+tests/test_assertions.py::TestAssertDagAcyclic::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertDagAcyclic::test_self_cycle_fails PASSED
+tests/test_assertions.py::TestAssertDagAcyclic::test_two_node_cycle_fails PASSED
+tests/test_assertions.py::TestAssertDagAcyclic::test_empty_slices_passes PASSED
+tests/test_assertions.py::TestAssertDagAcyclic::test_no_thin_slices_passes PASSED
+tests/test_assertions.py::TestAssertDependsOnResolve::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertDependsOnResolve::test_dangling_reference_fails PASSED
+tests/test_assertions.py::TestAssertDependsOnResolve::test_none_dependency_passes PASSED
+tests/test_assertions.py::TestAssertTracesPrdSectionFormat::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertTracesPrdSectionFormat::test_traces_without_section_number_fails PASSED
+tests/test_assertions.py::TestAssertTracesPrdSectionFormat::test_traces_with_section_number_passes PASSED
+tests/test_assertions.py::TestAssertTracesPrdSectionFormat::test_missing_traces_fails PASSED
+tests/test_assertions.py::TestAssertMaturityCheckpointsRows::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertMaturityCheckpointsRows::test_only_two_data_rows_fails PASSED
+tests/test_assertions.py::TestAssertMaturityCheckpointsRows::test_no_maturity_section_fails PASSED
+tests/test_assertions.py::TestAssertMaturityCheckpointsRows::test_exactly_3_rows_passes PASSED
+tests/test_assertions.py::TestAssertScopeExclusionCount::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertScopeExclusionCount::test_only_two_bullets_fails PASSED
+tests/test_assertions.py::TestAssertScopeExclusionCount::test_no_section_fails PASSED
+tests/test_assertions.py::TestAssertScopeExclusionRationale::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertScopeExclusionRationale::test_missing_em_dash_fails PASSED
+tests/test_assertions.py::TestAssertScopeExclusionRationale::test_with_en_dash_passes PASSED
+tests/test_assertions.py::TestAssertScopeExclusionRationale::test_no_section_fails PASSED
+tests/test_assertions.py::TestAssertNoBodyBacktickFences::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertNoBodyBacktickFences::test_backtick_fence_in_body_fails PASSED
+tests/test_assertions.py::TestAssertNoBodyBacktickFences::test_backtick_fence_only_in_meta_prompt_passes PASSED
+tests/test_assertions.py::TestAssertNoBodyBacktickFences::test_inline_backtick_ok PASSED
+tests/test_assertions.py::TestAssertNoDeepHeadingsInSlices::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertNoDeepHeadingsInSlices::test_h4_in_slice_fails PASSED
+tests/test_assertions.py::TestAssertNoDeepHeadingsInSlices::test_h3_is_acceptable PASSED
+tests/test_assertions.py::TestAssertNoDeepHeadingsInSlices::test_no_thin_slices_passes PASSED
+tests/test_assertions.py::TestAssertSequencingPrinciplesCount::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertSequencingPrinciplesCount::test_too_few_principles_fails PASSED
+tests/test_assertions.py::TestAssertSequencingPrinciplesCount::test_too_many_principles_fails PASSED
+tests/test_assertions.py::TestAssertSequencingPrinciplesCount::test_exactly_4_passes PASSED
+tests/test_assertions.py::TestAssertSequencingPrinciplesCount::test_exactly_6_passes PASSED
+tests/test_assertions.py::TestAssertSequencingPrinciplesCount::test_no_section_fails PASSED
+tests/test_assertions.py::TestAssertMetaPromptBlock::test_good_roadmap_passes PASSED
+tests/test_assertions.py::TestAssertMetaPromptBlock::test_missing_meta_prompt_fails PASSED
+tests/test_assertions.py::TestAssertMetaPromptBlock::test_missing_field_fails PASSED
+tests/test_assertions.py::TestAssertMetaPromptBlock::test_missing_key_components_fails PASSED
+tests/test_assertions.py::TestAssertMetaPromptBlock::test_only_one_separator_fails PASSED
+
+============================== 81 passed in 0.03s ==============================
+
+Status: PASS

@@ -1,0 +1,39 @@
+Type: file
+Command: check file existence and assertion count
+Expected: assertions.py exists, exports ASSERTIONS list with 17 entries
+Timestamp: 2026-04-23T00:00:00Z
+
+File: skills/cw-roadmap/assertions.py
+  EXISTS: yes
+  ASSERTIONS count: 17
+
+File: skills/cw-roadmap/tests/test_assertions.py
+  EXISTS: yes
+  Test count: 81
+
+Assertion functions exported:
+  1. assert_section_order
+  2. assert_line_count
+  3. assert_slice_cardinality
+  4. assert_slice_required_fields
+  5. assert_slice_traces_line
+  6. assert_exit_signal_verb
+  7. assert_delivers_bullet_count
+  8. assert_dag_acyclic
+  9. assert_depends_on_resolve
+  10. assert_traces_prd_section_format
+  11. assert_maturity_checkpoints_rows
+  12. assert_scope_exclusion_count
+  13. assert_scope_exclusion_rationale
+  14. assert_no_body_backtick_fences
+  15. assert_no_deep_headings_in_slices
+  16. assert_sequencing_principles_count
+  17. assert_meta_prompt_block
+
+All functions:
+  - signature: (response: str) -> bool
+  - one-line docstring present
+  - no eval, no shell-out, no file writes
+  - importable via importlib.util (no package init required)
+
+Status: PASS
