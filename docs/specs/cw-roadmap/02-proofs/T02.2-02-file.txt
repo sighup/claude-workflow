@@ -1,0 +1,37 @@
+Type: file
+Command: Verify Step 5b placeholder replaced and Step 3 §2 description updated in SKILL.md
+Expected: No placeholder text "[filled by T02.2" remains; Step 5b contains generation rules for §2/§4/§6
+Timestamp: 2026-04-23T00:00:00Z
+
+--- OUTPUT ---
+
+Check 1: "[filled by T02.2" placeholder removed from SKILL.md
+  Result: grep returned no matches for "[filled by T02.2" in SKILL.md — PASS
+
+Check 2: Step 5b now contains "§2 Sequencing Principles — generation rules"
+  Result: Found at SKILL.md line 275 — PASS
+
+Check 3: Step 5b contains "§4 What We're Deliberately Not Building — generation rules"
+  Result: Found at SKILL.md line 282 — PASS
+
+Check 4: Step 5b contains "§6 Maturity Checkpoints table — generation rules"
+  Result: Found at SKILL.md line 293 — PASS
+
+Check 5: Step 3 §2 description no longer says "placeholder-quality acceptable"
+  Result: Line 179 now reads "4–6 bullets, each labeled P-1 through P-N, each citing a §3 workflow stage or §8 open question by reference" — PASS
+
+Check 6: decomposition-prompt.md Instructions step 6 encodes P-N labeling and §3/§8 citation format
+  Result: Found at decomposition-prompt.md line 77 — PASS
+
+Check 7: decomposition-prompt.md Instructions step 7 encodes contiguous-prefix and §7-by-name
+  Result: Found at decomposition-prompt.md line 79 — PASS
+
+Check 8: decomposition-prompt.md Instructions step 9 encodes bold-dash format and Q-N/P-N citation
+  Result: Found at decomposition-prompt.md lines 83-87 — PASS
+
+Check 9: Example 3 and Example 4 added to decomposition-prompt.md demonstrating citation form
+  Result: "### Example 3" found at decomposition-prompt.md line 151 — PASS
+  Result: "### Example 4" found at decomposition-prompt.md line 170 — PASS
+
+--- STATUS: PASS ---
+All 9 checks passed. T02.2 R2.2/R2.3/R2.4 contract fully implemented.

@@ -74,13 +74,17 @@ Given the parsed PRD intermediate below, produce a complete roadmap document.
 
 5. **Build the dependency DAG.** For each slice, list its prerequisites. Validate: no cycles, every `Depends on: Slice N` references an existing slice ID.
 
-6. **Derive sequencing principles.** Write 4–6 bullets explaining *why* the slices are ordered the way they are. Each principle must be traceable to a structural observation from §3 or a risk identified in §8.
+6. **Derive sequencing principles (§2).** Write 4–6 bullets explaining *why* the slices are ordered the way they are. Label them **P-1** through **P-N**. Each principle must name a specific §3 Core Workflow stage (by its stage name or number) **or** reference a specific §8 Open Question by number (Q-N). Cite inline: `(§3 Stage N)` or `(§8 Q-N)`. Principles that could apply to any PRD without modification are generic platitudes and must be replaced with PRD-specific reasoning. Derive each principle by asking "Why does *this PRD's* workflow require *this specific ordering*?"
 
-7. **Assign maturity checkpoints.** Use §7 Success Metrics as thresholds. At least one slice must correspond to "Rapid Prototype", one to "MVP", and all remaining to "Production" or "Beyond this roadmap."
+7. **Assign maturity checkpoints (§6).** Use §7 Success Metrics as thresholds. The table must have ≥3 rows. The "Achieved After" column must be a **contiguous prefix** of slices (e.g., "Slices 1–2", "Slices 1–4") — not a single slice in isolation — and the three prefix lengths must satisfy N_prototype < N_mvp < N_production. In the "What's True" column, cite the PRD §7 Success Metric **by its exact metric name** when one exists for that level; only fall back to a slice's Exit signal when no §7 metric matches. Do not paraphrase metric names.
 
 8. **Populate Traces.** For every slice, record which PRD sections it implements (at minimum §4, plus §3 if it covers a workflow stage).
 
-9. **Write scope exclusions.** Any capability from §4 not included in a slice goes into "What We're Deliberately Not Building" with a one-sentence rationale.
+9. **Write scope exclusions (§4).** Any capability from §4 not included in a slice goes into "What We're Deliberately Not Building." Use this exact format for each entry:
+   ```
+   - **<scoped-out-thing>** — <one-sentence rationale citing §8 Q-N or Principle P-N>
+   ```
+   The em-dash (`—`) is literal; do not use a hyphen or colon. The rationale must name either a §8 Open Question number (Q-N) or a sequencing principle label (P-N) from §2. Produce ≥3 entries. Every §4 capability must appear either in a slice's Delivers list or in this section — silent omissions are a schema violation.
 
 10. **Promote sequencing risks.** Filter §8 Open Questions for items that affect ordering or dependencies. Include only those in Section 5.
 
@@ -141,6 +145,47 @@ Given the parsed PRD intermediate below, produce a complete roadmap document.
 ```
 
 **Why this works:** Each bullet names a specific PRD capability (§4), states why it is excluded in terms of build model or maturity target, and does not apologize or hedge.
+
+---
+
+### Example 3 — Sequencing Principles with PRD-specific citations
+
+**Context:** PRD §3 Core Workflow has four stages: (1) User runs `/cw-frame` to create a PRD, (2) User runs `/cw-roadmap` to decompose it into slices, (3) User runs `/cw-spec` to expand slices into specs, (4) User runs `/cw-plan` to generate tasks. PRD §8 Open Questions include Q-2: "Is the artifact format stable enough to build `/cw-spec` before `/cw-roadmap` has shipped?"
+
+**Resulting Sequencing Principles:**
+
+```markdown
+## 2. Sequencing Principles
+
+- **P-1** The frame → roadmap → spec → plan chain from §3 dictates left-to-right sequencing: no downstream skill ships before its upstream contract is proven (§3 Stage 1 → Stage 2 → Stage 3 → Stage 4).
+- **P-2** The artifact format (PRD schema, roadmap schema) must be locked in its own slice before any skill that consumes it is built, because Q-2 identifies format instability as the highest-risk dependency (§8 Q-2).
+- **P-3** Each skill's end-to-end pipeline is proved in its own slice before moving to the next skill; partial pipelines across two skills are not admitted until both are stable (§3 Stage 1, Stage 2).
+- **P-4** Validation logic ships in the same slice as the feature it validates, not a later "hardening" slice, because late validation has historically uncovered schema violations that require upstream rework (§3 Stage 3).
+```
+
+**Why this works:** Every principle names either a §3 stage (by number/name) or a §8 open question (by Q-N). None of the principles are generic platitudes — they each reflect a constraint specific to this PRD's workflow ordering. P-2 explicitly addresses the sequencing risk surfaced in §8 Q-2.
+
+---
+
+### Example 4 — Maturity Checkpoints citing §7 metrics by name
+
+**Context:** PRD §7 Success Metrics table includes:
+- Metric: "Decomposition round-trip time" | Target: < 2 minutes end-to-end
+- Metric: "Roadmap assertion pass rate" | Target: ≥ 95% on test corpus
+
+**Resulting Maturity Checkpoints:**
+
+```markdown
+## 6. Maturity Checkpoints
+
+| Maturity Level | Achieved After | What's True |
+|---|---|---|
+| Rapid Prototype | Slices 1–2 | A user can run `/cw-roadmap` against a single PRD and receive a valid 6-section roadmap; "Decomposition round-trip time" is observable but not yet measured against its < 2 min target. |
+| MVP | Slices 1–5 | All slices pass the full assertion library; "Roadmap assertion pass rate" meets the ≥ 95% target on the seeded test corpus. |
+| Production | Beyond this roadmap | Autoresearch harness continuously optimises the decomposition prompt; "Decomposition round-trip time" is tracked in CI against the < 2 min target. |
+```
+
+**Why this works:** The "What's True" column cites the PRD §7 metric names verbatim ("Decomposition round-trip time", "Roadmap assertion pass rate"). The "Achieved After" values are contiguous prefixes (1–2, 1–5, all slices), satisfying N_prototype < N_mvp < N_production. When no §7 metric applies (Rapid Prototype row), the cell describes a concrete observable state tied to a slice's exit signal instead.
 
 ---
 

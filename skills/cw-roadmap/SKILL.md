@@ -176,7 +176,7 @@ Render the candidate slices into a schema-compliant Markdown roadmap that matche
 **Exactly six H2 sections, numbered and in this order:**
 
 1. `## 1. Starting State` — 3–5 sentences anchored to the Starting State input
-2. `## 2. Sequencing Principles` — 4–6 bullets (placeholder-quality acceptable for this step; T02 refines)
+2. `## 2. Sequencing Principles` — 4–6 bullets, each labeled P-1 through P-N, each citing a §3 workflow stage or §8 open question by reference
 3. `## 3. Thin Slices` — 5–8 slices in the sub-schema below
 4. `## 4. What We're Deliberately Not Building` — ≥3 bullets, each capability-from-§4 + rationale
 5. `## 5. Risk & Open Questions` — 3–5 bold-dash items promoted from §8
@@ -270,13 +270,39 @@ Build the dependency graph from the candidate slices produced in Step 2:
 
 #### 5b. Sequencing Principles and Maturity Checkpoints
 
-[filled by T02.2 — sequencing principles, maturity checkpoints, scope exclusions]
+Generate the content for §2 (Sequencing Principles), §4 (What We're Deliberately Not Building), and §6 (Maturity Checkpoints) using the following rules. These three sections must be populated with PRD-specific content — generic platitudes are a schema violation.
 
-Behavior summary: Generate 4–6 Sequencing Principles anchored to
-`references/decomposition-rules.md` §1 heuristics. Populate the Maturity
-Checkpoints table (≥3 rows tied to §7 Success Metrics). Fill "What We're
-Deliberately Not Building" with ≥3 entries each carrying a rationale derived
-from §4 capabilities not covered by the slice set.
+**§2 Sequencing Principles — generation rules:**
+
+1. Produce exactly 4–6 principles. Label them sequentially **P-1** through **P-N**.
+2. Each principle is one bulleted sentence that names a specific §3 Core Workflow stage by its stage name (or stage number) **or** references a specific §8 Open Question by its number (Q-N). Principles that could apply to any PRD without modification are not acceptable.
+3. Derive each principle by asking: "Why does this specific PRD require this ordering?" Pull the answer from the §3 stage ordering (e.g., "Stage 2 must precede Stage 3 because…") or from a sequencing risk in §8 (e.g., "Q-2 is unresolved, so…"). Cite the stage name or question number inline using parentheses: `(§3 Stage N)` or `(§8 Q-N)`.
+4. The four heuristics in `references/decomposition-rules.md` §1 (Greenfield-First, Prove-Risk-Early, Demoability Threshold, One-to-Three-Week Budget) are the vocabulary for principles — express *why* each applies to this PRD's specific stages and risks, not the heuristic rule itself.
+
+**§4 What We're Deliberately Not Building — generation rules:**
+
+1. Produce ≥3 entries. Each entry uses this exact format:
+   ```
+   - **<scoped-out-thing>** — <one-sentence rationale citing §8 Q-N or Principle P-N>
+   ```
+   The em-dash (`—`) is literal; do not substitute a hyphen or colon.
+2. The `<scoped-out-thing>` must be a capability from PRD §4 (or a sub-capability) that is not covered by any slice's Delivers list, or a capability that is explicitly deferred beyond this roadmap horizon.
+3. The rationale must name either a §8 Open Question number (Q-N) or a sequencing principle label (P-N) from §2. Rationales that do not cite either are incomplete.
+4. Every capability bullet from PRD §4 must either appear in a slice's Delivers list or in this section. Silent omissions are a schema violation.
+
+**§6 Maturity Checkpoints table — generation rules:**
+
+1. Produce ≥3 rows using this table schema:
+   ```
+   | Maturity Level | Achieved After | What's True |
+   |---|---|---|
+   | Rapid Prototype | Slices 1–N | ... |
+   | MVP | Slices 1–M | ... |
+   | Production | Slices 1–K | ... |
+   ```
+2. The "Achieved After" column must express a **contiguous prefix** of slices (e.g., "Slices 1–3", not "Slice 4" in isolation). The three prefix lengths must satisfy N < M < K. If the maturity target is below Production, the Production row's "Achieved After" may read "Beyond this roadmap" and the "What's True" cell describes what gap remains.
+3. The "What's True" column **must** cite a PRD §7 Success Metric by its exact metric name when one exists that corresponds to that maturity level. Only when no §7 metric matches the maturity level is it acceptable to fall back to a slice's Exit signal. Do not paraphrase metric names — copy the name verbatim from §7.
+4. Align maturity levels to the stated roadmap maturity target: if target is "rapid prototype", the Rapid Prototype row is the terminal row with K = total slices; if target is "MVP", MVP is the terminal row.
 
 ### Step 6: Meta-Prompt Handoff
 

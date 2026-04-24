@@ -1,0 +1,28 @@
+Type: file
+Command: grep -n "P-1|P-N|Q-N|contiguous prefix|PRD-specific|exact metric name" skills/cw-roadmap/SKILL.md skills/cw-roadmap/references/decomposition-prompt.md
+Expected: All R2.2/R2.3/R2.4 contract clauses present in both SKILL.md and decomposition-prompt.md
+Timestamp: 2026-04-23T00:00:00Z
+
+--- OUTPUT ---
+
+SKILL.md matches:
+  179: ## 2. Sequencing Principles — 4–6 bullets, each labeled P-1 through P-N, each citing a §3 workflow stage or §8 open question by reference
+  277: 1. Produce exactly 4–6 principles. Label them sequentially **P-1** through **P-N**.
+  278: 2. Each principle is one bulleted sentence that names a specific §3 Core Workflow stage by its stage name (or stage number) **or** references a specific §8 Open Question by its number (Q-N).
+  279: 3. Derive each principle by asking: "Why does this specific PRD require this ordering?" Pull the answer from the §3 stage ordering ... Cite: `(§3 Stage N)` or `(§8 Q-N)`.
+  286:    - **<scoped-out-thing>** — <one-sentence rationale citing §8 Q-N or Principle P-N>
+  290: 3. The rationale must name either a §8 Open Question number (Q-N) or a sequencing principle label (P-N)
+  303: 2. The "Achieved After" column must express a **contiguous prefix** of slices
+  304: 3. The "What's True" column **must** cite a PRD §7 Success Metric by its exact metric name
+
+decomposition-prompt.md matches:
+  77:  Label them **P-1** through **P-N**. ... reference a specific §8 Open Question by number (Q-N). ... PRD-specific reasoning.
+  79:  "Achieved After" column must be a **contiguous prefix** ... cite the PRD §7 Success Metric **by its exact metric name**
+  85:  - **<scoped-out-thing>** — <one-sentence rationale citing §8 Q-N or Principle P-N>
+  87:  rationale must name either a §8 Open Question number (Q-N) or a sequencing principle label (P-N)
+  160: - **P-1** (few-shot example with PRD-specific citation)
+  166: PRD-specific reasoning example with Q-N citation
+  188: contiguous prefixes and §7 metric name citation examples
+
+--- STATUS: PASS ---
+All R2.2/R2.3/R2.4 contract clauses found in both modified files.
