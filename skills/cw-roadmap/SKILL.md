@@ -128,25 +128,113 @@ PRD path: <relative path to PRD file>
 
 - **§8 (Open Questions):** Extract the numbered list items verbatim.
 
-### Step 2: Build the Slice Decomposition
+### Step 2: Decomposition
 
-[filled by T01.3 — roadmap template + decomposition-prompt baseline]
+Compose the PRD intermediate from Step 1 into the decomposition call that produces candidate slices.
 
-Behavior summary: apply the decomposition prompt from `references/decomposition-prompt.md` against the parsed PRD to produce 5–8 thin slices, each with Goal / Delivers (3–6 bullets) / Depends on / Lifecycle phases / Exit signal / Traces fields, following `references/roadmap-template.md`.
+1. **Load the prompt.** `Read` `references/decomposition-prompt.md`. This file defines the system prompt, the PRD-section → roadmap-section mapping, the instructions, and the few-shot examples. Do not paraphrase it — use it verbatim.
 
-### Step 3: Validate Sequencing and Traceability
+2. **Load the output contract.** `Read` `references/roadmap-template.md`. This is the authoritative schema the emission in Step 3 must match. Keep it in working context alongside the prompt.
+
+3. **Assemble the decomposition input.** Append to the end of the prompt (after the `<!-- Insert PRD intermediate below this line -->` marker) the following, filled in from invocation arguments and Step 1 output:
+
+   ```
+   Starting state: <greenfield | brownfield | hybrid — one-line description>
+   Build model: <solo builder | small team | larger team>
+   Maturity target: <rapid prototype | MVP | production>
+   PRD path: <relative path from Step 1a>
+
+   ---
+   <PRD Intermediate block produced by Step 1d, verbatim>
+   ```
+
+   If `Starting state`, `Build model`, or `Maturity target` were not passed in, invoke `AskUserQuestion` once with all three questions grouped (max 4 options each) before proceeding. Record the answers in your working context — Step 3 writes them into the roadmap's metadata table.
+
+4. **Run the decomposition.** Produce 5–8 candidate slices that satisfy every rule in the prompt's Instructions section. Each candidate slice must include all six sub-schema fields; a slice missing any field is not a candidate and must be re-derived before Step 3.
+
+5. **Pre-emission checks (blocking).** Before advancing to Step 3, confirm:
+
+   - Slice count is between 5 and 8 inclusive.
+   - Every slice carries a non-empty `Traces: PRD §...` line citing at least one PRD section present in the intermediate.
+   - Every `Depends on:` entry is either `None` or a slice number `1..N` that exists in the candidate set.
+   - No slice's `Delivers` list exceeds 6 bullets or falls below 3.
+
+   If any check fails, re-run the decomposition once; if it still fails, abort and report which check failed — do not emit a non-conforming roadmap.
+
+### Step 3: Roadmap Emission
+
+Render the candidate slices into a schema-compliant Markdown roadmap that matches `references/roadmap-template.md` exactly.
+
+**Structural contract (all required):**
+
+- H1 `# <Product Name> — Roadmap` (Product Name taken from the PRD's Vision)
+- `**Roadmap Document**` bold line
+- Metadata table with rows: Document Version (`0.1.0`), Status (`DRAFT`), Author (`cw-roadmap`), Date (today, ISO `YYYY-MM-DD`), PRD Reference (relative path), Starting State, Build Model, Maturity Target
+- `> **Scope of this document:** ...` blockquote stating this is sequencing-only and pointing at specs/ADRs for implementation detail
+- A `---` horizontal rule before Section 1 and between every numbered section
+
+**Exactly six H2 sections, numbered and in this order:**
+
+1. `## 1. Starting State` — 3–5 sentences anchored to the Starting State input
+2. `## 2. Sequencing Principles` — 4–6 bullets (placeholder-quality acceptable for this step; T02 refines)
+3. `## 3. Thin Slices` — 5–8 slices in the sub-schema below
+4. `## 4. What We're Deliberately Not Building` — ≥3 bullets, each capability-from-§4 + rationale
+5. `## 5. Risk & Open Questions` — 3–5 bold-dash items promoted from §8
+6. `## 6. Maturity Checkpoints` — table with ≥3 rows (Rapid Prototype / MVP / Production) anchored to §7
+
+**Per-slice sub-schema (every slice, all six fields):**
+
+```markdown
+### Slice N: <Name>
+- **Goal**: One sentence — what is true after this slice ships.
+- **Delivers**: 3–6 bullets of concrete, demoable outcomes.
+- **Depends on**: Slice numbers or "None".
+- **Lifecycle phases exercised**: Frame | Discover | Specify | Build | Prove | Observe
+- **Exit signal**: How you know this slice is done (test, demo, or metric).
+- **Traces**: PRD §X[, §Y]
+```
+
+The `Traces:` line is mandatory on every slice. A slice without it is a schema violation — re-render the slice rather than emit it.
+
+**Body footer:** end the document content with a single italicized line `_End of Document_` before the file ends.
+
+**Line budget:** the Markdown source must be 150–250 lines inclusive. Count lines before writing; if over 250, compress `Delivers` lists toward the 3-bullet minimum. If under 150, expand Exit signals and Sequencing Principles until the floor is met. Do not pad with filler or boilerplate.
+
+### Step 4: Save
+
+Persist the rendered roadmap to a zero-padded, sequenced directory under `docs/roadmaps/`.
+
+1. **Re-affirm the PRD read-only contract.** No Write or Edit touches the PRD file at any point in Step 4 — the only filesystem writes are the new roadmap directory and file.
+
+2. **Derive the sequence number `NN`.** Use `Glob` against `docs/roadmaps/*-roadmap-*/`. For each match, extract the leading two-digit prefix (characters 0–1 of the directory basename). Take the maximum numeric value of the collected prefixes, add 1, and zero-pad the result to two digits. If no matching directories exist, `NN` is `01`. This mirrors the sequence-derivation pattern in `cw-spec/SKILL.md` Step 1 and must stay consistent with it.
+
+3. **Derive the slug.** From the `vision_block` captured in Step 1d (§1 Vision content), take the first 3–5 meaningful words (skip articles like "a", "the", "an", and filler like "is", "for"). Lowercase, replace runs of non-alphanumeric characters with a single hyphen, and strip leading/trailing hyphens. The slug must be `^[a-z0-9]+(-[a-z0-9]+){2,4}$`. If the vision block is empty or slug derivation produces fewer than three components, fall back to the PRD filename's slug (strip the `NN-prd-` prefix and the `.md` suffix).
+
+4. **Build the target path.**
+
+   ```
+   docs/roadmaps/[NN]-roadmap-[slug]/[NN]-roadmap-[slug].md
+   ```
+
+   The directory name and the filename stem are identical — this matches the cw-spec convention (`docs/specs/[NN]-spec-[name]/[NN]-spec-[name].md`).
+
+5. **Create the directory and write the file.** Ensure `docs/roadmaps/[NN]-roadmap-[slug]/` exists (create it if not) and `Write` the rendered Markdown from Step 3 to the target path. Do not append to an existing roadmap — if the target path already exists, abort and report the collision; the sequence-derivation in step 2 above is what prevents this, so a collision indicates a concurrent invocation and must not be overwritten silently.
+
+6. **Verify the write.** After `Write`, `Read` the saved file and confirm: the first line is the H1 `# ... — Roadmap`, the last non-empty line is `_End of Document_`, and the file contains exactly six `^## \d+\.` headings. Any mismatch is a schema violation — surface it and stop rather than advancing to the next step.
+
+### Step 5: Validate Sequencing and Traceability
 
 [filled by T02.1–T02.3 — DAG validation, sequencing principles, maturity checkpoints]
 
 Behavior summary: build the dependency graph from each slice's `Depends on:` field and abort on any cycle or dangling reference. Generate 4–6 Sequencing Principles, populate the Maturity Checkpoints table (≥3 rows tied to Success Metrics), and fill "What We're Deliberately Not Building" with ≥3 entries each carrying a rationale.
 
-### Step 4: Emit the Roadmap and Handoff
+### Step 6: Meta-Prompt Handoff
 
-[filled by T01.4 — end-to-end pipeline; T02.3 — Meta-Prompt appender]
+[filled by T02.3 — /cw-spec Meta-Prompt appender]
 
-Behavior summary: write the six-H2-section roadmap to the target path, append a `/cw-spec` Meta-Prompt block between `---` markers, and present a next-step `AskUserQuestion` offering "Run /cw-spec with this Meta-Prompt (Recommended) / Review roadmap first / Done for now".
+Behavior summary: append a `/cw-spec` Meta-Prompt block between `---` markers at the end of the saved roadmap, then present a next-step `AskUserQuestion` offering "Run /cw-spec with this Meta-Prompt (Recommended) / Review roadmap first / Done for now".
 
-### Step 5: Lint Subcommand
+### Step 7: Lint Subcommand
 
 [filled by T03.2 — /cw-roadmap lint subcommand]
 
