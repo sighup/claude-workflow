@@ -1,0 +1,36 @@
+Type: cli
+Command: autoresearch-runner assess --artifact .autoresearch/prompts/current.txt --test-case exemplar_spec_driven_development_system --test-cases .autoresearch/test_cases.jsonl --assertions .autoresearch/assertions.py
+Expected: Runner starts, prints assessment line, runs to completion
+Timestamp: 2026-04-23T00:00:00Z
+
+=== RUNNER DISCOVERY ===
+Runner on PATH: YES
+Path: /Users/msaliano/.claude/plugins/cache/liatrio-labs/autoresearch/0.1.5/bin/autoresearch-runner
+Plugin versions available: 0.1.2, 0.1.4, 0.1.5
+
+=== ASSESS OUTPUT (single case, run from skill dir) ===
+Assessing: exemplar_spec_driven_development_system (artifact: .autoresearch/prompts/current.txt, mode: sdk)
+Setting up autoresearch environment...
+Done.
+  exemplar_spec_driven_development_system: FAIL [assert_exit_signal_verb, assert_meta_prompt_block] (154.4s)
+{"id": "exemplar_spec_driven_development_system", "passed": false, "failed": ["assert_exit_signal_verb", "assert_meta_prompt_block"]}
+
+=== FINDINGS ===
+
+1. Runner IS on PATH and callable. Outcome 1 (partially) applies — end-to-end execution confirmed.
+
+2. Config path issue: config.json sets "test_cases": "test_cases.jsonl" (no prefix). When run
+   from skill dir, runner looks for ./test_cases.jsonl which does not exist. Workaround: pass
+   --test-cases .autoresearch/test_cases.jsonl --assertions .autoresearch/assertions.py explicitly.
+   The documented invocation above is the correct form.
+
+3. assess vs batch-assess: the `assess` subcommand runs a single test case and does NOT produce
+   summary_current.json. That file is produced by `batch-assess` (or `summarize`). The task
+   constraint (R4.6) requires summary_current.json — see T04.3-02-file.txt for the placeholder.
+
+4. ANTHROPIC_API_KEY is required for SDK mode. The runner sets up a venv and calls Claude directly.
+   Expect ~2-3 minutes per test case. For full corpus (12 cases), budget ~30-40 minutes.
+
+5. Results dir: .autoresearch/results/ is gitignored via .autoresearch/.gitignore (created by T04.3).
+
+Status: PASS (runner wired, end-to-end execution confirmed with real SDK call completing)

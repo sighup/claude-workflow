@@ -505,9 +505,70 @@ Return control to the caller with the lint output as the response. No file is mo
 
 ## Tuning the Decomposition Prompt
 
-[filled by T04.3 — autoresearch integration]
+The `/autoresearch` optimization loop lets you iteratively improve the decomposition prompt by scoring candidate variants against the 12-case PRD test corpus. This section documents the layout, the invocation pattern, and the promotion workflow.
 
-Behavior summary: the decomposition prompt under optimization lives at `.autoresearch/prompts/current.txt`. Use the `/autoresearch` command against this skill's `.autoresearch/` directory to score the prompt against the seeded 12-case PRD corpus and promote winning variants.
+### Layout
+
+| Path (relative to skill dir) | Role |
+|---|---|
+| `references/decomposition-prompt.md` | Canonical authoritative prompt — the version-controlled source of truth |
+| `.autoresearch/prompts/current.txt` | Working copy fed to the optimization loop; may differ from the canonical version during active tuning |
+| `.autoresearch/config.json` | Loop configuration: artifact path, assertions module, test-corpus location, model |
+| `.autoresearch/assertions.py` | Thin re-export wrapper that delegates to `assertions.py` in the skill root — edit the parent once, both surfaces update |
+| `.autoresearch/test_cases.jsonl` | 12-case PRD corpus (4 categories × 3 cases each: `simple_clear`, `complex_multi_capability`, `terse_under_specified`, `edge_cases`) |
+| `.autoresearch/results/` | Local-only run artifacts — `summary_current.json`, per-case JSONs; excluded from version control via `.autoresearch/.gitignore` |
+
+### Test Corpus
+
+The corpus contains 12 test cases in four categories:
+
+- **simple_clear** (3 cases) — well-structured PRDs with all 6 canonical sections; baseline for structural conformance.
+- **complex_multi_capability** (3 cases) — PRDs with many capabilities that strain the 5–8 slice constraint.
+- **terse_under_specified** (3 cases) — minimal PRDs that test graceful handling of missing sections.
+- **edge_cases** (3 cases) — adversarial inputs: one-liner, over-scoped platform overhaul, single-capability PRD.
+
+The exemplar case (`exemplar_spec_driven_development_system`) is the dogfooded PRD for this very system and is included in the `simple_clear` category.
+
+### Assertion Library Reuse
+
+`.autoresearch/assertions.py` is a thin wrapper — it imports `ASSERTIONS` from `../assertions.py` (the skill root) using `importlib`. Editing `assertions.py` once automatically updates the fitness function used by the optimization loop. No symlink, no duplication, no separate maintenance.
+
+### Invoking the Runner
+
+Run `autoresearch-runner` from the **skill directory** (`skills/cw-roadmap/`). Because the runner reads `.autoresearch/config.json` from the current working directory and resolves `test_cases` and `assertions` relative to cwd, both the `--test-cases` and `--assertions` flags must explicitly prefix `.autoresearch/`:
+
+```bash
+# Single-case probe (does not produce summary_current.json):
+cd skills/cw-roadmap
+autoresearch-runner assess \
+  --artifact .autoresearch/prompts/current.txt \
+  --test-case exemplar_spec_driven_development_system \
+  --test-cases .autoresearch/test_cases.jsonl \
+  --assertions .autoresearch/assertions.py
+
+# Full corpus batch-assess (produces .autoresearch/results/summary_current.json):
+cd skills/cw-roadmap
+autoresearch-runner batch-assess \
+  --variant current:.autoresearch/prompts/current.txt \
+  --test-cases .autoresearch/test_cases.jsonl \
+  --assertions .autoresearch/assertions.py
+```
+
+The environment variable `AUTORESEARCH_ARTIFACT` is **not** used by this runner version; pass `--artifact` (or `--variant`) explicitly.
+
+The runner invokes Claude via the Agent SDK and grades each response against the assertion library. Expect ~2–3 minutes per test case in SDK mode. `summary_current.json` (produced by `batch-assess`) exposes a numeric `pass_rate` field and a per-category breakdown.
+
+### Promotion Workflow
+
+The optimization loop mutates `.autoresearch/prompts/current.txt`. The canonical prompt at `references/decomposition-prompt.md` is never touched by the runner.
+
+| Action | Direction | When |
+|---|---|---|
+| **Bootstrap a new tuning cycle** | `references/decomposition-prompt.md` → `.autoresearch/prompts/current.txt` | Copy before starting; gives the loop a clean baseline. |
+| **Iterate** | Runner mutates `current.txt` in place | Run `batch-assess` repeatedly, comparing `pass_rate` across cycles. |
+| **Promote a winner** | `.autoresearch/prompts/current.txt` → `references/decomposition-prompt.md` | When `pass_rate` improves and the diff is reviewed, copy the winning variant back and commit as the new authoritative version. |
+
+Never commit `.autoresearch/prompts/current.txt` or `.autoresearch/results/` — they are local working state. Only `references/decomposition-prompt.md` is version-controlled as the canonical prompt.
 
 ## Output Requirements
 

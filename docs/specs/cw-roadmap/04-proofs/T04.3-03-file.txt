@@ -1,0 +1,36 @@
+Type: file
+Check: SKILL.md contains "Tuning the Decomposition Prompt" section with required content
+Expected: Section exists and documents a-f per R4.7
+Timestamp: 2026-04-23T00:00:00Z
+
+=== SECTION CONTENT VERIFICATION ===
+File: skills/cw-roadmap/SKILL.md
+
+(a) Canonical prompt location:
+  FOUND: "references/decomposition-prompt.md | Canonical authoritative prompt"
+  Status: PASS
+
+(b) Optimization-loop working copy:
+  FOUND: ".autoresearch/prompts/current.txt | Working copy fed to the optimization loop"
+  Status: PASS
+
+(c) How to invoke /autoresearch from skill dir:
+  FOUND: "cd skills/cw-roadmap" + "autoresearch-runner assess" and "autoresearch-runner batch-assess"
+  Status: PASS
+
+(d) Test-corpus location and category breakdown:
+  FOUND: ".autoresearch/test_cases.jsonl" + 4 categories documented (simple_clear, complex_multi_capability,
+         terse_under_specified, edge_cases) with 3 cases each
+  Status: PASS
+
+(e) Assertion library reuse note (single-edit propagation):
+  FOUND: ".autoresearch/assertions.py is a thin wrapper — it imports ASSERTIONS from ../assertions.py
+         (the skill root) using importlib. Editing assertions.py once automatically updates..."
+  Status: PASS
+
+(f) Promotion workflow (references/ <-> prompts/current.txt cycle):
+  FOUND: "Bootstrap" (references/ -> current.txt), "Iterate" (runner mutates), "Promote a winner"
+         (current.txt -> references/) table documented
+  Status: PASS
+
+=== OVERALL STATUS: PASS (all 6 R4.7 items documented) ===
