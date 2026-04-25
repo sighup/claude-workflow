@@ -17,10 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
-import sys
 from pathlib import Path
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Load assertions module via importlib (mirrors production import path)
@@ -31,6 +28,7 @@ _ASSERTIONS_PATH = Path(__file__).resolve().parent.parent / "assertions.py"
 
 def _load_assertions():
     spec = importlib.util.spec_from_file_location("assertions", _ASSERTIONS_PATH)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
