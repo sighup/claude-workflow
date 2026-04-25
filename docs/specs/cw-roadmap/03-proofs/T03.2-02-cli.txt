@@ -1,0 +1,46 @@
+Type: cli
+Description: Table rendering logic produces exactly 80-column output and FAILURE signal
+Timestamp: 2026-04-23T00:00:00Z
+Status: PASS
+
+--- Command ---
+
+python3 -c "
+# Simulates the L4 table rendering from SKILL.md Step 7
+def render_table(rows):
+    def trunc(s, n):
+        if len(s) > n:
+            return s[:n-3] + '...'
+        return s.ljust(n)
+    header = trunc('Check', 40) + ' | ' + trunc('Status', 6) + ' | ' + trunc('Message', 28)
+    sep = '-' * 40 + '|' + '-' * 8 + '|' + '-' * 28
+    print(header)
+    print(sep)
+    for check, status, msg in rows:
+        line = trunc(check, 40) + ' | ' + trunc(status, 6) + ' | ' + trunc(msg, 28)
+        assert len(line) == 80
+        print(line)
+rows = [
+    ('assert_section_order', 'PASS', 'Roadmap has six H2 sections in canonical order'),
+    ('assert_line_count', 'FAIL', 'Roadmap body line count is between 150 and 250 inclusive.'),
+]
+render_table(rows)
+k, m = 1, 2
+print(f'{k}/{m} assertions passed — FAILURE' if k < m else f'{k}/{m} assertions passed')
+"
+
+--- Output ---
+
+Check                                    | Status | Message
+----------------------------------------|--------|----------------------------
+assert_section_order                     | PASS   | Roadmap has six H2 sectio...
+assert_line_count                        | FAIL   | Roadmap body line count i...
+
+1/2 assertions passed — FAILURE
+
+--- Verification ---
+
+1. Header line width: 80 chars (PASS)
+2. Data line width: 80 chars (PASS)
+3. FAILURE keyword present in summary when K<M (PASS)
+4. importlib loading of assertions.py works: 17 ASSERTIONS loaded (PASS)

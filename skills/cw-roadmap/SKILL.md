@@ -37,6 +37,15 @@ You are a **Senior Engineering Lead** responsible for:
 
 ## Process
 
+### Subcommand Dispatch
+
+At invocation time, inspect the first positional argument passed to this skill:
+
+- **If the first argument is the literal string `lint`:** jump immediately to Step L1 below (inside `### Step 7: Lint Subcommand`). Execute L1 through L5 and return when L5 completes. Do **not** enter the normal decomposition flow (Steps 1–6).
+- **If any other argument is provided, or no argument is provided:** proceed normally with Step 1 below.
+
+This dispatch happens before any file I/O. The subcommand string comparison is case-sensitive: `lint` matches, `Lint` or `LINT` do not.
+
 ### Step 1: Locate and Parse the PRD
 
 #### 1a. Path Discovery
@@ -414,9 +423,85 @@ AskUserQuestion({
 
 ### Step 7: Lint Subcommand
 
-[filled by T03.2 — /cw-roadmap lint subcommand]
+This step is reached only via the `lint` subcommand dispatch (see `### Subcommand Dispatch` above). It never runs as part of the normal decomposition flow.
 
-Behavior summary: when invoked as `/cw-roadmap lint <path>`, run every assertion from `assertions.py` against the file at `<path>` and print a `Check | Status | Message` table followed by `N/M assertions passed`. Exit non-zero when any assertion fails. Do not modify the file.
+#### Step L1: Parse Args, Locate File, Validate Existence
+
+1. The invocation form is `/cw-roadmap lint <path>`. Extract `<path>` as the second positional argument. If it is absent, abort immediately with the message: `Usage: /cw-roadmap lint <path>`.
+2. Access `<path>` using the `Read` tool **only**. This is the lint flow's absolute read-only contract: no `Write` or `Edit` tool ever touches the file under lint, anywhere in steps L1 through L5, under any circumstance.
+3. If the `Read` call fails (file not found, permission error, etc.), report the error verbatim and abort. Do not fabricate a result.
+4. Store the full text of the file as `roadmap_text` in your working context. This is the only copy that enters the assertion pipeline.
+
+#### Step L2: Load Assertions Module via importlib
+
+Locate `assertions.py` in the **skill directory** — the same directory that contains this `SKILL.md` file. In Python terms, the path is:
+
+```
+Path(<skill-dir>) / "assertions.py"
+```
+
+where `<skill-dir>` is computed as the directory of the SKILL.md being executed (the analog of `Path(__file__).resolve().parent` in a Python script).
+
+Load the module using the canonical importlib pattern (documented in `assertions.py` lines 10–15):
+
+```python
+import importlib.util
+spec = importlib.util.spec_from_file_location("assertions", assertions_path)
+mod  = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+ASSERTIONS = mod.ASSERTIONS
+```
+
+`ASSERTIONS` is a list of callable functions. Each function has the signature `(response: str) -> bool`. If `assertions.py` cannot be loaded (file missing, import error, etc.), abort with a clear error message identifying which path was tried.
+
+#### Step L3: Run Each Assertion, Collect Rows
+
+Iterate over `ASSERTIONS` in order. For each function `fn`:
+
+1. **Check name**: `fn.__name__` — the Python function name (e.g. `assert_section_order`).
+2. **Message**: `fn.__doc__` stripped of leading/trailing whitespace — the function's one-line docstring. This is the human-readable description of what the check verifies.
+3. **Status**: call `fn(roadmap_text)`. If the return value is truthy, status is `PASS`; if falsy or if the call raises an exception, status is `FAIL`. On exception, include the exception type in the message cell (truncated to fit the column).
+4. Append a row `(check_name, status, message)` to the results list `rows`.
+5. Maintain two counters: `K` (number of `PASS` results), `M` (total assertions run, equal to `len(ASSERTIONS)`).
+
+Do not short-circuit on the first `FAIL`: run all assertions and collect all rows before rendering.
+
+#### Step L4: Render Table and Summary Line
+
+Render a 3-column table that fits within **80 columns**. Column widths are fixed:
+
+| Column  | Width | Truncation rule |
+|---------|-------|-----------------|
+| Check   | 40    | If `len(name) > 40`, render `name[:37] + "..."` |
+| Status  | 6     | Always `"PASS  "` or `"FAIL  "` (left-aligned, space-padded) |
+| Message | 28    | If `len(msg) > 28`, render `msg[:25] + "..."` |
+
+Column separators are ` | ` (space-pipe-space, 3 chars each). Total width: `40 + 3 + 6 + 3 + 28 = 80`.
+
+Print the table in this exact format:
+
+```
+Check                                    | Status | Message
+-----------------------------------------|--------|----------------------------
+assert_section_order                     | PASS   | Roadmap has six H2 section...
+assert_line_count                        | FAIL   | Roadmap body line count is...
+...
+```
+
+Header row uses the literal column names `Check`, `Status`, `Message`. Separator row uses `-` repeated to fill each column width, with `|` at the separator positions (no spaces on the separator row).
+
+After the table, print the summary line:
+
+- If `K == M` (all pass): `K/M assertions passed`
+- If `K < M` (any fail): `K/M assertions passed — FAILURE`
+
+The word `FAILURE` appears verbatim in the summary line when any assertion fails, so callers can detect a non-zero lint outcome by grepping for `FAILURE`.
+
+#### Step L5: Return Without Invoking the Rest of the Process
+
+After printing the table and summary line, stop. Do not proceed to Step 1, Step 2, or any further step. The lint subcommand is complete.
+
+Return control to the caller with the lint output as the response. No file is modified, no roadmap is generated, no `AskUserQuestion` is issued.
 
 ## Tuning the Decomposition Prompt
 

@@ -1,0 +1,17 @@
+Type: file
+Description: SKILL.md contains Subcommand Dispatch section at top of Process
+Timestamp: 2026-04-23T00:00:00Z
+Status: PASS
+
+--- Verification ---
+
+1. "Subcommand Dispatch" section exists at line 40 of SKILL.md (immediately after "## Process")
+2. Section dispatches to L1 when first arg == "lint" (line 44)
+3. Section specifies case-sensitive comparison (line 47)
+
+--- Evidence (grep output) ---
+
+Line 40: ### Subcommand Dispatch
+Line 44: - **If the first argument is the literal string `lint`:** jump immediately to Step L1 below (inside `### Step 7: Lint Subcommand`). Execute L1 through L5 and return when L5 completes. Do **not** enter the normal decomposition flow (Steps 1–6).
+Line 45: - **If any other argument is provided, or no argument is provided:** proceed normally with Step 1 below.
+Line 47: This dispatch happens before any file I/O. The subcommand string comparison is case-sensitive: `lint` matches, `Lint` or `LINT` do not.
