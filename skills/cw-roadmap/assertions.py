@@ -60,6 +60,16 @@ _EXIT_SIGNAL_VERBS = [
     "generates",
     "exports",
     "reports",
+    "lands",
+    "executes",
+    "resolves",
+    "succeeds",
+    "completes",
+    "accepts",
+    "validates",
+    "ships",
+    "deploys",
+    "responds",
 ]
 
 _META_PROMPT_FIELDS = [

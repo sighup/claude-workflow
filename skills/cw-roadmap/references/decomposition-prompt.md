@@ -139,9 +139,9 @@ Given the parsed PRD intermediate below, produce a complete roadmap document.
 ```markdown
 ## 4. What We're Deliberately Not Building
 
-- **Multi-user collaboration and presence indicators.** The build model is solo; real-time presence requires infrastructure that does not exist and would dominate Slices 1–4.
-- **Version history and diff view.** Git already provides this; surfacing it in a UI is a production concern deferred beyond this roadmap.
-- **Slack/Teams notifications.** Lifecycle transitions are observable via CLI output in the prototype horizon; push notifications add integration surface without advancing the core workflow.
+- **Multi-user collaboration and presence indicators** — the build model is solo (P-1); real-time presence requires infrastructure that does not exist and would dominate Slices 1–4.
+- **Version history and diff view** — git already provides this (Q-3); surfacing it in a UI is a production concern deferred beyond this roadmap.
+- **Slack/Teams notifications** — lifecycle transitions are observable via CLI output in the prototype horizon (P-2); push notifications add integration surface without advancing the core workflow.
 ```
 
 **Why this works:** Each bullet names a specific PRD capability (§4), states why it is excluded in terms of build model or maturity target, and does not apologize or hedge.

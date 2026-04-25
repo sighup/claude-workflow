@@ -342,7 +342,7 @@ Read the saved roadmap file from Step 4. Append the following block after the `_
 
 ---
 
-Build **{feature name}**.
+**Feature name:** {feature name}
 
 **Problem:** {problem — 1–3 sentences from PRD §1.2}
 

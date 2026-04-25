@@ -26,7 +26,7 @@ Derive each field from the roadmap and the PRD intermediate produced in Step 1:
 
 ---
 
-Build **{feature name}**.
+**Feature name:** {feature name}
 
 **Problem:** {problem — 1–3 sentences from PRD §1.2}
 
