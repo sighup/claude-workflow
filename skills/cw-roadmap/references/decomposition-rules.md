@@ -238,3 +238,68 @@ algorithm and must be reported in the same format.
 
 If both checks pass, the graph is a valid DAG. The topological order (for
 display or execution) can be derived from the DFS finish order (reversed).
+
+---
+
+## 4. Prompt Design Notes
+
+These four findings emerged from the first `/autoresearch` optimization pass
+on `cw-roadmap` (5 cycles, 0% → 92% on the 12-case corpus, 2026-04-25). They
+generalize beyond cw-roadmap and apply to any `cw-*` skill whose output is
+graded by deterministic assertions.
+
+### 4.1 Directive language beats emphasis
+
+Adding emphasis — uppercase, multiple negative examples, "NEVER do X. NEVER.
+NEVER." — does **not** raise compliance and **regresses unrelated checks**.
+In v3a/v3b of the optimization run, heavy emphasis on the failing assertion
+broke the Traces format check (which was passing) by overshadowing it.
+
+> **Rule:** State each requirement once, declaratively, in the section it
+> applies to. Do not stack emphasis. Do not repeat across sections.
+
+### 4.2 Sentence templates beat walls of text
+
+Prose rules ("the exit signal should be a concrete observable outcome
+expressed with a verb the reader could verify by inspection") underperform
+explicit shape templates.
+
+> **Rule:** When a graded field has a fixed shape, give the model a
+> sentence template, not a description. For verbs:
+> `<subject> <verb-from-list> <observable artifact>` lifted compliance
+> to 92% where the prose rule capped at 75%.
+
+### 4.3 Literal tokens beat guidance
+
+"Cite the PRD section motivating this slice" produced freeform text. The
+literal-token requirement `PRD §<digit>` (the word `PRD`, a single space, the
+U+00A7 section sign, then a digit) achieved per-line compliance.
+
+> **Rule:** When an assertion greps for an exact string, surface that
+> exact string in the prompt. Don't paraphrase it. Show the literal
+> bytes the assertion is looking for.
+
+### 4.4 Top-of-prompt contracts must restate, not summarize
+
+Hoisting a "mandatory contract" block to the top of the prompt that
+**summarizes** the body rules detaches the rules from the assertion
+vocabulary. The model defers to the summary and ignores the body. v3c lifted
+the verb check to 83% and the meta-prompt block to 100% but tanked Traces
+format to 50% — the contract summarized "cite PRD sections" instead of
+restating the literal `PRD §<digit>` token.
+
+> **Rule:** A top-of-prompt contract must restate every rule it enforces
+> verbatim. If you can't fit them all verbatim, don't hoist any of them.
+
+### 4.5 Anti-pattern: trying to override model refusal training
+
+The original `edge_overscoped_platform_overhaul` test case forced the model
+to decompose a deliberately impossible PRD (13 product domains, 195
+countries, 3-month timeline, 4 engineers). Three anti-halt prompt
+formulations failed to budge it; Sonnet refused to attempt a roadmap. This
+is **correct model behavior**, not a prompt-fixable issue, and the test case
+was replaced rather than continuing to optimize against it.
+
+> **Rule:** If three single-variable mutations targeting the same case all
+> regress or hold flat, the case is testing model behavior, not prompt
+> behavior. Replace it.
