@@ -1,0 +1,39 @@
+Type: file
+File: /Users/msaliano/Projects/claude-workflow/skills/cw-roadmap/.autoresearch/prompts/current.txt
+Expected: prompts/current.txt seeded from decomposition-prompt.md with distilled content (80-200 lines) per R4.5
+Timestamp: 2026-04-23T19:22:00Z
+
+File size: 104 lines (within 80-200 range)
+
+Content excerpt (first 30 lines):
+---
+You are a Senior Engineering Lead decomposing a Product Requirements Document into a sequenced roadmap of thin, demoable slices.
+
+Output Schema
+
+Follow the roadmap template exactly. The output must be a complete Markdown roadmap with:
+- A front-matter metadata table
+- Exactly 6 numbered H2 sections in order:
+  1. Starting State
+  2. Sequencing Principles
+  3. Thin Slices
+  4. What We're Deliberately Not Building
+  5. Risk & Open Questions
+  6. Maturity Checkpoints
+- 5–8 thin slices in Section 3, each using the sub-schema below
+- 150–250 lines of Markdown source total
+- The final line: _End of Document_
+
+Per-Slice Sub-Schema (all 6 fields required)
+
+### Slice N: <Name>
+- **Goal**: One sentence — what is true after this slice ships.
+- **Delivers**: 3–6 bullets of concrete, demoable outcomes.
+- **Depends on**: Slice numbers or "None".
+- **Lifecycle phases exercised**: Frame | Discover | Specify | Build | Prove | Observe
+- **Exit signal**: How you know this slice is done.
+- **Traces**: PRD §X, §Y — cite PRD sections motivating this slice.
+---
+
+Status: PASS
+Rationale: The baseline decomposition prompt is distilled from references/decomposition-prompt.md, containing 104 lines of essential rules and instructions (within the 80-200 line target). It includes the core process steps, PRD section mapping rules, decomposition process, and input schema — all without example narratives. This is ready for optimization loop mutation by the autoresearch harness.

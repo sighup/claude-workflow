@@ -1,0 +1,14 @@
+Type: file
+File: /Users/msaliano/Projects/claude-workflow/skills/cw-roadmap/.autoresearch/config.json
+Expected: config.json declares artifact, assertions, test_cases, and model per R4.1 contract
+Timestamp: 2026-04-23T19:22:00Z
+
+{
+  "artifact": "prompts/current.txt",
+  "assertions": "assertions.py",
+  "test_cases": "test_cases.jsonl",
+  "model": "sonnet"
+}
+
+Status: PASS
+Rationale: config.json matches the contract exactly. The artifact points to prompts/current.txt, assertions to assertions.py, test_cases to test_cases.jsonl (for T04.2), and model to sonnet as required by R4.1.

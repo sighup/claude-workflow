@@ -1,0 +1,18 @@
+Type: test
+Test: assertions.py thin wrapper import verification
+Expected: assertions.py successfully imports parent module and re-exports ASSERTIONS list per R4.4
+Timestamp: 2026-04-23T19:22:00Z
+
+Command: python3 -c "
+import sys; sys.path.insert(0, 'skills/cw-roadmap/.autoresearch')
+import assertions
+print('ASSERTIONS type:', type(assertions.ASSERTIONS))
+print('Assertions count:', len(assertions.ASSERTIONS))
+"
+
+Output:
+ASSERTIONS type: <class 'list'>
+Assertions count: 17
+
+Status: PASS
+Rationale: The thin wrapper at .autoresearch/assertions.py successfully loads the parent assertions module using importlib.util without a symlink (portable Python). The ASSERTIONS list is correctly re-exported with 17 assertion functions from the parent module.
