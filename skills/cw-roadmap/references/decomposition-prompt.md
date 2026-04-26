@@ -101,4 +101,8 @@ The input will conform to this schema, produced by Step 1d:
 ### §8 Open Questions
 1. <question text>
 
-If any of the six required fields (§1, §3, §4, §6, §7, §8) are absent from the intermediate, halt and report the missing section rather than producing a roadmap.
+If any of the six required fields (§1, §3, §4, §6, §7, §8) are absent from the intermediate, infer reasonable defaults from whatever input you do have and proceed to produce the roadmap. For terse or one-line inputs, treat the input as the §1 Vision/Problem statement and synthesize the missing §3 Core Workflow Stages, §4 Capabilities, §6 Domain Concepts, §7 Success Metrics, and §8 Open Questions from domain knowledge of the stated feature. Mark inferred PRD sections in slice Traces lines as `PRD §N (inferred)`. Always produce a complete roadmap; never refuse or halt on incomplete input.
+
+Final Verification (mandatory before emitting)
+
+Before producing your response, scan your own draft for the closing `/cw-spec` Meta-Prompt block. The block lives between two `---` markers AFTER the Maturity Checkpoints section and is the LAST content in the file. If the block is missing or any of the four bolded labels (Feature name, Problem, Key components, Key code references) is absent, ADD IT NOW. Omitting this block is the most common schema violation — do not let length pressure cause you to skip it. The block is short (~10 lines) and always fits within the 150–250 line budget; if you are over-budget, trim Delivers bullets, NOT the meta-prompt block.
