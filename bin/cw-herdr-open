@@ -3,8 +3,13 @@
 # cw-herdr-open - Open a herdr pane running claude in a worktree directory
 #
 # Detects herdr availability (binary on PATH + 2s socket probe) and, when
-# available, opens a herdr workspace/pane for the given worktree directory
-# running `claude`. Gracefully degrades on unavailable or unsupported systems.
+# available, opens a herdr tab running `claude` for the given worktree.
+#
+# Layout: one workspace per repo (label = repo basename), one tab per worktree
+# (label = worktree basename), one claude pane per tab. If a claude session
+# is already running in the target tab at the right cwd, the helper focuses
+# the workspace+tab and exits 0 without spawning a duplicate. Gracefully
+# degrades on unavailable or unsupported systems.
 #
 # Usage:
 #   cw-herdr-open [--focus-if-exists] [--prompt <text>] <worktree-path>
@@ -18,12 +23,10 @@
 #                    rejected with exit code 2.
 #
 # Options:
-#   --focus-if-exists   Before creating a new agent pane, check whether an
-#                       existing pane is already running "claude" with cwd
-#                       matching the worktree path. If found, focus that
-#                       workspace and exit 0 without spawning a duplicate.
-#                       If the workspace exists but has no matching pane, a
-#                       new pane is created in that workspace.
+#   --focus-if-exists   Accepted for backward compatibility. The helper
+#                       always focuses an existing claude session in the
+#                       target tab rather than spawning a duplicate, so this
+#                       flag is now a no-op.
 #   --prompt <text>     Forward an initial prompt to the spawned claude
 #                       session as its first user turn. The text is passed
 #                       verbatim as the first argument to `claude`.
@@ -81,7 +84,7 @@ show_help() {
     echo "                   Basename must match ^[a-z0-9-]+$."
     echo ""
     echo "Options:"
-    echo "  --focus-if-exists   Focus existing workspace/pane instead of spawning duplicate"
+    echo "  --focus-if-exists   No-op (accepted for compat); helper always reuses existing claude"
     echo "  --prompt <text>     Forward initial prompt as first arg to claude"
     echo "  --probe             Detection-only: exit 0/2/3 without any workspace ops"
     echo ""
@@ -120,48 +123,91 @@ _herdr() {
     fi
 }
 
+# Derive the workspace label (repo basename) for a worktree path.
+# Falls back to the worktree basename when the git lookup fails.
+_repo_name_for_worktree() {
+    local worktree_abs="$1"
+    local common_dir
+    if common_dir="$(git -C "$worktree_abs" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+       && [[ -n "$common_dir" ]]; then
+        basename "$(dirname "$common_dir")"
+    else
+        basename "$worktree_abs"
+    fi
+}
+
 # Find an existing workspace by label; prints workspace_id or returns 1
 _find_workspace() {
     local label="$1"
     local list_json
     list_json="$(_herdr workspace list 2>/dev/null)" || return 1
-    # Extract workspace_id for the matching label using jq if available, else grep+sed
     if command -v jq >/dev/null 2>&1; then
         echo "$list_json" | jq -r --arg lbl "$label" \
             '.result.workspaces[] | select(.label == $lbl) | .workspace_id' 2>/dev/null \
             | head -1
     else
-        # Fallback: crude pattern match (label must be exact)
         echo "$list_json" | grep -o "\"label\":\"${label}\"[^}]*\"workspace_id\":\"[^\"]*\"" \
             | grep -o '"workspace_id":"[^"]*"' | head -1 | sed 's/"workspace_id":"//;s/"//'
     fi
 }
 
-# Find an existing agent pane running "claude" with a specific cwd in a workspace.
-# Prints the terminal_id (or pane_id) of the first matching agent, or returns 1.
-# Usage: _find_agent <workspace_id> <cwd_abs>
-_find_agent() {
+# Find an existing tab in a workspace by label; prints tab_id or returns 1
+_find_tab() {
     local workspace_id="$1"
-    local cwd_abs="$2"
+    local label="$2"
     local list_json
-    list_json="$(_herdr agent list 2>/dev/null)" || return 1
+    list_json="$(_herdr tab list --workspace "$workspace_id" 2>/dev/null)" || return 1
     if command -v jq >/dev/null 2>&1; then
-        echo "$list_json" | jq -r \
-            --arg ws "$workspace_id" \
-            --arg cwd "$cwd_abs" \
-            '.result.agents[] | select(
-                .workspace_id == $ws and
-                .agent == "claude" and
-                .cwd == $cwd
-            ) | .terminal_id' 2>/dev/null \
+        echo "$list_json" | jq -r --arg lbl "$label" \
+            '.result.tabs[] | select(.label == $lbl) | .tab_id' 2>/dev/null \
             | head -1
     else
-        # Crude fallback: look for "claude" agents in the workspace with matching cwd
-        echo "$list_json" \
-            | grep -o "\"workspace_id\":\"${workspace_id}\"[^}]*\"cwd\":\"${cwd_abs}\"" \
-            | grep -o '"terminal_id":"[^"]*"' | head -1 \
-            | sed 's/"terminal_id":"//;s/"//'
+        echo "$list_json" | grep -o "\"label\":\"${label}\"[^}]*\"tab_id\":\"[^\"]*\"" \
+            | grep -o '"tab_id":"[^"]*"' | head -1 | sed 's/"tab_id":"//;s/"//'
     fi
+}
+
+# Get the first pane in a tab; prints pane_id or returns 1
+_first_pane_in_tab() {
+    local tab_id="$1"
+    local list_json
+    list_json="$(_herdr pane list 2>/dev/null)" || return 1
+    if command -v jq >/dev/null 2>&1; then
+        echo "$list_json" | jq -r --arg tid "$tab_id" \
+            '.result.panes[] | select(.tab_id == $tid) | .pane_id' 2>/dev/null \
+            | head -1
+    else
+        echo "$list_json" | grep -o "\"tab_id\":\"${tab_id}\"[^}]*\"pane_id\":\"[^\"]*\"" \
+            | grep -o '"pane_id":"[^"]*"' | head -1 | sed 's/"pane_id":"//;s/"//'
+    fi
+}
+
+# Check whether a pane is already running claude with matching cwd.
+# Returns 0 on match, 1 otherwise.
+_pane_running_claude() {
+    local pane_id="$1"
+    local cwd_abs="$2"
+    local list_json
+    list_json="$(_herdr pane list 2>/dev/null)" || return 1
+    if command -v jq >/dev/null 2>&1; then
+        local match
+        match="$(echo "$list_json" | jq -r --arg pid "$pane_id" --arg cwd "$cwd_abs" \
+            '.result.panes[] | select(.pane_id == $pid and (.agent // "") == "claude" and .cwd == $cwd) | .pane_id' 2>/dev/null \
+            | head -1)"
+        [[ -n "$match" ]]
+    else
+        echo "$list_json" | tr '}' '\n' \
+            | grep -E "\"pane_id\":\"${pane_id}\"" \
+            | grep -E "\"agent\":\"claude\"" \
+            | grep -qE "\"cwd\":\"${cwd_abs}\""
+    fi
+}
+
+# Single-quote a string for safe inclusion in a shell command (Bash 3.2 ok).
+# Wraps the string in single quotes and escapes any embedded single quotes.
+_shell_quote() {
+    local s="${1//\'/\'\\\'\'}"
+    printf "'%s'" "$s"
 }
 
 # Run the daemon-up detection: binary on PATH + 2s socket probe via a command
@@ -307,10 +353,11 @@ if [[ -z "$WORKTREE_ABS" ]]; then
     exit 2
 fi
 
-# Validate the basename to prevent injection attacks
-WORKSPACE_NAME="$(basename "$WORKTREE_ABS")"
-if [[ ! "$WORKSPACE_NAME" =~ ^[a-z0-9-]+$ ]]; then
-    echo "cw-herdr-open: invalid worktree path basename '$WORKSPACE_NAME' (must match ^[a-z0-9-]+$)" >&2
+# Validate the basename to prevent injection attacks. The worktree basename
+# becomes the tab label; constrained to a safe alphabet.
+TAB_LABEL="$(basename "$WORKTREE_ABS")"
+if [[ ! "$TAB_LABEL" =~ ^[a-z0-9-]+$ ]]; then
+    echo "cw-herdr-open: invalid worktree path basename '$TAB_LABEL' (must match ^[a-z0-9-]+$)" >&2
     exit 2
 fi
 
@@ -331,18 +378,36 @@ if [[ "$probe_rc" -ne 0 ]]; then
 fi
 
 # =============================================================================
-# Workspace Lookup / Creation (idempotent)
+# Derive the workspace label (one per repo, not per worktree)
+# =============================================================================
+
+WORKSPACE_NAME="$(_repo_name_for_worktree "$WORKTREE_ABS")"
+# Reject names containing shell-meaningful chars; we pass this to herdr but
+# also use it in error messages. Allow common repo-name punctuation (._-).
+if [[ ! "$WORKSPACE_NAME" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "cw-herdr-open: derived repo name contains unsafe characters: $WORKSPACE_NAME" >&2
+    exit 2
+fi
+
+# =============================================================================
+# Workspace Lookup / Creation (one workspace per repo)
 # =============================================================================
 
 WORKSPACE_ID=""
 WORKSPACE_ID="$(_find_workspace "$WORKSPACE_NAME")" || true
 
+# When we create the workspace ourselves we get its default tab+pane for free
+# and reuse them as this worktree's tab — no empty placeholder tab left behind.
+DEFAULT_TAB_ID=""
+DEFAULT_PANE_ID=""
+
 if [[ -z "$WORKSPACE_ID" ]]; then
-    # Create a new workspace with the label matching the worktree basename
     CREATE_JSON=""
-    CREATE_JSON="$(_herdr workspace create --label "$WORKSPACE_NAME" --no-focus 2>/dev/null)" || true
+    CREATE_JSON="$(_herdr workspace create --label "$WORKSPACE_NAME" --cwd "$WORKTREE_ABS" --no-focus 2>/dev/null)" || true
     if command -v jq >/dev/null 2>&1 && [[ -n "$CREATE_JSON" ]]; then
         WORKSPACE_ID="$(echo "$CREATE_JSON" | jq -r '.result.workspace.workspace_id // empty' 2>/dev/null)"
+        DEFAULT_TAB_ID="$(echo "$CREATE_JSON" | jq -r '.result.tab.tab_id // empty' 2>/dev/null)"
+        DEFAULT_PANE_ID="$(echo "$CREATE_JSON" | jq -r '.result.root_pane.pane_id // empty' 2>/dev/null)"
     fi
     if [[ -z "$WORKSPACE_ID" ]]; then
         # Retry lookup in case it was created by a race or the JSON parse failed
@@ -356,44 +421,70 @@ if [[ -z "$WORKSPACE_ID" ]]; then
 fi
 
 # =============================================================================
-# Focus-if-exists: check for an existing matching pane before spawning
+# Tab Lookup / Creation (one tab per worktree, label = worktree basename)
 # =============================================================================
 
-if [[ "$FOCUS_IF_EXISTS" -eq 1 ]]; then
-    EXISTING_AGENT=""
-    EXISTING_AGENT="$(_find_agent "$WORKSPACE_ID" "$WORKTREE_ABS")" || true
-    if [[ -n "$EXISTING_AGENT" ]]; then
-        # A matching pane already exists — focus the workspace and exit
-        _herdr workspace focus "$WORKSPACE_ID" >/dev/null 2>&1 || true
-        exit 0
+TAB_ID=""
+PANE_ID=""
+
+if [[ -n "$DEFAULT_TAB_ID" && -n "$DEFAULT_PANE_ID" ]]; then
+    # Fresh workspace: rename its default tab to match this worktree and reuse
+    # the default tab's pane (already at the right cwd).
+    _herdr tab rename "$DEFAULT_TAB_ID" "$TAB_LABEL" >/dev/null 2>&1 || true
+    TAB_ID="$DEFAULT_TAB_ID"
+    PANE_ID="$DEFAULT_PANE_ID"
+else
+    TAB_ID="$(_find_tab "$WORKSPACE_ID" "$TAB_LABEL")" || true
+    if [[ -z "$TAB_ID" ]]; then
+        TAB_JSON=""
+        TAB_JSON="$(_herdr tab create --workspace "$WORKSPACE_ID" --label "$TAB_LABEL" --cwd "$WORKTREE_ABS" --no-focus 2>/dev/null)" || true
+        if command -v jq >/dev/null 2>&1 && [[ -n "$TAB_JSON" ]]; then
+            TAB_ID="$(echo "$TAB_JSON" | jq -r '.result.tab.tab_id // empty' 2>/dev/null)"
+            PANE_ID="$(echo "$TAB_JSON" | jq -r '.result.root_pane.pane_id // empty' 2>/dev/null)"
+        fi
+        if [[ -z "$TAB_ID" ]]; then
+            TAB_ID="$(_find_tab "$WORKSPACE_ID" "$TAB_LABEL")" || true
+        fi
+    fi
+    if [[ -z "$PANE_ID" && -n "$TAB_ID" ]]; then
+        PANE_ID="$(_first_pane_in_tab "$TAB_ID")" || true
     fi
 fi
 
-# =============================================================================
-# Agent (Pane) Creation
-# =============================================================================
-
-# PID + epoch + RANDOM keeps the agent name unique across concurrent invocations.
-# herdr enforces unique agent names globally (not per-workspace), so any collision
-# causes the second agent start to fail with exit 1.
-AGENT_NAME="claude-$$-$(date +%s)-${RANDOM}"
-AGENT_EXIT=0
-if [[ -n "$INITIAL_PROMPT" ]]; then
-    _herdr agent start "$AGENT_NAME" \
-        --workspace "$WORKSPACE_ID" \
-        --cwd "$WORKTREE_ABS" \
-        --no-focus \
-        -- claude "$INITIAL_PROMPT" >/dev/null 2>&1 || AGENT_EXIT=$?
-else
-    _herdr agent start "$AGENT_NAME" \
-        --workspace "$WORKSPACE_ID" \
-        --cwd "$WORKTREE_ABS" \
-        --no-focus \
-        -- claude >/dev/null 2>&1 || AGENT_EXIT=$?
+if [[ -z "$TAB_ID" || -z "$PANE_ID" ]]; then
+    echo "cw-herdr-open: pane creation failed (could not find or create tab '$TAB_LABEL' in workspace '$WORKSPACE_NAME')" >&2
+    exit 4
 fi
 
-if [[ "$AGENT_EXIT" -ne 0 ]]; then
-    echo "cw-herdr-open: pane creation failed (agent start exit $AGENT_EXIT)" >&2
+# =============================================================================
+# Reuse-on-duplicate: focus an existing claude session instead of spawning one
+# =============================================================================
+
+# Whether or not --focus-if-exists was passed, if the tab's pane is already
+# running claude at the right cwd we focus and exit. Spawning a second claude
+# in the same pane via `pane run` would just inject "claude\n" into the
+# running session, which is never what we want.
+if _pane_running_claude "$PANE_ID" "$WORKTREE_ABS"; then
+    _herdr workspace focus "$WORKSPACE_ID" >/dev/null 2>&1 || true
+    _herdr tab focus "$TAB_ID" >/dev/null 2>&1 || true
+    exit 0
+fi
+
+# =============================================================================
+# Run claude in the tab's root pane (pane run = send text + Enter)
+# =============================================================================
+
+if [[ -n "$INITIAL_PROMPT" ]]; then
+    QUOTED_PROMPT="$(_shell_quote "$INITIAL_PROMPT")"
+    CMD="claude $QUOTED_PROMPT"
+else
+    CMD="claude"
+fi
+
+RUN_EXIT=0
+_herdr pane run "$PANE_ID" "$CMD" >/dev/null 2>&1 || RUN_EXIT=$?
+if [[ "$RUN_EXIT" -ne 0 ]]; then
+    echo "cw-herdr-open: pane creation failed (pane run exit $RUN_EXIT)" >&2
     exit 4
 fi
 

@@ -212,7 +212,7 @@ fi
     Status: Ready for development
 
     Next steps (keep THIS session open as control center):
-    1. Opened in herdr workspace: feature-{feature-name}
+    1. Opened in herdr: workspace {repo-name} → tab feature-{feature-name}
     2. Create spec: /cw-spec {feature-name}
     3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
     4. Create PR: gh pr create (PR contains spec + implementation)
@@ -629,12 +629,14 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    fi
    ```
 
-   The `--focus-if-exists` flag instructs the helper to:
-   - Look up the herdr workspace whose label matches the worktree basename (`feature-<name>`).
-   - Query `herdr agent list` to find any existing pane running `claude` with `cwd` equal to the absolute worktree path.
-   - If found: focus the workspace via `herdr workspace focus <workspace_id>` and exit 0 without creating a duplicate.
-   - If the workspace exists but no matching pane is present: create a new pane in that workspace.
-   - If neither workspace nor pane exists: create both (same behaviour as `create`).
+   The helper's layout is **one workspace per repo, one tab per worktree, one claude pane per tab**:
+   - The workspace label is the repo basename (derived from `git rev-parse --git-common-dir`).
+   - The tab label is the worktree basename (e.g. `feature-auth`).
+   - Look up an existing workspace by repo name; if absent, create it (the workspace's default tab is reused as this worktree's tab — no empty placeholder).
+   - Look up an existing tab in that workspace by worktree-basename label; if absent, create it.
+   - If the tab's pane is already running `claude` at the matching cwd: focus workspace + tab and exit 0 without spawning a duplicate.
+   - Otherwise: run `claude` in the tab's existing root pane via `herdr pane run`.
+   - `--focus-if-exists` is accepted for backward compatibility; the reuse-on-duplicate behaviour above runs unconditionally.
 
 4. **Report result:**
 
@@ -645,7 +647,7 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    Path:   .worktrees/feature-{feature-name}/
    Branch: feature/{feature-name}
 
-   Opened (or focused) in herdr workspace: feature-{feature-name}
+   Opened (or focused) in herdr: workspace {repo-name} → tab feature-{feature-name}
 
    To resume work in the terminal:
      cd .worktrees/feature-{feature-name} && claude
