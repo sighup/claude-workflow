@@ -1,0 +1,400 @@
+#!/usr/bin/env bash
+#
+# cw-herdr-open - Open a herdr pane running claude in a worktree directory
+#
+# Detects herdr availability (binary on PATH + 2s socket probe) and, when
+# available, opens a herdr workspace/pane for the given worktree directory
+# running `claude`. Gracefully degrades on unavailable or unsupported systems.
+#
+# Usage:
+#   cw-herdr-open [--focus-if-exists] [--prompt <text>] <worktree-path>
+#   cw-herdr-open --probe
+#   cw-herdr-open --help
+#
+# Arguments:
+#   worktree-path    Absolute or relative path to a worktree directory.
+#                    The trailing path component must match ^[a-z0-9-]+$ to
+#                    prevent shell injection; paths that fail this check are
+#                    rejected with exit code 2.
+#
+# Options:
+#   --focus-if-exists   Before creating a new agent pane, check whether an
+#                       existing pane is already running "claude" with cwd
+#                       matching the worktree path. If found, focus that
+#                       workspace and exit 0 without spawning a duplicate.
+#                       If the workspace exists but has no matching pane, a
+#                       new pane is created in that workspace.
+#   --prompt <text>     Forward an initial prompt to the spawned claude
+#                       session as its first user turn. The text is passed
+#                       verbatim as the first argument to `claude`.
+#   --probe             Run only the detection phase (binary + socket) and
+#                       exit with the same 0/2/3 codes — no worktree path
+#                       required and no workspace operations performed.
+#                       Use this to gate user-facing prompts that only make
+#                       sense when herdr is actually reachable.
+#
+# Exit Codes:
+#   0   Success — pane running claude was opened (or focused), or --probe ok
+#   2   Not installed, unsupported platform, or opt-out (CW_DISABLE_HERDR set)
+#   3   Socket unreachable — herdr binary found but daemon not responding
+#   4   Pane creation failed — herdr available but the agent start command failed
+#
+# Environment Variables:
+#   CW_DISABLE_HERDR   If set to any non-empty value, exit 2 immediately
+#                      without touching the herdr socket (explicit opt-out).
+#   HERDR_BIN          Override the herdr binary path (default: herdr from PATH).
+#                      Useful for test injection without a running herdr daemon.
+#
+# Examples:
+#   cw-herdr-open .worktrees/feature-auth/
+#   cw-herdr-open --focus-if-exists .worktrees/feature-auth/
+#   cw-herdr-open --prompt "/cw-spec auth" .worktrees/feature-auth/
+#   cw-herdr-open --probe                                       # 0=up, 2/3=down
+#   HERDR_BIN=./tests/fake-herdr cw-herdr-open .worktrees/feature-auth/
+#   CW_DISABLE_HERDR=1 cw-herdr-open .worktrees/feature-auth/   # exits 2
+#
+
+set -euo pipefail
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/cw-common.sh"
+
+HERDR_BIN="${HERDR_BIN:-herdr}"
+HERDR_TIMEOUT=5  # hard cap on all herdr invocations (seconds)
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+show_help() {
+    echo "Usage: cw-herdr-open [--focus-if-exists] [--prompt <text>] <worktree-path>"
+    echo "       cw-herdr-open --probe"
+    echo ""
+    echo "Open a herdr pane running claude in the given worktree directory."
+    echo ""
+    echo "Arguments:"
+    echo "  worktree-path    Path to an existing worktree directory."
+    echo "                   Basename must match ^[a-z0-9-]+$."
+    echo ""
+    echo "Options:"
+    echo "  --focus-if-exists   Focus existing workspace/pane instead of spawning duplicate"
+    echo "  --prompt <text>     Forward initial prompt as first arg to claude"
+    echo "  --probe             Detection-only: exit 0/2/3 without any workspace ops"
+    echo ""
+    echo "Exit Codes:"
+    echo "  0   Success — claude pane opened (or focused), or --probe ok"
+    echo "  2   Not installed, unsupported platform, or CW_DISABLE_HERDR opt-out"
+    echo "  3   Socket unreachable — herdr daemon not responding within 2s"
+    echo "  4   Pane creation failed"
+    echo ""
+    echo "Environment Variables:"
+    echo "  CW_DISABLE_HERDR   Set to any non-empty value to skip herdr (exits 2)"
+    echo "  HERDR_BIN          Override herdr binary path (default: herdr)"
+    echo ""
+    echo "Examples:"
+    echo "  cw-herdr-open .worktrees/feature-auth/"
+    echo "  cw-herdr-open --focus-if-exists .worktrees/feature-auth/"
+    echo "  cw-herdr-open --prompt '/cw-spec auth' .worktrees/feature-auth/"
+    echo "  cw-herdr-open --probe"
+    echo "  HERDR_BIN=./tests/fake-herdr cw-herdr-open .worktrees/feature-auth/"
+}
+
+# Run a herdr command with a hard timeout
+_herdr() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$HERDR_TIMEOUT" "$HERDR_BIN" "$@"
+    else
+        # macOS fallback: background with kill-after-N
+        "$HERDR_BIN" "$@" &
+        local bg_pid=$!
+        (sleep "$HERDR_TIMEOUT" && kill "$bg_pid" 2>/dev/null) &
+        local killer_pid=$!
+        local rc=0
+        wait "$bg_pid" 2>/dev/null || rc=$?
+        kill "$killer_pid" 2>/dev/null || true
+        return $rc
+    fi
+}
+
+# Find an existing workspace by label; prints workspace_id or returns 1
+_find_workspace() {
+    local label="$1"
+    local list_json
+    list_json="$(_herdr workspace list 2>/dev/null)" || return 1
+    # Extract workspace_id for the matching label using jq if available, else grep+sed
+    if command -v jq >/dev/null 2>&1; then
+        echo "$list_json" | jq -r --arg lbl "$label" \
+            '.result.workspaces[] | select(.label == $lbl) | .workspace_id' 2>/dev/null \
+            | head -1
+    else
+        # Fallback: crude pattern match (label must be exact)
+        echo "$list_json" | grep -o "\"label\":\"${label}\"[^}]*\"workspace_id\":\"[^\"]*\"" \
+            | grep -o '"workspace_id":"[^"]*"' | head -1 | sed 's/"workspace_id":"//;s/"//'
+    fi
+}
+
+# Find an existing agent pane running "claude" with a specific cwd in a workspace.
+# Prints the terminal_id (or pane_id) of the first matching agent, or returns 1.
+# Usage: _find_agent <workspace_id> <cwd_abs>
+_find_agent() {
+    local workspace_id="$1"
+    local cwd_abs="$2"
+    local list_json
+    list_json="$(_herdr agent list 2>/dev/null)" || return 1
+    if command -v jq >/dev/null 2>&1; then
+        echo "$list_json" | jq -r \
+            --arg ws "$workspace_id" \
+            --arg cwd "$cwd_abs" \
+            '.result.agents[] | select(
+                .workspace_id == $ws and
+                .agent == "claude" and
+                .cwd == $cwd
+            ) | .terminal_id' 2>/dev/null \
+            | head -1
+    else
+        # Crude fallback: look for "claude" agents in the workspace with matching cwd
+        echo "$list_json" \
+            | grep -o "\"workspace_id\":\"${workspace_id}\"[^}]*\"cwd\":\"${cwd_abs}\"" \
+            | grep -o '"terminal_id":"[^"]*"' | head -1 \
+            | sed 's/"terminal_id":"//;s/"//'
+    fi
+}
+
+# Run the daemon-up detection: binary on PATH + 2s socket probe via a command
+# that actually requires the socket. Returns 0 (ok), 2 (binary missing), or
+# 3 (socket unreachable). Writes a diagnostic to stderr on failure.
+_probe_herdr() {
+    if ! command -v "$HERDR_BIN" >/dev/null 2>&1; then
+        echo "cw-herdr-open: herdr is not installed or not on PATH" >&2
+        return 2
+    fi
+
+    # Probe with a command that requires the socket. `herdr status` returns
+    # 0 even when the daemon is stopped (it is purely informational), so it
+    # is unsuitable as a daemon-up check. `workspace list` exits non-zero
+    # when the socket is missing, which is what we actually want to detect.
+    local status_exit=0
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 2 "$HERDR_BIN" workspace list >/dev/null 2>&1 || status_exit=$?
+    else
+        # macOS fallback: background + kill-after-2s
+        "$HERDR_BIN" workspace list >/dev/null 2>&1 &
+        local local_pid=$!
+        (sleep 2 && kill "$local_pid" 2>/dev/null) &
+        local killer=$!
+        wait "$local_pid" 2>/dev/null || status_exit=$?
+        kill "$killer" 2>/dev/null || true
+    fi
+
+    if [[ "$status_exit" -ne 0 ]]; then
+        echo "cw-herdr-open: herdr is installed but its daemon isn't running. Start it (run 'herdr'), then retry." >&2
+        return 3
+    fi
+    return 0
+}
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+FOCUS_IF_EXISTS=0
+PROBE_ONLY=0
+INITIAL_PROMPT=""
+
+if [[ $# -eq 0 ]]; then
+    echo "cw-herdr-open: missing argument: worktree-path" >&2
+    echo "Run 'cw-herdr-open --help' for usage." >&2
+    exit 2
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --focus-if-exists)
+            FOCUS_IF_EXISTS=1
+            shift
+            ;;
+        --probe)
+            PROBE_ONLY=1
+            shift
+            ;;
+        --prompt)
+            if [[ $# -lt 2 ]]; then
+                echo "cw-herdr-open: --prompt requires a value" >&2
+                exit 2
+            fi
+            INITIAL_PROMPT="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            echo "cw-herdr-open: unknown option: $1" >&2
+            echo "Run 'cw-herdr-open --help' for usage." >&2
+            exit 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# =============================================================================
+# Platform Check (runs for both --probe and normal flows)
+# =============================================================================
+
+OS="$(uname -s 2>/dev/null || echo "unknown")"
+if [[ "$OS" != "Linux" && "$OS" != "Darwin" ]]; then
+    echo "cw-herdr-open: herdr integration is Linux/macOS only (detected: $OS)" >&2
+    exit 2
+fi
+
+# =============================================================================
+# Opt-out Check (runs for both --probe and normal flows)
+# =============================================================================
+
+if [[ -n "${CW_DISABLE_HERDR:-}" ]]; then
+    exit 2
+fi
+
+# =============================================================================
+# --probe: detection-only short-circuit
+# =============================================================================
+
+if [[ "$PROBE_ONLY" -eq 1 ]]; then
+    _probe_herdr
+    exit $?
+fi
+
+# =============================================================================
+# Normal flow requires <worktree-path>
+# =============================================================================
+
+if [[ $# -eq 0 ]]; then
+    echo "cw-herdr-open: missing argument: worktree-path" >&2
+    echo "Run 'cw-herdr-open --help' for usage." >&2
+    exit 2
+fi
+
+WORKTREE_PATH="$1"
+
+# =============================================================================
+# Input Validation — no shell injection
+# =============================================================================
+
+# Resolve the absolute path without requiring the directory to exist yet
+if command -v realpath >/dev/null 2>&1; then
+    WORKTREE_ABS="$(realpath -m "$WORKTREE_PATH" 2>/dev/null || echo "")"
+else
+    # Portable fallback: prefix with cwd if relative
+    case "$WORKTREE_PATH" in
+        /*) WORKTREE_ABS="$WORKTREE_PATH" ;;
+        *)  WORKTREE_ABS="$(pwd)/$WORKTREE_PATH" ;;
+    esac
+fi
+
+if [[ -z "$WORKTREE_ABS" ]]; then
+    echo "cw-herdr-open: could not resolve worktree path: $WORKTREE_PATH" >&2
+    exit 2
+fi
+
+# Validate the basename to prevent injection attacks
+WORKSPACE_NAME="$(basename "$WORKTREE_ABS")"
+if [[ ! "$WORKSPACE_NAME" =~ ^[a-z0-9-]+$ ]]; then
+    echo "cw-herdr-open: invalid worktree path basename '$WORKSPACE_NAME' (must match ^[a-z0-9-]+$)" >&2
+    exit 2
+fi
+
+# Verify the directory actually exists
+if [[ ! -d "$WORKTREE_ABS" ]]; then
+    echo "cw-herdr-open: worktree directory does not exist: $WORKTREE_ABS" >&2
+    exit 2
+fi
+
+# =============================================================================
+# Detection: binary on PATH + socket probe
+# =============================================================================
+
+_probe_herdr
+probe_rc=$?
+if [[ "$probe_rc" -ne 0 ]]; then
+    exit "$probe_rc"
+fi
+
+# =============================================================================
+# Workspace Lookup / Creation (idempotent)
+# =============================================================================
+
+WORKSPACE_ID=""
+WORKSPACE_ID="$(_find_workspace "$WORKSPACE_NAME")" || true
+
+if [[ -z "$WORKSPACE_ID" ]]; then
+    # Create a new workspace with the label matching the worktree basename
+    CREATE_JSON=""
+    CREATE_JSON="$(_herdr workspace create --label "$WORKSPACE_NAME" --no-focus 2>/dev/null)" || true
+    if command -v jq >/dev/null 2>&1 && [[ -n "$CREATE_JSON" ]]; then
+        WORKSPACE_ID="$(echo "$CREATE_JSON" | jq -r '.result.workspace.workspace_id // empty' 2>/dev/null)"
+    fi
+    if [[ -z "$WORKSPACE_ID" ]]; then
+        # Retry lookup in case it was created by a race or the JSON parse failed
+        WORKSPACE_ID="$(_find_workspace "$WORKSPACE_NAME")" || true
+    fi
+fi
+
+if [[ -z "$WORKSPACE_ID" ]]; then
+    echo "cw-herdr-open: pane creation failed (could not find or create workspace '$WORKSPACE_NAME')" >&2
+    exit 4
+fi
+
+# =============================================================================
+# Focus-if-exists: check for an existing matching pane before spawning
+# =============================================================================
+
+if [[ "$FOCUS_IF_EXISTS" -eq 1 ]]; then
+    EXISTING_AGENT=""
+    EXISTING_AGENT="$(_find_agent "$WORKSPACE_ID" "$WORKTREE_ABS")" || true
+    if [[ -n "$EXISTING_AGENT" ]]; then
+        # A matching pane already exists — focus the workspace and exit
+        _herdr workspace focus "$WORKSPACE_ID" >/dev/null 2>&1 || true
+        exit 0
+    fi
+fi
+
+# =============================================================================
+# Agent (Pane) Creation
+# =============================================================================
+
+# PID + epoch + RANDOM keeps the agent name unique across concurrent invocations.
+# herdr enforces unique agent names globally (not per-workspace), so any collision
+# causes the second agent start to fail with exit 1.
+AGENT_NAME="claude-$$-$(date +%s)-${RANDOM}"
+AGENT_EXIT=0
+if [[ -n "$INITIAL_PROMPT" ]]; then
+    _herdr agent start "$AGENT_NAME" \
+        --workspace "$WORKSPACE_ID" \
+        --cwd "$WORKTREE_ABS" \
+        --no-focus \
+        -- claude "$INITIAL_PROMPT" >/dev/null 2>&1 || AGENT_EXIT=$?
+else
+    _herdr agent start "$AGENT_NAME" \
+        --workspace "$WORKSPACE_ID" \
+        --cwd "$WORKTREE_ABS" \
+        --no-focus \
+        -- claude >/dev/null 2>&1 || AGENT_EXIT=$?
+fi
+
+if [[ "$AGENT_EXIT" -ne 0 ]]; then
+    echo "cw-herdr-open: pane creation failed (agent start exit $AGENT_EXIT)" >&2
+    exit 4
+fi
+
+exit 0

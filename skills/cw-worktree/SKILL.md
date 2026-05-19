@@ -49,7 +49,9 @@ Branch:    feature/{feature-name}
 
 ## Feature Discovery Pattern
 
-When analyzing a codebase, spec, or issue tracker and you identify **multiple potential features** to build, use AskUserQuestion with `multiSelect: true` to let the user choose which ones to work on:
+Whenever multiple potential features are in play — whether **you** identified them from a codebase / spec / issue tracker, or **the user** enumerated them in their request (e.g., "auth, web, mobile, backend, database") — confirm the set with `AskUserQuestion` before spinning up worktrees. Creating N worktrees is a high-leverage action; one confirmation pass lets the user re-prioritise, drop one, or add via "Other" before the work starts. Fire the question even under a standing "work without clarifying questions" instruction: this is a one-time decomposition decision, not a per-step clarification.
+
+### Single-question shape (≤ 4 candidates)
 
 ```
 AskUserQuestion({
@@ -65,15 +67,78 @@ AskUserQuestion({
 })
 ```
 
-After selection, create worktrees for all chosen features sequentially.
+### Multi-question shape (> 4 candidates)
+
+`AskUserQuestion` enforces `options.maxItems: 4` per question but accepts up to **4 questions per call** (rendered as tabs in the UI). When you have 5–16 candidates, split them across multiple grouped questions instead of dropping any. Group by **semantic affinity** when there is one — e.g., interfaces vs. services — and fall back to arbitrary even chunks only when no natural grouping exists.
+
+Worked example for the fitness-app case ("auth, web, mobile, backend, database"):
+
+```
+AskUserQuestion({
+  questions: [
+    {
+      question: "Which interface worktrees?",
+      header: "Interfaces",
+      options: [
+        { label: "Web", description: "Browser-based interface" },
+        { label: "Mobile", description: "iOS/Android client" }
+      ],
+      multiSelect: true
+    },
+    {
+      question: "Which service worktrees?",
+      header: "Services",
+      options: [
+        { label: "Auth", description: "Authentication and session management" },
+        { label: "Backend", description: "API and business logic" },
+        { label: "Database", description: "Schema and migrations" }
+      ],
+      multiSelect: true
+    }
+  ]
+})
+```
+
+Each question still needs `options.minItems: 2`. If a residual group would end up with a single candidate, either fold it into a sibling group or add a "Skip this one" companion option to keep the array valid.
+
+If candidate count exceeds 16 (4 questions × 4 options), say so plainly and ask the user to either prune the list or group by domain before continuing — don't silently drop candidates.
+
+After the user's selection, create worktrees for every chosen feature sequentially.
 
 ## Starter Prompt Generation
 
-When you've scoped out a feature during discovery (identified components, routes, requirements), **generate a starter prompt** that the user can paste into the worktree session. Include it in the worktree creation output as plain text (easy to copy). See the create command implementation for the template.
+When prior discussion gives you enough signal, **construct a starter prompt** to seed the new worktree's first claude session. The herdr integration in step 9 of the create flow forwards this prompt verbatim via `cw-herdr-open --prompt` (after a confirmation question); when herdr is unavailable, step 11 prints it as a copy-paste block.
 
-**When to generate:** Feature requirements were discussed before worktree creation, or specific components/routes/APIs were identified.
+Classify the user's intent into one of three shapes:
 
-**When NOT to generate:** Simple `/cw-worktree create <name>` without prior discussion, or the user already knows what they want to build.
+**Research-mode** — the user said things like "look into X", "I want to understand Y", "let's research how Z works", or otherwise signaled they need to investigate before scoping. Construct:
+
+```
+/cw-research {topic derived from the discussion}
+```
+
+**Spec/build-mode** — the user identified concrete components, routes, APIs, or requirements. Construct:
+
+```
+Build {feature-name}.
+
+{Brief description of what the feature does}
+
+Components/files to create:
+- {Component1}: {purpose}
+- {Component2}: {purpose}
+
+{Any routes, APIs, or patterns to follow}
+
+Run: /cw-spec {feature-name}
+```
+
+**No starter prompt** — `STARTER_PROMPT=""`. Use this when:
+- Bare `/cw-worktree create <name>` was issued without prior context.
+- The user said they want to drive the new session themselves.
+- Intent is ambiguous and a wrong guess would be worse than no guess.
+
+The AskUserQuestion gate in step 9 always offers an "Other" escape hatch so the user can edit a misclassified preset.
 
 ## Commands
 
@@ -126,6 +191,14 @@ See [worktree-commands.md](references/worktree-commands.md#sync) for full implem
 
 ***
 
+### /cw-worktree open <feature-name>
+
+Retrospectively attaches a herdr pane to an existing worktree. If a matching herdr workspace and claude pane (matched on both cwd and command) already exist, focuses the workspace rather than spawning a duplicate. If herdr is unavailable, prints the legacy manual `cd ... && claude` instructions and exits 0 — open is not a hard failure when herdr is missing. If the named worktree does not exist, exits non-zero and references `/cw-worktree list`.
+
+See [worktree-commands.md](references/worktree-commands.md#open) for full implementation.
+
+***
+
 ### /cw-worktree cleanup
 
 Removes completed or orphaned worktrees. Identifies merged branches and orphaned directories, presents cleanup options, confirms with user, removes worktrees/branches, and prunes references.
@@ -146,11 +219,15 @@ MAIN SESSION (project root) - Control Center
   /cw-worktree list
   /cw-worktree cleanup
      |
-     +---> Terminal 1: cd .worktrees/feature-auth && claude
+     +---> herdr workspace: feature-auth  (auto-opened when herdr is running)
      |     /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
      |
-     +---> Terminal 2: cd .worktrees/feature-billing && claude
+     +---> herdr workspace: feature-billing  (auto-opened when herdr is running)
            /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
+
+  Without herdr (or when CW_DISABLE_HERDR=1):
+     +---> Terminal 1: cd .worktrees/feature-auth && claude
+     +---> Terminal 2: cd .worktrees/feature-billing && claude
 ```
 
 **Key Points:**
@@ -160,6 +237,7 @@ MAIN SESSION (project root) - Control Center
 - **Automatic task isolation** - `.claude/settings.local.json` configures task list ID
 - **Persistent tasks** - Tasks stored in `~/.claude/tasks/{worktree-name}/`, survive session restarts
 - **Seamless resume** - Just `cd` to worktree and run `claude`, tasks are there
+- **herdr integration** - When [herdr](https://github.com/ogulcancelik/herdr) is installed and running, `create` automatically opens a Claude session in the new worktree. On hosts without herdr, the manual terminal flow is unchanged.
 
 ## Error Handling
 
@@ -177,6 +255,21 @@ MAIN SESSION (project root) - Control Center
 git worktree prune                                        # Remove broken worktree reference
 git worktree remove --force .worktrees/feature-{name}     # Force remove worktree (last resort)
 git branch -D feature/{name}                              # Delete orphaned branch
+```
+
+### Diagnosing the herdr integration
+
+If `create` or `open` falls back to the manual `cd ... && claude` output unexpectedly, run the probe directly:
+
+```bash
+cw-herdr-open --probe; echo $?
+# 0 = working   2 = not installed or CW_DISABLE_HERDR=1   3 = daemon down
+```
+
+For a full trace of what the helper does, prefix the invocation with `bash -x`:
+
+```bash
+bash -x "$(command -v cw-herdr-open)" --probe
 ```
 
 ## Output Requirements
@@ -197,7 +290,15 @@ Command: create | list | status | merge | sync | cleanup
 
 After creating a worktree (keep main session open as control center):
 
-**In a NEW terminal:**
+**When herdr is running** — a Claude session opens automatically in the new worktree. Switch to that herdr pane and:
+1. `/cw-spec` - create specification (committed to feature branch)
+2. `/cw-plan` - create tasks from the spec
+3. `/cw-dispatch` - execute tasks (can exit and resume anytime)
+4. `/cw-validate` - verify completion
+5. `/cw-worktree sync` - rebase on main (if needed)
+6. `gh pr create` - open PR (contains spec + implementation)
+
+**Without herdr** — open a new terminal manually:
 1. `cd .worktrees/feature-{name} && claude` - task list auto-configured
 2. `/cw-spec` - create specification (committed to feature branch)
 3. `/cw-plan` - create tasks from the spec

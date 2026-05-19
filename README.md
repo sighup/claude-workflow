@@ -95,6 +95,22 @@ npm install --save-dev playwright-bdd @playwright/test
 npx playwright install
 ```
 
+## Optional integrations
+
+### herdr
+
+[herdr](https://github.com/ogulcancelik/herdr) is a terminal-native agent multiplexer (Linux/macOS). When it is installed and running, `/cw-worktree create` will automatically open a Claude session in the new worktree's herdr pane instead of asking you to open a new terminal. `/cw-worktree open <name>` does the same retrospectively, focusing the existing pane if one already exists.
+
+If herdr is not installed, not running, or you set `CW_DISABLE_HERDR=1`, every worktree command works exactly as before — the integration is silently skipped and the manual `cd ... && claude` instructions are printed instead. Nothing in the plugin requires herdr.
+
+To give the in-pane Claude session full knowledge of herdr's CLI (workspaces, panes, `wait output`, etc.), install herdr's own skill into Claude Code after installing herdr:
+
+```bash
+herdr integration install claude
+```
+
+That skill is maintained by the herdr project (AGPL-3.0) and self-disables outside a herdr pane via the `HERDR_ENV=1` guard, so it stays out of your way on hosts without herdr.
+
 ## Task Metadata
 
 Every task on the board carries self-contained metadata enabling autonomous execution:
