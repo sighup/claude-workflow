@@ -182,7 +182,7 @@ fi
              description: "Spawn a herdr pane running claude with the prompt as first message",
              preview: "<STARTER_PROMPT verbatim>" },
            { label: "Yes, drive autonomously (/goal)",
-             description: "Forward a /goal-prefixed prompt that drives cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing → PR until done",
+             description: "Forward a /goal-prefixed prompt that drives cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing until done",
              preview: "<STARTER_PROMPT_GOAL verbatim>" },
            { label: "Open empty session",
              description: "Spawn a herdr pane running claude with no auto-prompt" },

@@ -142,21 +142,20 @@ The AskUserQuestion gate in step 9 always offers an "Other" escape hatch so the 
 
 ### Autonomous variant (`STARTER_PROMPT_GOAL`)
 
-Whenever `STARTER_PROMPT` is non-empty, **also** construct an autonomous variant `STARTER_PROMPT_GOAL`. This wraps the same intent in a `/goal`-prefixed directive that drives the full pipeline end-to-end (cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing → PR). Step 9's AskUserQuestion offers this as a fourth choice so the user can promote any worktree to hands-off execution without restating the request. `/goal` is a semantic marker, not a registered slash command — the spawned claude session reads it as plain text and follows the structured steps.
+Whenever `STARTER_PROMPT` is non-empty, **also** construct an autonomous variant `STARTER_PROMPT_GOAL`. This wraps the same intent in a `/goal`-prefixed directive that drives the full pipeline end-to-end (cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing). Step 9's AskUserQuestion offers this as a fourth choice so the user can promote any worktree to hands-off execution without restating the request. `/goal` is a semantic marker, not a registered slash command — the spawned claude session reads it as plain text and follows the structured steps.
 
 **Template — when base mode is Research-mode** (no spec exists, greenfield or large-unknown task):
 
 ```
-/goal Pipeline complete for `{feature-name}`: research done, spec committed, plan executed, all non-test tasks have status `completed` (verified via TaskList), `cw-validate` passes, `cw-review` has no blocking issues, `cw-testing` is green, and a PR exists for this branch.
+/goal Pipeline complete for `{feature-name}`: research done, spec committed, plan executed, all non-test tasks have status `completed` (verified via TaskList), `cw-validate` passes, `cw-review` has no blocking issues, and `cw-testing` is green.
 
-Workflow (research → spec → plan → dispatch → validate → review → testing → PR):
+Workflow (research → spec → plan → dispatch → validate → review → testing):
 1. Invoke `cw-research` with the topic below. It saves a report under `docs/specs/research-*/` and appends a Meta-Prompt section ready for `cw-spec`.
 2. Without pausing for review, extract the meta-prompt from the research report and invoke `cw-spec` with it.
 3. Commit the spec and research artifacts (`git add docs/specs && git commit -m "spec: {feature-name}"`).
 4. Invoke `cw-plan` against the spec to populate this worktree's task list.
 5. Use `cw-dispatch` to advance ready tasks until non-test tasks are complete.
 6. Invoke `cw-validate`, then `cw-review`, then `cw-testing`. Treat their findings as new FIX tasks on the board and keep dispatching until the goal condition holds.
-7. Open a PR for this branch.
 
 Topic: {topic derived from the discussion — same text as Research-mode STARTER_PROMPT, minus the `/cw-research` prefix}
 
@@ -166,15 +165,14 @@ Stop and report if three consecutive turns make no progress on task transitions.
 **Template — when base mode is Spec/build-mode** (concrete build directive, no research needed):
 
 ```
-/goal Pipeline complete for `{feature-name}`: spec committed, plan executed, all non-test tasks have status `completed` (verified via TaskList), `cw-validate` passes, `cw-review` has no blocking issues, `cw-testing` is green, and a PR exists for this branch.
+/goal Pipeline complete for `{feature-name}`: spec committed, plan executed, all non-test tasks have status `completed` (verified via TaskList), `cw-validate` passes, `cw-review` has no blocking issues, and `cw-testing` is green.
 
-Workflow (spec → plan → dispatch → validate → review → testing → PR):
+Workflow (spec → plan → dispatch → validate → review → testing):
 1. Invoke `cw-spec` with the build directive below as input.
 2. Commit the spec (`git add docs/specs && git commit -m "spec: {feature-name}"`).
 3. Invoke `cw-plan` against the spec to populate this worktree's task list.
 4. Use `cw-dispatch` to advance ready tasks until non-test tasks are complete.
 5. Invoke `cw-validate`, then `cw-review`, then `cw-testing`. Treat their findings as new FIX tasks on the board and keep dispatching until the goal condition holds.
-6. Open a PR for this branch.
 
 Build directive:
 {STARTER_PROMPT body without the trailing `Run: /cw-spec` line}
