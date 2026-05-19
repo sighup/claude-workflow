@@ -170,7 +170,7 @@ fi
      "$HERDR_OPEN_BIN" ".worktrees/feature-${FEATURE}/" 2>/dev/null
      HERDR_EXIT=$?
      ```
-   - `HERDR_AVAILABLE=1` and starter prompt available → use `AskUserQuestion` to confirm before forwarding (the question is rendered by Claude, not Bash):
+   - `HERDR_AVAILABLE=1` and starter prompt available → use `AskUserQuestion` to confirm before forwarding (the question is rendered by Claude, not Bash). When the classifier produced a non-empty `STARTER_PROMPT_GOAL` (see SKILL.md "Autonomous variant"), include the autonomous option so the user can promote this worktree to hands-off execution without restating the request:
 
      ```
      AskUserQuestion({
@@ -181,6 +181,9 @@ fi
            { label: "Yes, start with this prompt (Recommended)",
              description: "Spawn a herdr pane running claude with the prompt as first message",
              preview: "<STARTER_PROMPT verbatim>" },
+           { label: "Yes, drive autonomously (/goal)",
+             description: "Forward a /goal-prefixed prompt that drives cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing → PR until done",
+             preview: "<STARTER_PROMPT_GOAL verbatim>" },
            { label: "Open empty session",
              description: "Spawn a herdr pane running claude with no auto-prompt" },
            { label: "Don't open in herdr",
@@ -191,8 +194,11 @@ fi
      })
      ```
 
+     Omit the autonomous option when `STARTER_PROMPT_GOAL` is empty (no concrete topic or build directive to drive the goal toward — see SKILL.md "Autonomous variant").
+
      Map the answer to a Bash invocation:
      - **Recommended** (or **Other** with edited text) → `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".worktrees/feature-${FEATURE}/" 2>/dev/null` then `HERDR_EXIT=$?`
+     - **Yes, drive autonomously (/goal)** → `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".worktrees/feature-${FEATURE}/" 2>/dev/null` then `HERDR_EXIT=$?`
      - **Open empty session** → `"$HERDR_OPEN_BIN" ".worktrees/feature-${FEATURE}/" 2>/dev/null` then `HERDR_EXIT=$?`
      - **Don't open in herdr** → set `HERDR_EXIT=2`, do not invoke the helper
 
