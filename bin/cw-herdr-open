@@ -277,6 +277,15 @@ while [[ $# -gt 0 ]]; do
                 exit 2
             fi
             INITIAL_PROMPT="$2"
+            # Reject stringified-nil sentinels from buggy callers (JS/Python/etc)
+            # that interpolate an unset variable. Forwarding "undefined" to claude
+            # makes for a baffling first turn; failing loudly surfaces the caller bug.
+            case "$INITIAL_PROMPT" in
+                undefined|null|NaN|None|'[object Object]')
+                    echo "cw-herdr-open: --prompt value is the literal string '$INITIAL_PROMPT' — looks like an unset variable from the caller. Refusing to forward." >&2
+                    exit 2
+                    ;;
+            esac
             shift 2
             ;;
         --)
