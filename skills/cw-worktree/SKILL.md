@@ -107,7 +107,7 @@ After the user's selection, create worktrees for every chosen feature sequential
 
 ## Starter Prompt Generation
 
-When prior discussion gives you enough signal, **construct a starter prompt** to seed the new worktree's first claude session. The herdr integration in step 9 of the create flow forwards this prompt verbatim via `cw-herdr-open --prompt` (after a confirmation question); when herdr is unavailable, step 11 prints it as a copy-paste block.
+When prior discussion gives you enough signal, **construct a starter prompt** to seed the new worktree's first claude session. After every feature has its `STARTER_PROMPT` (and, where applicable, `STARTER_PROMPT_GOAL`), the **Drive-Mode Selection** gate decides — once for the whole batch — what gets forwarded to each tab. When herdr is available the chosen prompt is forwarded via `cw-herdr-open --prompt`; when herdr is unavailable, step 11 prints it as a copy-paste block.
 
 Classify the user's intent into one of three shapes:
 
@@ -138,11 +138,11 @@ Run: /cw-spec {feature-name}
 - The user said they want to drive the new session themselves.
 - Intent is ambiguous and a wrong guess would be worse than no guess.
 
-The AskUserQuestion gate in step 9 always offers an "Other" escape hatch so the user can edit a misclassified preset.
+The Drive-Mode Selection gate always offers an "Other" escape hatch so the user can edit a misclassified preset before it is forwarded.
 
 ### Autonomous variant (`STARTER_PROMPT_GOAL`)
 
-Whenever `STARTER_PROMPT` is non-empty, **also** construct an autonomous variant `STARTER_PROMPT_GOAL`. This wraps the same intent in a `/goal`-prefixed directive that drives the full pipeline end-to-end (cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing). Step 9's AskUserQuestion offers this as a fourth choice so the user can promote any worktree to hands-off execution without restating the request. `/goal` is a semantic marker, not a registered slash command — the spawned claude session reads it as plain text and follows the structured steps.
+Whenever `STARTER_PROMPT` is non-empty, **also** construct an autonomous variant `STARTER_PROMPT_GOAL`. This wraps the same intent in a `/goal`-prefixed directive that drives the full pipeline end-to-end (cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing). The Drive-Mode Selection gate surfaces this as the autonomous option so the user can promote the whole batch to hands-off execution without restating the request. `/goal` is a semantic marker, not a registered slash command — the spawned claude session reads it as plain text and follows the structured steps.
 
 **Template — when base mode is Research-mode** (no spec exists, greenfield or large-unknown task):
 
@@ -181,6 +181,62 @@ Stop and report if three consecutive turns make no progress on task transitions.
 ```
 
 When `STARTER_PROMPT=""`, leave `STARTER_PROMPT_GOAL=""` too — without a topic or build directive there is nothing concrete to drive the goal toward.
+
+## Drive-Mode Selection
+
+After feature discovery and starter-prompt classification — but **before any worktree is created** — present a **single** `AskUserQuestion` that establishes how the whole batch will be driven. Cache the answer as `DRIVE_MODE ∈ {starter, autonomous, empty, skip_herdr}`. Step 9 of the create flow reads `DRIVE_MODE` and forwards accordingly; there is no per-worktree confirmation.
+
+Fire this question even under a standing "work without clarifying questions" instruction. It is a one-time, batch-level commitment, not a per-step clarification — same rationale as the feature-discovery question above.
+
+The choice applies uniformly to every feature in the call. If a user wants to mix modes (e.g. autonomous for one, manual for another) they should split into separate `/cw-worktree create` invocations.
+
+### When and what to ask
+
+The available options collapse based on (a) whether **any** feature in the batch has a non-empty `STARTER_PROMPT` and (b) whether herdr is available (the once-per-invocation probe from worktree-commands.md `create` § per-invocation setup).
+
+| Any STARTER_PROMPT? | herdr available? | Options surfaced |
+|---|---|---|
+| Yes | Yes | starter (Recommended), autonomous, empty, skip herdr |
+| Yes | No | starter (Recommended), autonomous — choice changes what gets printed in step 11 |
+| No  | Yes | empty, skip herdr |
+| No  | No  | **Skip the question.** Nothing to forward, nothing to open — fall through to legacy print. |
+
+Drop the **autonomous** option when `STARTER_PROMPT_GOAL` is empty for every feature. If only one meaningful option remains after collapsing, skip the question and use that option as `DRIVE_MODE`.
+
+### Question shape (full 4-option variant)
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "How should the {N} worktree(s) be driven after creation?",
+    header: "Drive mode",
+    options: [
+      { label: "Starter prompt (Recommended)",
+        description: "Forward the classified /cw-spec or /cw-research kickoff to each tab; you steer from there",
+        preview: "<STARTER_PROMPT verbatim for first feature; if N>1 add '\\n\\n…and similar for the other {N-1} worktree(s).'>" },
+      { label: "Autonomous (/goal)",
+        description: "Drive end-to-end through cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing without further input",
+        preview: "<STARTER_PROMPT_GOAL verbatim for first feature; if N>1 add '\\n\\n…and similar for the other {N-1} worktree(s).'>" },
+      { label: "Empty session",
+        description: "Open the herdr tab(s) with no auto-prompt" },
+      { label: "Skip herdr",
+        description: "Just create the worktree(s); start sessions manually with cd ... && claude" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Map the chosen label to `DRIVE_MODE`:
+
+| Label | `DRIVE_MODE` | Step-9 behavior |
+|---|---|---|
+| Starter prompt (or **Other** with edited text) | `starter` | Forward `STARTER_PROMPT` via `cw-herdr-open --prompt` |
+| Autonomous (/goal) | `autonomous` | Forward `STARTER_PROMPT_GOAL` via `cw-herdr-open --prompt` |
+| Empty session | `empty` | Invoke `cw-herdr-open` without `--prompt` |
+| Skip herdr | `skip_herdr` | Set `HERDR_EXIT=2`; do not invoke the helper. Step 11 prints the copy-paste block when a starter exists. |
+
+When the user picks **Other** under "Starter prompt", treat the edited text as the new `STARTER_PROMPT` for all features in the batch — or, if it clearly only applies to one feature, ask a follow-up to choose. (Editing the autonomous variant is rare; treat its **Other** the same way.)
 
 ## Commands
 

@@ -38,6 +38,12 @@ fi
 
 `HERDR_PROBE_EXIT` carries the original 0/2/3 exit code. Step 9 reuses it as `HERDR_EXIT` when herdr is unavailable, so step 10 can distinguish exit 3 (daemon down — say so in the fallback summary) from exit 2 (not installed or `CW_DISABLE_HERDR=1` — stay silent). For diagnosis run `cw-herdr-open --probe; echo $?` directly — see SKILL.md "Diagnosing the herdr integration".
 
+**Drive-mode selection (runs once for the whole batch):**
+
+After classifying each feature into a `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (see SKILL.md "Starter Prompt Generation"), but **before** entering the per-feature loop, present a single `AskUserQuestion` to pick `DRIVE_MODE ∈ {starter, autonomous, empty, skip_herdr}`. The full question shape, option-collapsing rules, and label-to-mode mapping live in SKILL.md "Drive-Mode Selection". The chosen `DRIVE_MODE` is cached and read by step 9 of every feature in this call — there is no per-worktree confirmation.
+
+Fire the question even under a standing "work without clarifying questions" instruction. Skip it only when zero meaningful options remain (no starter prompts AND no herdr) — in that case set `DRIVE_MODE=skip_herdr` and fall through.
+
 **Process (for each feature):**
 
 1. **Validate feature name:**
@@ -160,47 +166,20 @@ fi
 
 9. **Invoke herdr integration (optional, silent on failure):**
 
-   After the worktree and task list are configured, attempt to open a herdr pane for this worktree. `HERDR_OPEN_BIN` and `HERDR_AVAILABLE` were resolved once in the per-invocation setup above; this step uses those cached values. A failure on one worktree does not skip subsequent worktrees in a multi-create call.
+   Read the cached `DRIVE_MODE` from per-invocation setup. `HERDR_OPEN_BIN` and `HERDR_AVAILABLE` were also resolved once in setup; this step uses those cached values. A failure on one worktree does not skip subsequent worktrees in a multi-create call.
 
-   **Decide invocation shape** based on `$HERDR_AVAILABLE` and whether a starter prompt was constructed (the probe runs only once per multi-create — see per-invocation setup above; before forwarding a starter prompt, only the `AskUserQuestion` confirmation runs per worktree).
+   If `HERDR_AVAILABLE=0`, set `HERDR_EXIT=$HERDR_PROBE_EXIT` (preserves 2 vs 3 — see step 10 hint logic) and skip the helper entirely regardless of `DRIVE_MODE`. Fall through to legacy output in step 10.
 
-   - `HERDR_AVAILABLE=0` → set `HERDR_EXIT=$HERDR_PROBE_EXIT` (preserves 2 vs 3 — see step 10 hint logic) and skip the helper entirely. Fall through to legacy output in step 10.
-   - `HERDR_AVAILABLE=1` and no starter prompt → invoke without `--prompt`:
-     ```bash
-     "$HERDR_OPEN_BIN" ".worktrees/feature-${FEATURE}/" 2>/dev/null
-     HERDR_EXIT=$?
-     ```
-   - `HERDR_AVAILABLE=1` and starter prompt available → use `AskUserQuestion` to confirm before forwarding (the question is rendered by Claude, not Bash). When the classifier produced a non-empty `STARTER_PROMPT_GOAL` (see SKILL.md "Autonomous variant"), include the autonomous option so the user can promote this worktree to hands-off execution without restating the request:
+   Otherwise dispatch on `DRIVE_MODE`:
 
-     ```
-     AskUserQuestion({
-       questions: [{
-         question: "Open feature-{name} in herdr with this kickoff?",
-         header: "Herdr",
-         options: [
-           { label: "Yes, start with this prompt (Recommended)",
-             description: "Spawn a herdr pane running claude with the prompt as first message",
-             preview: "<STARTER_PROMPT verbatim>" },
-           { label: "Yes, drive autonomously (/goal)",
-             description: "Forward a /goal-prefixed prompt that drives cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing until done",
-             preview: "<STARTER_PROMPT_GOAL verbatim>" },
-           { label: "Open empty session",
-             description: "Spawn a herdr pane running claude with no auto-prompt" },
-           { label: "Don't open in herdr",
-             description: "Skip herdr; the worktree is still created" }
-         ],
-         multiSelect: false
-       }]
-     })
-     ```
+   | `DRIVE_MODE` | Bash invocation |
+   |---|---|
+   | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `autonomous` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `empty` | `"$HERDR_OPEN_BIN" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `skip_herdr` | `HERDR_EXIT=2` (do not invoke the helper) |
 
-     Omit the autonomous option when `STARTER_PROMPT_GOAL` is empty (no concrete topic or build directive to drive the goal toward — see SKILL.md "Autonomous variant").
-
-     Map the answer to a Bash invocation:
-     - **Recommended** (or **Other** with edited text) → `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".worktrees/feature-${FEATURE}/" 2>/dev/null` then `HERDR_EXIT=$?`
-     - **Yes, drive autonomously (/goal)** → `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".worktrees/feature-${FEATURE}/" 2>/dev/null` then `HERDR_EXIT=$?`
-     - **Open empty session** → `"$HERDR_OPEN_BIN" ".worktrees/feature-${FEATURE}/" 2>/dev/null` then `HERDR_EXIT=$?`
-     - **Don't open in herdr** → set `HERDR_EXIT=2`, do not invoke the helper
+   When `DRIVE_MODE=starter` or `autonomous` and this specific feature has an empty `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (rare — only possible when the batch is mixed and the user picked a mode that fits *some* features), fall back to the `empty` invocation for this feature so the tab still opens.
 
    The helper has its own 5-second hard timeout on all herdr socket calls and exits 0 (success) / 2 (unavailable or opt-out) / 3 (daemon unreachable) / 4 (pane creation failed). Step 10's two branches are gated by `HERDR_EXIT=0` vs everything else.
 
@@ -273,18 +252,20 @@ fi
 
 11. **Include starter prompt (only when herdr did not forward it):**
 
-    When `HERDR_EXIT=0` and the user chose "Yes, start with this prompt" in step 9, the prompt was already forwarded to the spawned claude session via `--prompt` and does NOT need to be printed here.
+    When step 9 forwarded the prompt (`HERDR_EXIT=0` and `DRIVE_MODE ∈ {starter, autonomous}`), the spawned claude session already has it and nothing needs to be printed here.
 
-    Print the copy-paste block only when one of the following holds:
-    - `HERDR_EXIT!=0` (herdr unavailable, the user picked "Don't open in herdr", or the helper failed), **and**
-    - A starter prompt was constructed in step 9.
+    Print the copy-paste block only when **both** hold:
+    - `HERDR_EXIT!=0` (herdr unavailable, `DRIVE_MODE=skip_herdr`, or the helper failed), **and**
+    - A starter prompt was constructed for this feature (`STARTER_PROMPT` non-empty, or `STARTER_PROMPT_GOAL` non-empty when `DRIVE_MODE=autonomous`).
+
+    Use `STARTER_PROMPT_GOAL` for the body when `DRIVE_MODE=autonomous`; otherwise use `STARTER_PROMPT`.
 
     ```
     STARTER PROMPT (copy into worktree session)
     ═══════════════════════════════════════════
 
-    {STARTER_PROMPT verbatim — see SKILL.md "Starter Prompt Generation"
-     for the research-mode and spec-mode templates}
+    {STARTER_PROMPT or STARTER_PROMPT_GOAL verbatim — see SKILL.md
+     "Starter Prompt Generation" and "Autonomous variant" for templates}
     ```
 
 ---
