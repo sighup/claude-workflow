@@ -204,9 +204,12 @@ _pane_running_claude() {
 }
 
 # Single-quote a string for safe inclusion in a shell command (Bash 3.2 ok).
-# Wraps the string in single quotes and escapes any embedded single quotes.
+# Wraps the string in single quotes and escapes any embedded single quotes
+# as `'\''` (close, escaped quote, reopen). The assignment is intentionally
+# unquoted — inside `"${var//pat/repl}"` bash treats backslashes as literal
+# rather than as escape characters, producing `\'\\'\'` instead of `'\''`.
 _shell_quote() {
-    local s="${1//\'/\'\\\'\'}"
+    local s=${1//\'/\'\\\'\'}
     printf "'%s'" "$s"
 }
 
