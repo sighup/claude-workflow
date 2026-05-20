@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # PreToolUse hook: Block team-based skills (cw-dispatch-team, cw-review-team)
-# when CLAUDE_CODE_TASK_LIST_ID is not set in the environment. Filtering to
-# only fire for team-based skills is handled declaratively via the "if" field
-# in hooks/hooks.json.
+# when CLAUDE_CODE_TASK_LIST_ID is not set in the environment.
+#
+# Filtering happens in this script (not via the "if" field in hooks.json)
+# because the "if" field accepts only a single permission rule — boolean
+# operators like || are silently rejected, which would cause this hook to
+# fire on every Skill invocation.
 
 set -euo pipefail
 
@@ -13,15 +16,15 @@ INPUT=$(cat)
 # Strip any namespace prefix (e.g., "claude-workflow:cw-dispatch-team" -> "cw-dispatch-team")
 SKILL_NAME=$(echo "$INPUT" | jq -r '(.tool_input.skill // "") | split(":") | last' 2>/dev/null || echo "")
 
+# Only gate team-based skills; allow everything else through.
+case "$SKILL_NAME" in
+  cw-dispatch-team) ALT_SKILL="/cw-dispatch" ;;
+  cw-review-team)   ALT_SKILL="/cw-review" ;;
+  *)                exit 0 ;;
+esac
+
 # Check if CLAUDE_CODE_TASK_LIST_ID is set
 if [ -z "${CLAUDE_CODE_TASK_LIST_ID:-}" ]; then
-  # Suggest the non-team alternative based on which skill was invoked
-  case "$SKILL_NAME" in
-    cw-dispatch-team) ALT_SKILL="/cw-dispatch" ;;
-    cw-review-team)   ALT_SKILL="/cw-review" ;;
-    *)                ALT_SKILL="the non-team variant" ;;
-  esac
-
   echo "CLAUDE_CODE_TASK_LIST_ID is not set." >&2
   echo "" >&2
   echo "/$SKILL_NAME requires this env var so all teammates share the project task list." >&2
