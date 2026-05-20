@@ -6,6 +6,44 @@ Detailed process steps for each `/cw-worktree` command. Referenced from [SKILL.m
 
 ## create
 
+**Per-invocation setup (runs once, before the per-feature loop):**
+
+Resolve the `cw-herdr-open` helper and probe herdr availability **once** for the whole multi-create call. The result is reused for every feature — there is no point probing the same daemon `N` times when the answer cannot change between worktrees on a single host.
+
+**Helper resolution** uses three lookups in priority order: PATH (the plugin's `bin/` is auto-added to Claude's session PATH at startup, so `command -v` works for marketplace installs), `CLAUDE_PLUGIN_ROOT` (set in hooks but not in Bash by default), and the git top-level (useful only when running from a plugin source checkout).
+
+```bash
+# Primary: marketplace installs put plugin bin/ on Claude's PATH
+HERDR_OPEN_BIN="$(command -v cw-herdr-open 2>/dev/null || true)"
+# Fallback 1: explicit plugin root (set in hook context)
+if [ -z "$HERDR_OPEN_BIN" ] && [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  HERDR_OPEN_BIN="$CLAUDE_PLUGIN_ROOT/bin/cw-herdr-open"
+fi
+# Fallback 2: plugin source checkout only — for any other repo this resolves
+# to a non-existent path and the [ -x ] guard below trips, falling through
+# to the legacy output.
+if [ -z "$HERDR_OPEN_BIN" ] || [ ! -x "$HERDR_OPEN_BIN" ]; then
+  HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/bin/cw-herdr-open"
+fi
+
+# Probe once for the whole multi-create call.
+HERDR_AVAILABLE=0
+HERDR_PROBE_EXIT=2
+if [ -x "$HERDR_OPEN_BIN" ]; then
+  "$HERDR_OPEN_BIN" --probe 2>/dev/null
+  HERDR_PROBE_EXIT=$?
+  [ "$HERDR_PROBE_EXIT" -eq 0 ] && HERDR_AVAILABLE=1
+fi
+```
+
+`HERDR_PROBE_EXIT` carries the original 0/2/3 exit code. Step 9 reuses it as `HERDR_EXIT` when herdr is unavailable, so step 10 can distinguish exit 3 (daemon down — say so in the fallback summary) from exit 2 (not installed or `CW_DISABLE_HERDR=1` — stay silent). For diagnosis run `cw-herdr-open --probe; echo $?` directly — see SKILL.md "Diagnosing the herdr integration".
+
+**Drive-mode selection (runs once for the whole batch):**
+
+After classifying each feature into a `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (see SKILL.md "Starter Prompt Generation"), but **before** entering the per-feature loop, present a single `AskUserQuestion` to pick `DRIVE_MODE ∈ {starter, autonomous, empty, skip_herdr}`. The full question shape, option-collapsing rules, and label-to-mode mapping live in SKILL.md "Drive-Mode Selection". The chosen `DRIVE_MODE` is cached and read by step 9 of every feature in this call — there is no per-worktree confirmation.
+
+Fire the question even under a standing "work without clarifying questions" instruction. Skip it only when zero meaningful options remain (no starter prompts AND no herdr) — in that case set `DRIVE_MODE=skip_herdr` and fall through.
+
 **Process (for each feature):**
 
 1. **Validate feature name:**
@@ -126,54 +164,108 @@ Detailed process steps for each `/cw-worktree` command. Referenced from [SKILL.m
    fi
    ```
 
-9. **Report success:**
-   ```
-   WORKTREE CREATED
-   ================
-   Path:   .worktrees/feature-{feature-name}/
-   Branch: feature/{feature-name}
-   Task List: feature-{feature-name} (via .claude/settings.local.json)
-   Status: Ready for development
+9. **Invoke herdr integration (optional, silent on failure):**
 
-   Next steps (keep THIS session open as control center):
-   1. Open NEW terminal: cd .worktrees/feature-{feature-name} && claude
-   2. Create spec: /cw-spec {feature-name}
-   3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
-   4. Create PR: gh pr create (PR contains spec + implementation)
-   5. Exit worktree session when done
+   Read the cached `DRIVE_MODE` from per-invocation setup. `HERDR_OPEN_BIN` and `HERDR_AVAILABLE` were also resolved once in setup; this step uses those cached values. A failure on one worktree does not skip subsequent worktrees in a multi-create call.
 
-   From THIS session you can:
-     /cw-worktree list              # Check status of all worktrees
-     /cw-worktree create <other>    # Create more worktrees
-     /cw-worktree cleanup           # Remove merged worktrees
+   If `HERDR_AVAILABLE=0`, set `HERDR_EXIT=$HERDR_PROBE_EXIT` (preserves 2 vs 3 — see step 10 hint logic) and skip the helper entirely regardless of `DRIVE_MODE`. Fall through to legacy output in step 10.
 
-   To resume worktree work later:
-     cd .worktrees/feature-{feature-name} && claude
-     (Tasks persist across sessions)
+   Otherwise dispatch on `DRIVE_MODE`:
 
-   To sync with main before PR (from worktree session):
-     /cw-worktree sync {feature-name}
-   ```
+   | `DRIVE_MODE` | Bash invocation |
+   |---|---|
+   | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `autonomous` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `empty` | `"$HERDR_OPEN_BIN" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `skip_herdr` | `HERDR_EXIT=2` (do not invoke the helper) |
 
-10. **Include starter prompt (if context was gathered):**
+   When `DRIVE_MODE=starter` or `autonomous` and this specific feature has an empty `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (rare — only possible when the batch is mixed and the user picked a mode that fits *some* features), fall back to the `empty` invocation for this feature so the tab still opens.
 
-    If the feature was scoped during discovery (components identified, requirements discussed), include a starter prompt the user can paste into the worktree session. Use plain text for easy copying:
+   The helper has its own 5-second hard timeout on all herdr socket calls and exits 0 (success) / 2 (unavailable or opt-out) / 3 (daemon unreachable) / 4 (pane creation failed). Step 10's two branches are gated by `HERDR_EXIT=0` vs everything else.
+
+10. **Report success:**
+
+    The first "Next steps" line varies based on whether the herdr invocation (step 9) succeeded:
+
+    **When `HERDR_EXIT=0` (herdr pane opened):**
+    ```
+    WORKTREE CREATED
+    ================
+    Path:   .worktrees/feature-{feature-name}/
+    Branch: feature/{feature-name}
+    Task List: feature-{feature-name} (via .claude/settings.local.json)
+    Status: Ready for development
+
+    Next steps (keep THIS session open as control center):
+    1. Opened in herdr: workspace {repo-name} → tab feature-{feature-name}
+    2. Create spec: /cw-spec {feature-name}
+    3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
+    4. Create PR: gh pr create (PR contains spec + implementation)
+    5. Exit worktree session when done
+
+    From THIS session you can:
+      /cw-worktree list              # Check status of all worktrees
+      /cw-worktree create <other>    # Create more worktrees
+      /cw-worktree cleanup           # Remove merged worktrees
+
+    To resume worktree work later:
+      cd .worktrees/feature-{feature-name} && claude
+      (Tasks persist across sessions)
+
+    To sync with main before PR (from worktree session):
+      /cw-worktree sync {feature-name}
+    ```
+
+    **When `HERDR_EXIT!=0` (herdr unavailable or failed — legacy output, byte-identical to pre-herdr behavior):**
+
+    When `HERDR_EXIT=3` (probe got past `command -v` but the socket is unreachable — i.e., herdr is installed but its daemon isn't running), note the daemon-down state in your summary so the user knows the integration is one daemon-start away. Otherwise (`HERDR_EXIT=2` — not installed or `CW_DISABLE_HERDR=1` — or `HERDR_EXIT=4` — pane-creation failure), no annotation. Then print the legacy block:
+
+    ```
+    WORKTREE CREATED
+    ================
+    Path:   .worktrees/feature-{feature-name}/
+    Branch: feature/{feature-name}
+    Task List: feature-{feature-name} (via .claude/settings.local.json)
+    Status: Ready for development
+
+    Next steps (keep THIS session open as control center):
+    1. Open NEW terminal: cd .worktrees/feature-{feature-name} && claude
+    2. Create spec: /cw-spec {feature-name}
+    3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
+    4. Create PR: gh pr create (PR contains spec + implementation)
+    5. Exit worktree session when done
+
+    From THIS session you can:
+      /cw-worktree list              # Check status of all worktrees
+      /cw-worktree create <other>    # Create more worktrees
+      /cw-worktree cleanup           # Remove merged worktrees
+
+    To resume worktree work later:
+      cd .worktrees/feature-{feature-name} && claude
+      (Tasks persist across sessions)
+
+    To sync with main before PR (from worktree session):
+      /cw-worktree sync {feature-name}
+    ```
+
+    The helper's stderr is suppressed (`2>/dev/null`). For diagnosis run `cw-herdr-open --probe; echo $?` directly — see SKILL.md "Diagnosing the herdr integration".
+
+11. **Include starter prompt (only when herdr did not forward it):**
+
+    When step 9 forwarded the prompt (`HERDR_EXIT=0` and `DRIVE_MODE ∈ {starter, autonomous}`), the spawned claude session already has it and nothing needs to be printed here.
+
+    Print the copy-paste block only when **both** hold:
+    - `HERDR_EXIT!=0` (herdr unavailable, `DRIVE_MODE=skip_herdr`, or the helper failed), **and**
+    - A starter prompt was constructed for this feature (`STARTER_PROMPT` non-empty, or `STARTER_PROMPT_GOAL` non-empty when `DRIVE_MODE=autonomous`).
+
+    Use `STARTER_PROMPT_GOAL` for the body when `DRIVE_MODE=autonomous`; otherwise use `STARTER_PROMPT`.
 
     ```
     STARTER PROMPT (copy into worktree session)
     ═══════════════════════════════════════════
 
-    Build {feature-name}.
-
-    {Brief description of what the feature does}
-
-    Components/files to create:
-    - {Component1}: {purpose}
-    - {Component2}: {purpose}
-
-    {Any routes, APIs, or patterns to follow}
-
-    Run: /cw-spec {feature-name}
+    {STARTER_PROMPT or STARTER_PROMPT_GOAL verbatim — see SKILL.md
+     "Starter Prompt Generation" and "Autonomous variant" for templates}
     ```
 
 ---
@@ -480,6 +572,89 @@ Detailed process steps for each `/cw-worktree` command. Referenced from [SKILL.m
    The feature branch is now up to date with main.
    Ready for PR: gh pr create
    ```
+
+---
+
+## open
+
+Retrospectively attaches a herdr pane to an existing worktree. If a matching workspace and claude pane already exist (matched on both cwd and command), the workspace is focused rather than spawning a duplicate. When herdr is unavailable the command prints legacy manual instructions and exits 0.
+
+**Process:**
+
+1. **Parse feature name:**
+   ```bash
+   FEATURE="$1"
+   WORKTREE_DIR=".worktrees/feature-${FEATURE}"
+   ```
+
+2. **Validate the worktree exists:**
+   ```bash
+   if [ ! -d "$WORKTREE_DIR" ]; then
+     echo "ERROR: No worktree found for feature '${FEATURE}' (expected: ${WORKTREE_DIR})" >&2
+     echo "Run /cw-worktree list to see available worktrees." >&2
+     exit 1
+   fi
+   ```
+
+3. **Resolve helper path and invoke with --focus-if-exists:**
+
+   Helper lookup uses the same three-step resolution as the `create` command — PATH first (marketplace installs), then `CLAUDE_PLUGIN_ROOT`, then the git top-level fallback (plugin source checkout only).
+
+   ```bash
+   HERDR_OPEN_BIN="$(command -v cw-herdr-open 2>/dev/null || true)"
+   if [ -z "$HERDR_OPEN_BIN" ] && [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+     HERDR_OPEN_BIN="$CLAUDE_PLUGIN_ROOT/bin/cw-herdr-open"
+   fi
+   if [ -z "$HERDR_OPEN_BIN" ] || [ ! -x "$HERDR_OPEN_BIN" ]; then
+     HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/bin/cw-herdr-open"
+   fi
+
+   HERDR_EXIT=2  # default: treat as unavailable
+   if [ -x "$HERDR_OPEN_BIN" ]; then
+     "$HERDR_OPEN_BIN" --focus-if-exists "${WORKTREE_DIR}/" 2>/dev/null
+     HERDR_EXIT=$?
+   fi
+   ```
+
+   The helper's layout is **one workspace per repo, one tab per worktree, one claude pane per tab**:
+   - The workspace label is the repo basename (derived from `git rev-parse --git-common-dir`).
+   - The tab label is the worktree basename (e.g. `feature-auth`).
+   - Look up an existing workspace by repo name; if absent, create it (the workspace's default tab is reused as this worktree's tab — no empty placeholder).
+   - Look up an existing tab in that workspace by worktree-basename label; if absent, create it.
+   - If the tab's pane is already running `claude` at the matching cwd: focus workspace + tab and exit 0 without spawning a duplicate.
+   - Otherwise: run `claude` in the tab's existing root pane via `herdr pane run`.
+   - `--focus-if-exists` is accepted for backward compatibility; the reuse-on-duplicate behaviour above runs unconditionally.
+
+4. **Report result:**
+
+   **When `HERDR_EXIT=0` (herdr pane opened or focused):**
+   ```
+   WORKTREE OPEN
+   =============
+   Path:   .worktrees/feature-{feature-name}/
+   Branch: feature/{feature-name}
+
+   Opened (or focused) in herdr: workspace {repo-name} → tab feature-{feature-name}
+
+   To resume work in the terminal:
+     cd .worktrees/feature-{feature-name} && claude
+   ```
+
+   **When `HERDR_EXIT!=0` (herdr unavailable or CW_DISABLE_HERDR set — legacy output):**
+
+   When `HERDR_EXIT=3` (herdr is installed but its daemon isn't running), note the daemon-down state in your summary so the user knows the integration is one daemon-start away. Otherwise (`HERDR_EXIT=2`), no annotation. Then print the legacy block:
+
+   ```
+   WORKTREE OPEN
+   =============
+   Path:   .worktrees/feature-{feature-name}/
+   Branch: feature/{feature-name}
+
+   Open a terminal and run:
+     cd .worktrees/feature-{feature-name} && claude
+   ```
+
+   The helper's stderr is suppressed (`2>/dev/null`). For diagnosis run `cw-herdr-open --probe; echo $?` directly — see SKILL.md "Diagnosing the herdr integration".
 
 ---
 
