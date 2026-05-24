@@ -3,11 +3,10 @@
     "PreToolUse": [
       {
         "matcher": "Skill",
-        "if": "Skill(cw-dispatch-team) || Skill(cw-review-team)",
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/hooks/validate-task-list-id.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/validate-task-list-id.sh",
             "timeout": 5
           }
         ]
