@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.12.0 (2026-05-24)
+
+### Chores
+
+- Remove duplicate entry for .worktrees/ ([#29](https://github.com/sighup/claude-workflow/pull/29),
+  [`5d56bcb`](https://github.com/sighup/claude-workflow/commit/5d56bcb0e4582bf6a62f57a9e91377339e78f4a3))
+
+### Features
+
+- **cw-worktree**: Optional herdr integration with starter-prompt forwarding
+  ([#30](https://github.com/sighup/claude-workflow/pull/30),
+  [`86605b1`](https://github.com/sighup/claude-workflow/commit/86605b16a807c7149893cf5ef36cf1d6afef6ee1))
+
+
 ## v2.11.1 (2026-04-10)
 
 ### Bug Fixes
