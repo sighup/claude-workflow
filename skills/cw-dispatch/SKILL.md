@@ -64,9 +64,13 @@ TaskUpdate({
 })
 ```
 
-### Step 4: Spawn Workers
+### Step 4: Spawn and Continuously Refill Workers
 
-Send a **single message** with multiple Task tool calls for parallel execution.
+Fill the in-flight set up to the concurrency cap, then refill on demand — do **not** dispatch a fixed batch and wait for the slowest member.
+
+- **Initial fill**: Send a **single message** with one Task tool call per ready task, up to the cap (N=3). Owning each task per Step 3 first.
+- **Refill on every return**: The instant a worker returns (verified completion, error, or timeout), re-run `TaskList` and re-survey (Steps 1–2). If a conflict-free unblocked task exists, assign ownership (Step 3) and spawn it immediately to refill the freed slot. A fast worker never idles waiting for a slow one — only the file-scope conflict guard (see [Conflict Prevention](#conflict-prevention)) and the cap gate a spawn.
+- **Drain trigger**: When the in-flight set drains to zero with no conflict-free unblocked task left to spawn, run the periodic synthesis sweep (Step 5) before looping or terminating.
 
 **Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override.
 
@@ -85,22 +89,27 @@ Constraints:
 })
 ```
 
-Repeat for each worker with incrementing worker-N identifiers.
+Repeat for each worker with incrementing worker-N identifiers, both at initial fill and on each refill.
 
-### Step 5: Monitor and Report
+Spawned workers bypass the `invoke_claude` retry/timeout wrapper — bound, retry, and salvage each one per [Resilient Worker Invocation](#resilient-worker-invocation).
 
-After workers complete:
+### Step 5: Synthesis Sweep and Report
 
-1. Run `TaskList` to check final state
-2. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
-3. Report results:
+The integration check is a **periodic synthesis sweep**, not a per-worker step. Trigger it when the in-flight set drains to zero (no worker running and no conflict-free unblocked task left to refill) — every freed slot otherwise feeds straight back into Step 4.
+
+On a drain:
+
+1. Run `TaskList` to check current state
+2. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks across the workers that have completed since the last sweep
+3. Report results, naming any degraded worker per [Resilient Worker Invocation](#resilient-worker-invocation):
 
 ```
 CW-DISPATCH COMPLETE
 =====================
-Workers spawned: 2
+Workers spawned: 3 (returned: 2)
   worker-1: T01 - [subject] -> COMPLETED
   worker-2: T04 - [subject] -> COMPLETED
+  worker-3: T07 - [subject] -> TIMED-OUT (salvaged: task left pending for next round)
 
 Integration Check:
   Build: PASS | FAIL
@@ -116,21 +125,33 @@ Progress: X/Y tasks complete
 
 ## Continuous Execution
 
-Loop Step 1 → Step 5 → Step 1 until termination conditions fire (`Ready=0+Pending=0` or `Ready=0+Blocked>0`). These are the only stop conditions. Findings, build failures, worker errors, and scope discoveries go in the report — the loop continues with whatever remains dispatchable. Never call AskUserQuestion mid-loop.
+This is dataflow scheduling, not barrier scheduling: a freed slot refills the instant its worker returns (Step 4), so no fast task waits on a slow one. The synthesis sweep (Step 5) fires only when the in-flight set drains. Re-survey (Steps 1–2) on every return and on every drain; continue until termination conditions fire (`Ready=0+Pending=0` or `Ready=0+Blocked>0`). These are the only stop conditions. Findings, build failures, worker errors, and scope discoveries go in the report — refill continues with whatever remains dispatchable. Never call AskUserQuestion mid-loop.
 
 ## Conflict Prevention
 
 See [dispatch-common.md](references/dispatch-common.md#conflict-prevention) for the file conflict check algorithm.
 
-## Batch Size
+## Concurrency Cap
 
-- **Default**: Spawn up to 3 workers simultaneously
+- **Default**: Keep up to **N=3** workers in flight at once
 - **Reason**: More than 3 parallel agents risk git conflicts and resource contention
-- If more than 3 tasks are ready, dispatch in batches of 3
+- This is a *cap*, not a batch — you refill continuously (Step 4), never wait for a slowest batch-mate. The instant a worker returns, re-survey the board and spawn the next conflict-free unblocked task to refill the freed slot.
 
 ## Error Handling
 
 See [dispatch-common.md](references/dispatch-common.md#error-handling) for failure handling rules.
+
+## Resilient Worker Invocation
+
+The `invoke_claude` retry/timeout/crash wrapper only guards top-level `claude -p`. In-session `Task(implementer)` workers bypass it — a worker that errors, hangs, or returns empty leaves its task `in_progress` with no salvage. Apply equivalent discipline to every worker you spawn:
+
+- **Bound each worker.** If a worker does not return within its wait budget, treat it as timed-out — do not wait indefinitely. The orchestrator owns the clock; a stalled worker frees its slot for refill, it never stalls the in-flight set.
+- **Retry transient failures once.** A worker that errors or times out (not one that ran and reported a task failure) may be re-spawned a single time for its task. Re-verify ownership first so you never double-assign.
+- **Log every failure.** For each worker that errors, hangs, or returns empty, record `worker-N: T<id> <errored|timed-out|empty>` — never silently drop it.
+- **Mark the unit unreliable.** A worker that did not return verified completion has NOT completed its task, regardless of any partial self-report. Trust the task board (its `cw-execute` TaskUpdate), not the worker's narration — the orchestrator is a control plane, the worker an untrusted data plane. Leave the task `pending`/`in_progress`; do not mark it `completed` on the worker's word.
+- **Salvage and proceed.** After the retry, abstain on any task whose worker still did not return verified completion and refill the slot with the next conflict-free task — a single dead worker never blocks refill. Carry the loss into the completion report.
+
+Account these losses with the funnel-accounting sub-protocol (see [funnel-accounting.md](../cw-research/references/funnel-accounting.md)): `spawned` = workers dispatched across the run, `returned` = workers that returned verified completion. Name every degraded worker (`worker-N: T<id> <errored|timed-out|empty>`) in the completion report's `Workers spawned` block — a thin run must never read as a full one.
 
 ## Pre-Exit Verification
 
