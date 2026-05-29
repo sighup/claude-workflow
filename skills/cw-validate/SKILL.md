@@ -36,7 +36,7 @@ You are a **Senior QA Engineer** responsible for:
 
 ## Validation Gates
 
-All 6 gates must pass for overall PASS:
+Gates compose with **AND**, never OR — all 6 must pass for overall PASS, and one gate's PASS never offsets another's FAIL (the multi-gate AND of [quorum-verification.md](../cw-review-team/references/quorum-verification.md)). Score each gate by that agreement vocabulary: a gate whose evidence is missing, errored, or unverifiable **abstains**, and abstain ≠ pass — an abstaining gate is `Unknown`, never PASS.
 
 | Gate | Rule | Blocker? |
 |------|------|----------|
@@ -47,7 +47,7 @@ All 6 gates must pass for overall PASS:
 | **E** | Implementation follows repository standards | Yes |
 | **F** | No real credentials in proof artifacts | Yes |
 
-See [validation-gates.md](references/validation-gates.md) for detailed gate definitions.
+See [validation-gates.md](references/validation-gates.md) for detailed gate definitions and [quorum-verification.md](../cw-review-team/references/quorum-verification.md) for the agreement vocabulary.
 
 ## Process
 
@@ -140,7 +140,9 @@ Not all categories apply to every feature. Use judgment: a CLI tool needs bounda
 
 ### Step 6: Apply Gates
 
-Check each gate in order (A through G). See [validation-gates.md](references/validation-gates.md).
+Check each gate in order (A through G). See [validation-gates.md](references/validation-gates.md). Decide each gate by the agreement vocabulary in [quorum-verification.md](../cw-review-team/references/quorum-verification.md): a gate with no usable evidence **abstains** and is scored `Unknown`, never PASS (abstain ≠ pass). The overall verdict is the AND of all gates — any single FAIL or `Unknown` makes the run FAIL. A surviving blocking finding (CRITICAL/HIGH, or any requirement not affirmatively `Verified`) vetoes PASS.
+
+Apply the **bounded-abstention escape** (quorum rule 4) so a flaky proof cannot deadlock the run: when a gate can only be decided by code-level evidence (e.g. a `skip`-captured visual or an un-runnable proof), mark it `partial` and let a human or `--force` override it at the irreversible boundary (PR creation). The override is logged, never implicit — autonomous `--bg` runs record which gates were `partial`/`Unknown` and keep moving.
 
 ### Step 7: Generate Report
 

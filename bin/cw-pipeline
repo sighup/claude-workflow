@@ -33,6 +33,7 @@
 #   --no-pr               Skip PR creation
 #   --no-review           Skip code review stage
 #   --auto-pr             Create PR without pausing for confirmation
+#   --force               Bypass the PR gate even if a validate/review gate did not PASS
 #   -m, --model MODEL     Claude model to use (default: sonnet)
 #   -v, --verbose         Stream JSON output for real-time visibility
 #   -h, --help            Show this help message
@@ -68,6 +69,13 @@ NO_TEST=false
 NO_PR=false
 NO_REVIEW=false
 AUTO_PR=false
+CW_FORCE=false
+
+# Gate verdicts (PASS | FAIL | Unknown) — populated by validate/review stages,
+# enforced at the PR stage. Default Unknown: an unrun gate never counts as PASS.
+GATE_VALIDATE="Unknown"
+GATE_REVIEW="Unknown"
+GATE_REVALIDATE="Unknown"
 
 # Resume flags
 CW_RESUME=false
@@ -81,6 +89,7 @@ NO_WORKTREE_SET=false
 AUTO_PR_SET=false
 MODEL_SET=false
 VERBOSE_SET=false
+FORCE_SET=false
 
 # =============================================================================
 # Argument Parsing
@@ -116,6 +125,7 @@ show_help() {
     echo "  --no-pr             Skip PR creation"
     echo "  --no-review         Skip code review stage"
     echo "  --auto-pr           Create PR without confirmation"
+    echo "  --force             Bypass PR gate on a non-PASS validate/review gate"
     echo "  -m, --model MODEL   Claude model (default: $CW_MODEL)"
     echo "  -v, --verbose       Stream JSON output for real-time visibility"
     echo "  -h, --help          Show this help"
@@ -163,6 +173,7 @@ while [[ $# -gt 0 ]]; do
         --no-pr) NO_PR=true; NO_PR_SET=true; shift ;;
         --no-review) NO_REVIEW=true; NO_REVIEW_SET=true; shift ;;
         --auto-pr) AUTO_PR=true; AUTO_PR_SET=true; shift ;;
+        --force) CW_FORCE=true; FORCE_SET=true; shift ;;
         -m|--model) require_arg "--model" "${2:-}"; CW_MODEL="$2"; MODEL_SET=true; shift 2 ;;
         -v|--verbose) CW_VERBOSE=true; VERBOSE_SET=true; shift ;;
         -h|--help) show_help; exit 0 ;;
@@ -235,6 +246,81 @@ log_info "Worktree: $([ "$NO_WORKTREE" = true ] && echo "disabled" || echo "enab
 log_info "Tests: $([ "$NO_TEST" = true ] && echo "disabled" || echo "enabled")"
 log_info "Review: $([ "$NO_REVIEW" = true ] && echo "disabled" || echo "enabled")"
 log_info "PR: $([ "$NO_PR" = true ] && echo "disabled" || echo "auto-pr=$AUTO_PR")"
+log_info "PR gate: $([ "$CW_FORCE" = true ] && echo "forced (validate/review veto bypassed)" || echo "enforced (validate + review must PASS)")"
+
+# =============================================================================
+# Gate Verdict Parsing (hard PR gate)
+# =============================================================================
+#
+# Validate/review skills end with a machine-readable trailer:
+#   cw-validate     -> "VERDICT: PASS"  | "VERDICT: FAIL"
+#   cw-review[-team] -> "VERDICT: APPROVED" | "VERDICT: CHANGES_REQUESTED"
+# Classify the last such line into PASS | FAIL | Unknown. Per the agreement rule
+# in skills/cw-review-team/references/quorum-verification.md (rule 1: abstain ≠
+# pass), a missing or unparseable verdict is Unknown — never PASS.
+
+# Classify captured skill output into a gate verdict.
+# Usage: _gate_verdict_from_output OUTPUT
+_gate_verdict_from_output() {
+    local output="$1"
+    local line
+    line=$(echo "$output" | grep -iE '^[[:space:]]*VERDICT:' | tail -1)
+    # Conservative default: a verdict that names FAIL / CHANGES_REQUESTED at all
+    # (even alongside PASS, e.g. an unresolved "PASS | FAIL" template) blocks.
+    case "$line" in
+        *[Ff][Aa][Ii][Ll]*|*[Cc][Hh][Aa][Nn][Gg][Ee][Ss]_[Rr][Ee][Qq][Uu][Ee][Ss][Tt][Ee][Dd]*) echo "FAIL" ;;
+        *[Pp][Aa][Ss][Ss]*|*[Aa][Pp][Pp][Rr][Oo][Vv][Ee][Dd]*) echo "PASS" ;;
+        *) echo "Unknown" ;;
+    esac
+}
+
+# Persist a gate verdict into the pipeline state file so a resumed run that
+# re-enters the PR stage still sees it. Best-effort; never aborts the pipeline.
+# Usage: _gate_verdict_save WORK_DIR GATE_KEY VERDICT
+_gate_verdict_save() {
+    local work_dir="$1" gate_key="$2" verdict="$3"
+    local state_file="$work_dir/$PIPELINE_STATE_FILE"
+    [ -f "$state_file" ] || return 0
+    local tmp_file
+    tmp_file=$(mktemp)
+    jq --arg k "$gate_key" --arg v "$verdict" \
+        '.gates = (.gates // {}) | .gates[$k] = $v | .updated_at = (now | todate)' \
+        "$state_file" > "$tmp_file" 2>/dev/null && mv "$tmp_file" "$state_file" || rm -f "$tmp_file"
+}
+
+# Read a previously persisted gate verdict (for resumed runs).
+# Usage: _gate_verdict_load WORK_DIR GATE_KEY  -> prints verdict or "Unknown"
+_gate_verdict_load() {
+    local work_dir="$1" gate_key="$2"
+    local state_file="$work_dir/$PIPELINE_STATE_FILE"
+    [ -f "$state_file" ] || { echo "Unknown"; return 0; }
+    jq -r --arg k "$gate_key" '.gates[$k] // "Unknown"' "$state_file" 2>/dev/null || echo "Unknown"
+}
+
+# Invoke a verification skill, keep its output visible, and classify the verdict.
+# Sets the named gate variable to PASS | FAIL | Unknown. Returns invoke_claude's
+# exit code so callers can still distinguish CLI failure from a FAIL verdict.
+# Usage: _run_gate WORK_DIR GATE_KEY GATE_VAR PROMPT
+_run_gate() {
+    local work_dir="$1" gate_key="$2" gate_var="$3" prompt="$4"
+    local out_file invoke_rc=0 captured verdict
+    out_file=$(mktemp)
+    # tee keeps the skill's report visible while capturing it for verdict parsing.
+    # pipefail so the pipe reports invoke_claude's exit, not tee's; restore after.
+    local had_pipefail=false
+    if set -o | grep -q 'pipefail[[:space:]]*on'; then had_pipefail=true; fi
+    set -o pipefail
+    invoke_claude "$prompt" "$CW_MODEL" | tee "$out_file" || invoke_rc=$?
+    if [ "$had_pipefail" = false ]; then set +o pipefail; fi
+    captured=$(cat "$out_file")
+    rm -f "$out_file"
+    # A missing/unparseable verdict — including one from a crashed invocation —
+    # classifies as Unknown (abstain ≠ pass), never PASS.
+    verdict=$(_gate_verdict_from_output "$captured")
+    printf -v "$gate_var" '%s' "$verdict"
+    _gate_verdict_save "$work_dir" "$gate_key" "$verdict"
+    return "$invoke_rc"
+}
 
 # =============================================================================
 # Feature Pipeline Function
@@ -434,11 +520,12 @@ run_feature_pipeline() {
 
 Run the 6-gate validation against the spec. This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
-        if invoke_claude "$validate_prompt" "$CW_MODEL"; then
-            log_success "[$feature_name] Validation passed"
+        _run_gate "$work_dir" "validate" GATE_VALIDATE "$validate_prompt" || true
+        if [ "$GATE_VALIDATE" = "PASS" ]; then
+            log_success "[$feature_name] Validation PASSED"
             pipeline_checkpoint "$work_dir" "4" "completed"
         else
-            log_warning "[$feature_name] Validation had issues (continuing pipeline)"
+            log_warning "[$feature_name] Validation verdict: $GATE_VALIDATE (continuing pipeline; PR stage will gate on this)"
             pipeline_checkpoint "$work_dir" "4" "failed"
         fi
     else
@@ -457,22 +544,27 @@ Review all code changes on this branch against the spec and repository standards
 
 This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
-            if invoke_claude "$review_prompt" "$CW_MODEL"; then
-                log_success "[$feature_name] Code review completed"
+            _run_gate "$work_dir" "review" GATE_REVIEW "$review_prompt" || true
 
-                local fix_count
-                fix_count=$(get_pending_fix_count 2>/dev/null || echo "0")
-                if [ "$fix_count" -gt 0 ]; then
-                    log_info "[$feature_name] Executing $fix_count review fix task(s)..."
-                    CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" -m "$CW_MODEL" "$work_dir" || true
-                fi
+            # Execute any FIX-REVIEW tasks the review raised, regardless of verdict.
+            local fix_count
+            fix_count=$(get_pending_fix_count 2>/dev/null || echo "0")
+            if [ "$fix_count" -gt 0 ]; then
+                log_info "[$feature_name] Executing $fix_count review fix task(s)..."
+                CW_NON_INTERACTIVE=true "$SCRIPT_DIR/cw-loop" -m "$CW_MODEL" "$work_dir" || true
+            fi
+
+            if [ "$GATE_REVIEW" = "PASS" ]; then
+                log_success "[$feature_name] Code review APPROVED"
                 pipeline_checkpoint "$work_dir" "5" "completed"
             else
-                log_warning "[$feature_name] Code review had issues (continuing)"
+                log_warning "[$feature_name] Review verdict: $GATE_REVIEW (continuing; PR stage will gate on this)"
                 pipeline_checkpoint "$work_dir" "5" "failed"
             fi
         else
             log_info "[$feature_name] Stage 5: Skipped (--no-review)"
+            GATE_REVIEW="skipped"
+            _gate_verdict_save "$work_dir" "review" "skipped"
             pipeline_checkpoint "$work_dir" "5" "skipped"
         fi
     else
@@ -587,11 +679,12 @@ This is running non-interactively — proceed autonomously without using AskUser
 
 Run the final 6-gate validation against the spec. This is the last check before PR creation. This is running non-interactively — proceed autonomously without using AskUserQuestion."
 
-        if invoke_claude "$revalidate_prompt" "$CW_MODEL"; then
-            log_success "[$feature_name] Final validation passed"
+        _run_gate "$work_dir" "revalidate" GATE_REVALIDATE "$revalidate_prompt" || true
+        if [ "$GATE_REVALIDATE" = "PASS" ]; then
+            log_success "[$feature_name] Final validation PASSED"
             pipeline_checkpoint "$work_dir" "8" "completed"
         else
-            log_warning "[$feature_name] Final validation had issues"
+            log_warning "[$feature_name] Final validation verdict: $GATE_REVALIDATE (PR stage will gate on this)"
             pipeline_checkpoint "$work_dir" "8" "failed"
         fi
     else
@@ -603,6 +696,58 @@ Run the final 6-gate validation against the spec. This is the last check before 
         if [ "$NO_PR" = false ]; then
             pipeline_checkpoint "$work_dir" "9" "in_progress"
             log_info "[$feature_name] Stage 9: PR creation..."
+
+            # ── Hard PR gate ─────────────────────────────────────────────
+            # The PR stage trusts no agent's self-report: it gates on the
+            # recorded validate/review verdicts, not on whether the skill ran.
+            # Gates compose with AND (quorum rule 3) — every required gate must
+            # be PASS. A non-PASS verdict (FAIL or Unknown) blocks the PR;
+            # abstain ≠ pass (rule 1). Only --force or an explicit human
+            # override at this irreversible boundary bypasses (rule 4), logged.
+            #
+            # On resume the in-memory verdicts may be unset — fall back to the
+            # values persisted by the validate/review stages.
+            if [ "$GATE_VALIDATE" = "Unknown" ]; then GATE_VALIDATE=$(_gate_verdict_load "$work_dir" "validate"); fi
+            if [ "$GATE_REVIEW" = "Unknown" ]; then GATE_REVIEW=$(_gate_verdict_load "$work_dir" "review"); fi
+            if [ "$GATE_REVALIDATE" = "Unknown" ]; then GATE_REVALIDATE=$(_gate_verdict_load "$work_dir" "revalidate"); fi
+
+            local pr_blocked=false
+            local blocking_gates=""
+            if [ "$GATE_VALIDATE" != "PASS" ]; then
+                pr_blocked=true; blocking_gates="${blocking_gates} validate=$GATE_VALIDATE"
+            fi
+            if [ "$NO_REVIEW" = false ] && [ "$GATE_REVIEW" != "PASS" ] && [ "$GATE_REVIEW" != "skipped" ]; then
+                pr_blocked=true; blocking_gates="${blocking_gates} review=$GATE_REVIEW"
+            fi
+            if [ "$GATE_REVALIDATE" != "PASS" ]; then
+                pr_blocked=true; blocking_gates="${blocking_gates} revalidate=$GATE_REVALIDATE"
+            fi
+
+            if [ "$pr_blocked" = true ]; then
+                if [ "$CW_FORCE" = true ]; then
+                    log_warning "[$feature_name] PR gate FAILED (${blocking_gates# }) — bypassed by --force"
+                elif [ "$AUTO_PR" = true ] || [ "${CW_NON_INTERACTIVE}" = "true" ]; then
+                    log_error "[$feature_name] PR gate FAILED (${blocking_gates# }) — refusing to open PR"
+                    log_info "[$feature_name] Fix the failing gate(s) and re-run, or pass --force to override"
+                    pipeline_checkpoint "$work_dir" "9" "failed"
+                    cd "$original_dir"
+                    return 1
+                else
+                    echo ""
+                    echo -e "${YELLOW}[$feature_name] PR gate FAILED:${NC}${blocking_gates}"
+                    echo "Create the PR anyway? Type 'y' to override, anything else to abort..."
+                    read -r gate_override
+                    if [ "$gate_override" != "y" ] && [ "$gate_override" != "Y" ]; then
+                        log_error "[$feature_name] PR creation aborted by human (gate not overridden)"
+                        pipeline_checkpoint "$work_dir" "9" "failed"
+                        cd "$original_dir"
+                        return 1
+                    fi
+                    log_warning "[$feature_name] PR gate overridden by human at confirmation prompt"
+                fi
+            else
+                log_success "[$feature_name] PR gate PASSED (validate + review + revalidate)"
+            fi
 
             # Idempotency: check if PR already exists
             local stage9_ok=true

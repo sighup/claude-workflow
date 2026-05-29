@@ -229,10 +229,12 @@ Messages from teammates are auto-delivered. Track reviewer completion:
 After all reviewers complete (or timeout):
 
 1. **Collect findings**: `TaskGet` each concern task to read findings from metadata
-2. **Check for failures**: If a concern task is not completed or has no `findings` in metadata, record that concern as **partially reviewed**
+2. **Check for abstentions**: A concern task that is not completed or has no `findings` in metadata is an **abstention**, not a clean lens. Per [quorum-verification.md](references/quorum-verification.md) rule 1, abstain ≠ pass — record that concern as **partially reviewed** and never treat its silence as approval. Apply the bounded-abstention escape (rule 4): with 2 of 3 lenses present, proceed; with 0 present, the verdict is `Unknown` — escalate, do not APPROVE
 3. **Count blocking findings** across all concern tasks
 
 ### Step 8: Challenge Round (Conditional)
+
+Score every finding by the agreement vocabulary in [quorum-verification.md](references/quorum-verification.md): a blocking finding **STANDS** by default and is **VETOED** only when a majority of present lenses (≥2 of 3) actively **REFUTE** it with counter-evidence. A non-response is an **ABSTAIN**, not a refute (rule 1). With only 2 lenses present both must refute to veto; with 1 lens present the finding stands as `partial` (rule 4, bounded-abstention escape).
 
 **Only trigger if blocking findings >= 3.**
 
@@ -244,15 +246,15 @@ If triggered:
 ```
 SendMessage({
   type: "broadcast",
-  content: "CHALLENGE ROUND: Review these [N] blocking findings and respond with AGREE, CHALLENGE, or ADD for each.\n\n[Finding 1: title - file:lines - category]\n[Finding 2: ...]\n...",
+  content: "CHALLENGE ROUND: Review these [N] blocking findings. For each respond REFUTE (with counter-evidence), AGREE, or ADD.\n\n[Finding 1: title - file:lines - category]\n[Finding 2: ...]\n...",
   summary: "Challenge round: [N] findings"
 })
 ```
 
 3. Collect responses from all 3 reviewers
-4. Process responses:
-   - **AGREE**: Increases confidence in finding (no change)
-   - **CHALLENGE**: Re-evaluate the finding. If 2+ reviewers challenge, downgrade from blocking to advisory
+4. Process responses per the quorum rules:
+   - **AGREE**: Corroborates the finding (no change)
+   - **REFUTE**: Counts only if it supplies counter-evidence (a code reference showing the finding is wrong or overstated). Downgrade blocking → advisory **only when ≥2 present lenses refute**; a lone refute does not weaken it. A reviewer that did not respond abstains (not a refute)
    - **ADD**: Add the new finding to the consolidated list with proper categorization
 
 ### Step 9: Consolidate Findings
@@ -260,7 +262,8 @@ SendMessage({
 1. **Flatten**: Merge all findings arrays from all concern tasks into one list
 2. **Deduplicate**: Remove findings with the same file + overlapping line range + same category
 3. **Sort**: Order by severity — B (Security) first, then A (Correctness), C (Spec Compliance), D (Quality)
-4. **Apply challenge results**: Downgrade challenged findings, add new findings from ADD responses
+4. **Apply challenge results**: Downgrade only VETOED findings (≥2 present lenses refuted), add new findings from ADD responses
+5. **Set verdict** per [quorum-verification.md](references/quorum-verification.md): any surviving (STANDS) blocking finding — flagged by ≥2 of 3 lenses, or by 1 lens unchallenged — vetoes **APPROVED**, so the verdict is **CHANGES_REQUESTED**. A `partial` (1 lens present) or `Unknown` (0 present) lens set may not yield APPROVED; flag it `partial`/`Unknown` and require a human or `--force` override at PR creation (logged, never implicit)
 
 Mark each concern task as completed (cleanup):
 
