@@ -25,6 +25,9 @@
 #   CW_SLEEP              Seconds between iterations (default: 5)
 #   CW_MAX_FAILURES       Max consecutive failures before abort (default: 3)
 #   CW_TIMEOUT            Claude invocation timeout in seconds (default: 0/none)
+#   CW_MAX_TURNS          Per-invocation agentic turn cap (default: 0/unlimited)
+#   CW_BUDGET             Run-level invocation budget across loops (default: 0/unlimited)
+#   CW_BUDGET_SHED_AT     Fraction of budget at which to shed load (default: 0.8)
 #   CW_VERBOSE            Stream JSON output for visibility (default: false)
 #   CW_NON_INTERACTIVE    Skip confirmation prompt if "true"
 #
@@ -40,6 +43,14 @@ source "$SCRIPT_DIR/lib/cw-common.sh"
 
 USE_DISPATCH=false
 PROJECT_PATH=""
+
+# Run-level proactive budget (counts Claude invocations across all loops).
+# 0 = unlimited. Shed load once usage crosses CW_BUDGET_SHED_AT of the budget;
+# exit with code 6 once the budget is spent. This is the run-level companion
+# to the per-invocation CW_MAX_TURNS cap and the reactive 429 retry logic.
+CW_BUDGET="${CW_BUDGET:-0}"
+CW_BUDGET_SHED_AT="${CW_BUDGET_SHED_AT:-0.8}"
+EXIT_BUDGET_EXHAUSTED=6
 
 show_help() {
     echo "Usage: cw-loop [OPTIONS] [PROJECT_PATH]"
@@ -60,6 +71,7 @@ show_help() {
     echo ""
     echo "Environment Variables:"
     echo "  CW_MODEL, CW_MAX_ITERATIONS, CW_SLEEP, CW_MAX_FAILURES, CW_TIMEOUT"
+    echo "  CW_MAX_TURNS, CW_BUDGET, CW_BUDGET_SHED_AT"
     echo ""
     echo "Exit Codes:"
     echo "  0  All tasks completed successfully"
@@ -67,6 +79,7 @@ show_help() {
     echo "  2  Max consecutive failures reached"
     echo "  3  No available tasks (all blocked)"
     echo "  4  Missing dependencies or no session found"
+    echo "  6  Run-level budget (CW_BUDGET) exhausted"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -99,6 +112,11 @@ log_info "Model: $CW_MODEL"
 log_info "Max iterations: $CW_MAX_ITERATIONS"
 log_info "Sleep between: ${CW_SLEEP}s"
 log_info "Max failures: $CW_MAX_FAILURES"
+if [ "$CW_BUDGET" -gt 0 ] 2>/dev/null; then
+    log_info "Budget: $CW_BUDGET invocations (shed at $CW_BUDGET_SHED_AT, max-turns/invocation: $CW_MAX_TURNS)"
+else
+    log_info "Budget: unlimited (max-turns/invocation: $CW_MAX_TURNS)"
+fi
 log_info "Mode: $([ "$USE_DISPATCH" = true ] && echo "dispatch (parallel)" || echo "execute (sequential)")"
 
 # =============================================================================
@@ -130,7 +148,16 @@ fi
 
 ITERATION=0
 FAILURES=0
+BUDGET_USED=0
 START_TIME=$(date +%s)
+
+# Budget shed threshold (invocation count). Below 1 when disabled so the
+# crossing check below stays inert when CW_BUDGET is 0.
+BUDGET_SHED_THRESHOLD=0
+if [ "$CW_BUDGET" -gt 0 ] 2>/dev/null; then
+    BUDGET_SHED_THRESHOLD=$(awk -v b="$CW_BUDGET" -v f="$CW_BUDGET_SHED_AT" \
+        'BEGIN { t = int(b * f); print (t < 1 ? 1 : t) }')
+fi
 
 # Select skill based on mode
 if [ "$USE_DISPATCH" = true ]; then
@@ -167,19 +194,53 @@ while [ $ITERATION -lt $CW_MAX_ITERATIONS ]; do
     NEXT=$(get_next_task_id)
     log_info "Next task: $NEXT ($PENDING pending unblocked)"
 
+    # Run-level budget guard. Evaluated only at the loop boundary (between
+    # waves), so an in-flight worker is never killed mid-commit. Once the
+    # budget is spent we stop dispatching new work and exit distinctly so
+    # callers can tell a budget stop apart from completion or failure.
+    if [ "$CW_BUDGET" -gt 0 ] 2>/dev/null && [ "$BUDGET_USED" -ge "$CW_BUDGET" ]; then
+        ELAPSED=$(($(date +%s) - START_TIME))
+        log_warning "Run budget exhausted: $BUDGET_USED/$CW_BUDGET invocations used. (Runtime: $(format_elapsed $ELAPSED))"
+        log_warning "Stopping before blowout. Raise CW_BUDGET to continue. (exit $EXIT_BUDGET_EXHAUSTED)"
+        print_task_status
+        exit "$EXIT_BUDGET_EXHAUSTED"
+    fi
+
+    # Proactive shedding: once usage crosses the shed threshold, hint the
+    # dispatch skill (which reads CW_BUDGET_REMAINING) to lower its worker
+    # count so the remaining budget stretches further instead of blowing out.
+    if [ "$BUDGET_SHED_THRESHOLD" -gt 0 ] && [ "$BUDGET_USED" -ge "$BUDGET_SHED_THRESHOLD" ]; then
+        export CW_BUDGET_REMAINING=$((CW_BUDGET - BUDGET_USED))
+        log_warning "Budget at $BUDGET_USED/$CW_BUDGET — shedding: dispatch worker count capped to remaining budget ($CW_BUDGET_REMAINING)."
+    fi
+
     # Capture completed count before execution
     COMPLETED_BEFORE=$(get_completed_count)
 
     # Execute task(s)
     log_info "Invoking Claude with $SKILL_NAME..."
+    BUDGET_USED=$((BUDGET_USED + 1))
     if invoke_claude "$SKILL_PROMPT" "$CW_MODEL"; then
         log_success "Execution completed"
         FAILURES=0
 
+        # Proof gate (sequential mode only): the worker's TaskUpdate is a
+        # self-report, not evidence. Re-execute the target task's proof
+        # artifacts in a fresh shell and only count it done if they pass;
+        # otherwise reset it to pending so the next iteration re-attempts it.
+        if [ "$USE_DISPATCH" != true ] && [ -n "$NEXT" ]; then
+            if proof_gate_passes "$NEXT"; then
+                log_success "Proof gate passed for task $NEXT"
+            else
+                log_warning "Proof gate FAILED for task $NEXT — resetting to pending."
+                reset_task_pending "$NEXT" "re-executed proof gate failed"
+            fi
+        fi
+
         # Verify task progress was recorded
         COMPLETED_AFTER=$(get_completed_count)
         if [ "$COMPLETED_AFTER" -eq "$COMPLETED_BEFORE" ]; then
-            log_warning "No tasks were marked completed. Worker may have bypassed cw-execute."
+            log_warning "No tasks were marked completed. Worker may have bypassed cw-execute (or proof gate reset it)."
             log_warning "Check that workers invoke the Skill tool with 'cw-execute'."
         else
             NEWLY_DONE=$((COMPLETED_AFTER - COMPLETED_BEFORE))

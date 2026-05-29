@@ -62,6 +62,8 @@ CW_TIMEOUT="${CW_TIMEOUT:-0}"            # seconds, 0 = no timeout
 CW_SLEEP="${CW_SLEEP:-5}"                 # seconds between iterations
 CW_MAX_ITERATIONS="${CW_MAX_ITERATIONS:-50}"
 CW_MAX_FAILURES="${CW_MAX_FAILURES:-3}"
+CW_PROOF_TIMEOUT="${CW_PROOF_TIMEOUT:-120}"  # seconds per re-executed proof
+CW_MAX_TURNS="${CW_MAX_TURNS:-0}"        # per-invocation agentic turn cap, 0 = unlimited
 
 # Task file locations
 CLAUDE_DIR="$HOME/.claude"
@@ -107,6 +109,12 @@ invoke_claude() {
     local ATTEMPT=0
 
     local CMD=(claude --print --model "$MODEL" --dangerously-skip-permissions)
+
+    # Proactive per-invocation budget: cap agentic turns so a runaway worker
+    # cannot burn the whole run before the reactive 429-detector trips.
+    if [ "$CW_MAX_TURNS" -gt 0 ] 2>/dev/null; then
+        CMD+=(--max-turns "$CW_MAX_TURNS")
+    fi
 
     # Add streaming JSON output for real-time visibility
     if [ "$CW_VERBOSE" = "true" ]; then
@@ -759,6 +767,177 @@ get_pipeline_results() {
 }
 
 # =============================================================================
+# Input-Hash Idempotency (shared by proof gate + pipeline checkpoints)
+# =============================================================================
+#
+# A re-entered stage/proof is only safe to skip when its *inputs* are unchanged.
+# The input hash is computed over the committed tree (git blob SHAs of scope
+# files) plus the command string, so it is reproducible on re-entry and a
+# working-copy edit cannot mask staleness. See
+# skills/cw-execute/references/proof-gate.md.
+
+# Content hash of a proof/stage's true input set: the command string plus the
+# git blob SHA of every scope file (deterministic order). A scope file with no
+# committed blob hashes as MISSING:<path> — a distinct value that forces re-run.
+# Usage: proof_input_hash COMMAND [SCOPE_FILE...]
+proof_input_hash() {
+    local cmd="$1"; shift
+    {
+        local f
+        for f in $(printf '%s\n' "$@" | LC_ALL=C sort); do
+            git rev-parse "HEAD:$f" 2>/dev/null || echo "MISSING:$f"
+        done
+        printf '%s\n' "$cmd"
+    } | git hash-object --stdin
+}
+
+# Re-entry verdict for a single proof artifact: should it be re-executed?
+# Skip applies only to a recorded PASS whose stamped hash matches the recomputed
+# hash; a FAIL/BLOCKED, a missing hash, or a hash mismatch always re-runs.
+# Usage: proof_should_rerun STORED_STATUS STAMPED_HASH CURRENT_HASH
+# Returns: 0 (re-run) when stale/unverified, 1 (skip) when prior PASS still valid
+proof_should_rerun() {
+    local stored_status="$1"
+    local stamped_hash="$2"
+    local current_hash="$3"
+
+    [ "$stored_status" = "PASS" ] || return 0
+    [ -n "$stamped_hash" ] || return 0
+    [ "$stamped_hash" = "$current_hash" ] || return 0
+    return 1
+}
+
+# Re-execute a task's proof artifacts in a fresh shell and decide PASS/FAIL
+# independently of the worker's self-reported proof_results. The producer is an
+# untrusted data plane: its stored status is narration, not evidence. See
+# skills/cw-execute/references/proof-gate.md.
+#
+# For each artifact: recompute the input hash over the committed scope, skip only
+# a recorded PASS at a matching hash (proof_should_rerun), otherwise re-run the
+# command under timeout and judge by exit status. Non-automatable proofs
+# (browser, or capture method "manual") accept a recorded PASS attestation only
+# while its hash matches; an unverifiable proof with no valid attestation fails.
+#
+# Usage: proof_gate_passes TASK_ID
+# Returns: 0 if every artifact gates PASS (or there are none), 1 otherwise.
+proof_gate_passes() {
+    local task_id="$1"
+    local task_file="$CW_TASKS_DIR/$task_id.json"
+    [ -f "$task_file" ] || { log_warning "Proof gate: task $task_id not found"; return 1; }
+
+    local artifacts
+    artifacts=$(jq -c '.metadata.proof_artifacts // []' "$task_file" 2>/dev/null)
+    local count
+    count=$(printf '%s' "$artifacts" | jq 'length' 2>/dev/null || echo 0)
+    [ "${count:-0}" -gt 0 ] || return 0
+
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        log_warning "Proof gate: not in a git repo, cannot re-verify $task_id"
+        return 1
+    }
+
+    local scope_files
+    scope_files=$(jq -r '
+        [(.metadata.scope.files_to_create // [])[],
+         (.metadata.scope.files_to_modify // [])[]] | .[]
+    ' "$task_file" 2>/dev/null)
+    local sf_arr=()
+    while IFS= read -r f; do [ -n "$f" ] && sf_arr+=("$f"); done <<< "$scope_files"
+
+    local i all_pass=0
+    for ((i = 0; i < count; i++)); do
+        local art type cmd cap_method
+        art=$(printf '%s' "$artifacts" | jq -c ".[$i]")
+        type=$(printf '%s' "$art" | jq -r '.type // "cli"')
+        cap_method=$(printf '%s' "$art" | jq -r '.capture_method // "auto"')
+        # The proof command string is the part hashed and re-executed.
+        case "$type" in
+            file) cmd=$(printf '%s' "$art" | jq -r '(.path // "") + " :: " + (.contains // "")') ;;
+            url)  cmd=$(printf '%s' "$art" | jq -r '(.method // "GET") + " " + (.url // "")') ;;
+            *)    cmd=$(printf '%s' "$art" | jq -r '.command // ""') ;;
+        esac
+
+        local cur_hash
+        cur_hash=$(proof_input_hash "$cmd" "${sf_arr[@]}")
+
+        # Stored verdict + stamped hash for this artifact (by index).
+        local stored_status stamped_hash
+        stored_status=$(jq -r ".metadata.proof_results[$i].status // \"\" | ascii_upcase" "$task_file" 2>/dev/null)
+        stamped_hash=$(jq -r ".metadata.proof_results[$i].input_hash // \"\"" "$task_file" 2>/dev/null)
+
+        if ! proof_should_rerun "$stored_status" "$stamped_hash" "$cur_hash"; then
+            log_info "Proof gate [$task_id #$((i + 1)) $type]: PASS (hash match, skip re-run)"
+            continue
+        fi
+
+        # Non-automatable proofs cannot be re-executed by the gate. Accept a
+        # recorded PASS attestation only while its hash still matches.
+        if [ "$type" = "browser" ] || [ "$cap_method" = "manual" ]; then
+            if [ "$stored_status" = "PASS" ] && [ -n "$stamped_hash" ] && [ "$stamped_hash" = "$cur_hash" ]; then
+                log_info "Proof gate [$task_id #$((i + 1)) $type]: PASS (attested, hash match)"
+            else
+                log_warning "Proof gate [$task_id #$((i + 1)) $type]: FAIL (no valid attestation)"
+                all_pass=1
+            fi
+            continue
+        fi
+
+        if [ -z "$cmd" ] || [ "$cmd" = " :: " ]; then
+            log_warning "Proof gate [$task_id #$((i + 1)) $type]: FAIL (no command to re-execute)"
+            all_pass=1
+            continue
+        fi
+
+        # Re-execute from the committed tree under a timeout (fresh shell).
+        local rc=0
+        if [ "$type" = "file" ]; then
+            local p c
+            p=$(printf '%s' "$art" | jq -r '.path // ""')
+            c=$(printf '%s' "$art" | jq -r '.contains // ""')
+            if [ ! -f "$repo_root/$p" ]; then
+                rc=1
+            elif [ -n "$c" ] && ! grep -qF -- "$c" "$repo_root/$p"; then
+                rc=1
+            fi
+        else
+            ( cd "$repo_root" && timeout "$CW_PROOF_TIMEOUT" bash -c "$cmd" ) >/dev/null 2>&1 || rc=$?
+        fi
+
+        if [ "$rc" -eq 0 ]; then
+            log_info "Proof gate [$task_id #$((i + 1)) $type]: PASS (re-executed)"
+        else
+            log_warning "Proof gate [$task_id #$((i + 1)) $type]: FAIL (re-executed, exit $rc)"
+            all_pass=1
+        fi
+    done
+
+    return "$all_pass"
+}
+
+# Reset a task that failed its proof gate back to pending so the loop re-attempts
+# it, recording why. A worker's TaskUpdate is not the source of truth — the gate
+# is — so a completed-but-unproven task must not be counted done.
+# Usage: reset_task_pending TASK_ID REASON
+reset_task_pending() {
+    local task_id="$1"
+    local reason="${2:-proof gate failed}"
+    local task_file="$CW_TASKS_DIR/$task_id.json"
+    [ -f "$task_file" ] || return 1
+
+    local tmp_file
+    tmp_file=$(mktemp)
+    if jq --arg r "$reason" \
+        '.status = "pending" | .metadata.proof_gate = {"verdict": "FAIL", "reason": $r, "at": (now | todate)}' \
+        "$task_file" > "$tmp_file" 2>/dev/null; then
+        mv "$tmp_file" "$task_file"
+    else
+        rm -f "$tmp_file"
+        return 1
+    fi
+}
+
+# =============================================================================
 # Pipeline State Management (Resumable Pipeline)
 # =============================================================================
 
@@ -832,12 +1011,15 @@ pipeline_state_init() {
     log_info "Pipeline state initialized: $state_file"
 }
 
-# Update a stage's status with timestamp
-# Usage: pipeline_checkpoint WORK_DIR STAGE_NUM STATUS
+# Update a stage's status with timestamp. An optional INPUT_HASH stamps the
+# committed-tree hash of the stage's inputs so re-entry can detect staleness;
+# omit it for stages with no scope (the stage then always re-runs on change).
+# Usage: pipeline_checkpoint WORK_DIR STAGE_NUM STATUS [INPUT_HASH]
 pipeline_checkpoint() {
     local work_dir="$1"
     local stage_num="$2"
     local new_status="$3"
+    local input_hash="${4:-}"
     local state_file="$work_dir/$PIPELINE_STATE_FILE"
 
     if [ ! -f "$state_file" ]; then
@@ -856,12 +1038,12 @@ pipeline_checkpoint() {
     tmp_file=$(mktemp)
 
     if [ -n "$ts_field" ]; then
-        jq --arg n "$stage_num" --arg s "$new_status" --arg tf "$ts_field" \
-            '.stages[$n].status = $s | .stages[$n][$tf] = (now | todate) | .current_stage = ($n | tonumber) | .updated_at = (now | todate)' \
+        jq --arg n "$stage_num" --arg s "$new_status" --arg tf "$ts_field" --arg ih "$input_hash" \
+            '.stages[$n].status = $s | .stages[$n][$tf] = (now | todate) | (if $ih != "" then .stages[$n].input_hash = $ih else . end) | .current_stage = ($n | tonumber) | .updated_at = (now | todate)' \
             "$state_file" > "$tmp_file" && mv "$tmp_file" "$state_file"
     else
-        jq --arg n "$stage_num" --arg s "$new_status" \
-            '.stages[$n].status = $s | .current_stage = ($n | tonumber) | .updated_at = (now | todate)' \
+        jq --arg n "$stage_num" --arg s "$new_status" --arg ih "$input_hash" \
+            '.stages[$n].status = $s | (if $ih != "" then .stages[$n].input_hash = $ih else . end) | .current_stage = ($n | tonumber) | .updated_at = (now | todate)' \
             "$state_file" > "$tmp_file" && mv "$tmp_file" "$state_file"
     fi
 }
@@ -885,6 +1067,33 @@ pipeline_get_resume_stage() {
     ' "$state_file")
 
     echo "$result"
+}
+
+# Re-entry verdict for a completed/skipped stage: must it re-run because its
+# inputs changed? Recomputes the committed-tree input hash from CURRENT_HASH and
+# compares it to the stamped hash. A stage with no stamped hash is treated as
+# unverified and re-runs; a matching hash lets the coarse status flag stand.
+# Usage: pipeline_stage_is_stale WORK_DIR STAGE_NUM CURRENT_HASH
+# Returns: 0 (stale, re-run) or 1 (fresh, prior result still valid)
+pipeline_stage_is_stale() {
+    local work_dir="$1"
+    local stage_num="$2"
+    local current_hash="$3"
+    local state_file="$work_dir/$PIPELINE_STATE_FILE"
+
+    [ -f "$state_file" ] || return 0
+
+    local stored_status stamped_hash
+    stored_status=$(jq -r --arg n "$stage_num" '.stages[$n].status // ""' "$state_file")
+    stamped_hash=$(jq -r --arg n "$stage_num" '.stages[$n].input_hash // ""' "$state_file")
+
+    case "$stored_status" in
+        completed|skipped) ;;
+        *) return 0 ;;
+    esac
+    [ -n "$stamped_hash" ] || return 0
+    [ "$stamped_hash" = "$current_hash" ] && return 1
+    return 0
 }
 
 # Check if pipeline state file exists

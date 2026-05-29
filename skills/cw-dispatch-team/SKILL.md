@@ -113,7 +113,9 @@ Apply the same conflict checks as Step 2 — verify no file overlaps between ass
 
 ### Step 5: Spawn Teammates
 
-Send a **single message** with multiple Task tool calls for parallel launch. Spawn **one teammate per ready task** — no arbitrary cap.
+Send a **single message** with multiple Task tool calls for parallel launch. Spawn **one teammate per ready task**, subject to the budget cap below.
+
+**Budget-aware worker count**: If `CW_BUDGET_REMAINING` is set in the environment, cap teammates spawned this wave at that value (the run-level loop sets it once the run crosses its budget-shed threshold). Spawn `min(ready_tasks, max(1, CW_BUDGET_REMAINING))` teammates and leave the rest pending for a later wave — never spawn 0 while a ready task exists (floor of 1). When `CW_BUDGET_REMAINING` is unset, spawn one teammate per ready task with no arbitrary cap.
 
 **Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override.
 
@@ -261,7 +263,7 @@ See [../cw-dispatch/references/dispatch-common.md](../cw-dispatch/references/dis
 
 ## Batch Size
 
-Spawn one teammate per ready task in the current parallel group. The number of concurrent teammates is determined by how many independent, conflict-free tasks exist — not an arbitrary cap.
+Spawn one teammate per ready task in the current parallel group. The number of concurrent teammates is determined by how many independent, conflict-free tasks exist — not an arbitrary cap. The one exception is the run-level budget: when `CW_BUDGET_REMAINING` is set (see Step 5), cap the wave at `max(1, CW_BUDGET_REMAINING)` and defer the surplus.
 
 ## Error Handling
 
