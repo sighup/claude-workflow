@@ -133,7 +133,7 @@ Perform a general codebase exploration covering all areas without topic filterin
 |-------|----------|----------------|
 | `quick` | Auto-explore only — no interactive refinement, no external context, no deep-dive | Steps 1-3, 8-10 (skip 4-7) |
 | `medium` (default) | Full process as documented | All steps |
-| `thorough` | Full process + expanded exploration with 2 passes per dimension | All steps, with repeat auto-explore |
+| `thorough` | Full process + 2-3 additional distinct lenses (not repeated passes) | All steps, with extra-lens auto-explore |
 
 Examples:
 ```
@@ -156,23 +156,40 @@ examples: "authentication" -> "authentication"
 
 Launch parallel `Task(Explore)` subagents to explore the codebase across five research dimensions simultaneously. Each subagent focuses on one dimension and returns structured findings.
 
+**Create the dimensions directory before launching subagents** so each can persist its own findings:
+
+```bash
+mkdir -p docs/specs/research-{topic_slug}/dimensions
+```
+
 **Launch all five subagents in a single message for maximum concurrency.** Each subagent explores one dimension: Tech Stack & Project Structure, Architecture & Patterns, Dependencies & Integrations, Test & Quality Patterns, and Data Models & API Surface.
+
+**Each subagent persists its own findings — never return them through the conversation.** Append to every subagent prompt an instruction to `Write` its structured markdown findings to `docs/specs/research-{topic_slug}/dimensions/{dimension-slug}.md` (dimension slug: lowercase, hyphens — e.g. `tech-stack-project-structure`, `architecture-patterns`, `security-surface`) as the last action, returning only the file path it wrote. This keeps the orchestrator a control plane: findings live on disk from the moment each dimension finishes, surviving a crash, and downstream steps read from disk rather than memory.
 
 ```
 Task({
   subagent_type: "Explore",
   description: "Auto-Explore: {dimension name}",
-  prompt: "{subagent prompt from references/research-dimensions.md}"
+  prompt: "{subagent prompt from references/research-dimensions.md} Write your structured markdown findings to docs/specs/research-{topic_slug}/dimensions/{dimension-slug}.md and return only that path."
 })
 ```
 
 See [research-dimensions.md](references/research-dimensions.md) for dimension focus areas, subagent prompt templates, and topic filtering examples.
 
-**Collecting results:** After all five subagents complete, collect their findings into the report template (Step 3).
+**Thorough depth — add distinct lenses, not repeat passes.** A second identical-prompt pass per dimension buys throughput, not breadth. Instead, launch 2-3 additional Explore subagents in the same message, each with a distinct cross-cutting lens: **security-surface** (auth boundaries, input trust, secret handling, injection sinks), **performance-hotpaths** (hot loops, N+1 queries, allocation/IO on critical paths), **migration/compat-risk** (breaking-change surfaces, version pins, deprecations, backward-compat shims). These lenses cut across the five dimensions rather than repeating them. Each lens prompt carries the same anti-redundancy clause as the dimension prompts (see [research-dimensions.md](references/research-dimensions.md)).
+
+**Collecting results — account the funnel.** After all subagents complete, each should have written a file under `docs/specs/research-{topic_slug}/dimensions/`. List that directory and `Read` the dimension files — do not rely on findings carried in the conversation. Apply the funnel-accounting sub-protocol (see [funnel-accounting.md](references/funnel-accounting.md)): set `spawned` = the count of Explore subagents dispatched (five auto-explore plus any thorough-mode lenses), and `returned` = the count whose file exists and is non-empty. A dimension whose subagent returned but left no file (or an empty one) is a loss — record it in a `degraded` list as `{dimension}: {failed|empty|timed-out}` and never fabricate findings for it. Proceed on quorum (a majority of `spawned` returned); do not block on a single missing dimension. Carry `returned`, `spawned`, and the `degraded` list forward to Steps 9 and 10.
+
+**Resilient subagent invocation.** `Task(Explore)` agents run in-session and bypass the `invoke_claude` retry/timeout/crash wrapper that guards top-level `claude -p` — apply equivalent discipline on this worker path:
+
+- **Bound each subagent.** Wait only until the fan-in budget expires; a subagent that has not written its file by then is timed-out, not pending. The orchestrator owns the clock — a hung Explore agent cannot stall research.
+- **Retry transient failures once.** A dimension whose subagent errored or timed out (not one that ran and wrote thin findings) may be re-spawned a single time. A second attempt that still leaves no file is a confirmed loss.
+- **Log every failure.** Record each errored, hung, or empty subagent as `{dimension}: {failed|empty|timed-out}` — this is the `degraded` list above; never silently drop a missing dimension.
+- **Mark the unit unreliable and salvage.** A subagent's path-returned-but-no-file (or a bare narrative claim of findings) is not coverage — the orchestrator is a control plane, the subagent an untrusted data plane; coverage is the file on disk, never the agent's word. Abstain on that dimension and proceed on quorum; the `degraded` list propagates the gap downstream (Steps 9, 10) so a thin run never reads as complete.
 
 ### Step 3: Compile Initial Research Report
 
-Assemble the subagent findings into a structured markdown report. This is the initial version -- it will be enriched with deep-dive findings and external context in later steps.
+Assemble the report from the per-dimension files in `docs/specs/research-{topic_slug}/dimensions/` (written in Step 2) -- read each file and place its contents under the matching report section. This is the initial version -- it will be enriched with deep-dive findings and external context in later steps.
 
 See [report-template.md](references/report-template.md) for the full markdown template and report size guidelines.
 
@@ -269,7 +286,7 @@ For each focus area selected by the user (or all five dimensions if the user con
 Task({
   subagent_type: "Explore",
   description: "Deep-Dive: {dimension name}",
-  prompt: "Perform a deep-dive exploration of {dimension name} in this codebase. Initial findings from auto-explore: {summary of initial findings for this dimension}. Go deeper: {specific questions or areas to investigate based on initial findings and user direction}. Topic filter: {topic or 'none'}. Return detailed markdown findings with specific file references, code pattern examples, and actionable insights. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}"
+  prompt: "Perform a deep-dive exploration of {dimension name} in this codebase. Initial findings from auto-explore: {summary of initial findings for this dimension}. Go deeper: {specific questions or areas to investigate based on initial findings and user direction}. Topic filter: {topic or 'none'}. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS} Write your detailed markdown findings -- with specific file references, code pattern examples, and actionable insights -- to docs/specs/research-{topic_slug}/dimensions/{dimension-slug}-deep-dive.md and return only that path."
 })
 ```
 
@@ -281,7 +298,7 @@ Also use the LSP tool for deeper analysis: use documentSymbol to enumerate symbo
 
 **6b. Launch subagents concurrently:**
 
-Launch all deep-dive subagents in a single message for maximum concurrency, just like the auto-explore phase.
+Launch all deep-dive subagents in a single message for maximum concurrency, just like the auto-explore phase. They run in-session and bypass `invoke_claude` — bound, retry, log, and salvage each per the **Resilient subagent invocation** discipline in Step 2, and account the fan-in with funnel-accounting (deep-dive files written/non-empty vs. deep-dives dispatched).
 
 **6c. If user redirected exploration (Step 4):**
 
@@ -291,7 +308,7 @@ When the user provided custom exploration directions, formulate subagent prompts
 Task({
   subagent_type: "Explore",
   description: "Deep-Dive: {user-described focus area}",
-  prompt: "Explore this codebase focusing on: {user's description}. Find relevant files, patterns, configurations, and conventions. Return detailed markdown findings with specific file references. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}"
+  prompt: "Explore this codebase focusing on: {user's description}. Find relevant files, patterns, configurations, and conventions. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS} Write your detailed markdown findings with specific file references to docs/specs/research-{topic_slug}/dimensions/{focus-area-slug}-deep-dive.md and return only that path."
 })
 ```
 
@@ -301,7 +318,7 @@ Enrich the initial research report (from Step 3) with deep-dive findings and ext
 
 **7a. Integrate deep-dive findings:**
 
-For each dimension that received a deep-dive, update the corresponding section in the report. Append deep-dive findings below the initial auto-explore findings, clearly marked:
+For each dimension that received a deep-dive, `Read` its `docs/specs/research-{topic_slug}/dimensions/{dimension-slug}-deep-dive.md` file (written in Step 6) and append its contents to the corresponding report section below the initial auto-explore findings -- assemble from the files, not from conversation memory. A deep-dive that returned a path but left no file is a salvage case (note it; do not fabricate). Mark the appended block clearly:
 
 ```markdown
 ## {Dimension Name}
@@ -355,7 +372,11 @@ See [meta-prompt-template.md](references/meta-prompt-template.md) for the field 
 
 Derive each field from the research findings (feature name, problem statement, key components, architectural constraints, patterns to follow, suggested demoable units, and code references).
 
-**9b. Append the meta-prompt to the report:**
+**9b. Propagate coverage into the meta-prompt:**
+
+Carry the funnel-accounting result (Step 2) into the meta-prompt as a `Context Assessment` line so cw-spec cannot mistake a thin run for complete (see [funnel-accounting.md](references/funnel-accounting.md)). Emit `Coverage: {returned}/{spawned}`; when `returned < spawned`, add `Confidence: partial` and list the un-covered dimensions from the `degraded` list. cw-spec must treat a `Confidence: partial` flag as unverified gaps, not confirmed-absent.
+
+**9c. Append the meta-prompt to the report:**
 
 Read the saved report file, append the meta-prompt section using the template from [meta-prompt-template.md](references/meta-prompt-template.md), and write the updated file.
 
@@ -370,7 +391,8 @@ CW-RESEARCH COMPLETE
 =====================
 Topic: {topic}
 Report: docs/specs/research-{topic_slug}/research-{topic_slug}.md
-Dimensions explored: 5/5
+Coverage: {returned}/{spawned}
+degraded: [{dimension}: {failed|empty|timed-out}, ...]   # omit line if none
 Deep-dives completed: {N}
 External sources incorporated: {N} ({M} inaccessible)
 

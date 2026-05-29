@@ -34,7 +34,7 @@ When `lsp_available = true` (determined during the LSP Availability Check), appe
 
 **Subagent prompt:**
 ```
-Explore this codebase and report on Tech Stack & Project Structure. Find: languages and frameworks used, build tools and package managers, directory layout and organization, entry points and main modules, configuration files and environment setup. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings. Keep it focused -- list key files, not every file. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}
+Explore this codebase and report on Tech Stack & Project Structure. Find: languages and frameworks used, build tools and package managers, directory layout and organization, entry points and main modules, configuration files and environment setup. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings. Keep it focused -- list key files, not every file. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS} You own ONLY Tech Stack & Project Structure; siblings cover the rest; note off-lens issues in one Cross-lens flag line; surface what a generalist sweep would MISS in Tech Stack & Project Structure.
 ```
 
 **LSP_INSTRUCTIONS (when available):**
@@ -56,7 +56,7 @@ Also use the LSP tool: use documentSymbol on entry point files to enumerate expo
 
 **Subagent prompt:**
 ```
-Explore this codebase and report on Architecture & Patterns. Find: design patterns in use (MVC, plugin, event-driven, etc.), module boundaries and separation of concerns, key abstractions and interfaces, state management approach, error handling conventions, naming conventions. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings and specific file references. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}
+Explore this codebase and report on Architecture & Patterns. Find: design patterns in use (MVC, plugin, event-driven, etc.), module boundaries and separation of concerns, key abstractions and interfaces, state management approach, error handling conventions, naming conventions. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings and specific file references. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS} You own ONLY Architecture & Patterns; siblings cover the rest; note off-lens issues in one Cross-lens flag line; surface what a generalist sweep would MISS in Architecture & Patterns.
 ```
 
 **LSP_INSTRUCTIONS (when available):**
@@ -77,7 +77,7 @@ Also use the LSP tool for deeper architectural analysis: use goToImplementation 
 
 **Subagent prompt:**
 ```
-Explore this codebase and report on Dependencies & Integrations. Find: external dependencies and their purposes, API integrations and third-party services, internal module dependencies and data flow between components, integration points where modules connect, configuration for external services. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}
+Explore this codebase and report on Dependencies & Integrations. Find: external dependencies and their purposes, API integrations and third-party services, internal module dependencies and data flow between components, integration points where modules connect, configuration for external services. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS} You own ONLY Dependencies & Integrations; siblings cover the rest; note off-lens issues in one Cross-lens flag line; surface what a generalist sweep would MISS in Dependencies & Integrations.
 ```
 
 **LSP_INSTRUCTIONS (when available):**
@@ -99,7 +99,7 @@ Also use the LSP tool: use findReferences on key integration functions (API clie
 
 **Subagent prompt:**
 ```
-Explore this codebase and report on Test & Quality Patterns. Find: test frameworks and testing approach, test directory structure and naming conventions, coverage tooling and CI/CD configuration, linting and formatting tools, type checking setup, pre-commit hooks or quality gates. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}
+Explore this codebase and report on Test & Quality Patterns. Find: test frameworks and testing approach, test directory structure and naming conventions, coverage tooling and CI/CD configuration, linting and formatting tools, type checking setup, pre-commit hooks or quality gates. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS} You own ONLY Test & Quality Patterns; siblings cover the rest; note off-lens issues in one Cross-lens flag line; surface what a generalist sweep would MISS in Test & Quality Patterns.
 ```
 
 **LSP_INSTRUCTIONS (when available):**
@@ -120,7 +120,7 @@ Also use the LSP tool: use documentSymbol on representative test files to unders
 
 **Subagent prompt:**
 ```
-Explore this codebase and report on Data Models & API Surface. Find: database schemas or data models, API endpoints and route definitions, request/response shapes and validation, key data structures and types, serialization formats. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}
+Explore this codebase and report on Data Models & API Surface. Find: database schemas or data models, API endpoints and route definitions, request/response shapes and validation, key data structures and types, serialization formats. Topic filter: {topic or 'none'}. Return a structured markdown section with key findings. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS} You own ONLY Data Models & API Surface; siblings cover the rest; note off-lens issues in one Cross-lens flag line; surface what a generalist sweep would MISS in Data Models & API Surface.
 ```
 
 **LSP_INSTRUCTIONS (when available):**

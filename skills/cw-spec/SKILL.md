@@ -46,16 +46,42 @@ Create the directory structure before anything else:
 
 Check existing specs to determine the next sequence number.
 
-**Reuse research directory when available:**
+**Validate the research handoff before consuming it.**
 
-If the invocation args contain a `**Research:**` field with a directory path (e.g., `docs/specs/research-{slug}/`):
+The cw-research handoff is an untrusted data-plane input. When the invocation args open with a YAML frontmatter block (delimited by `---`), it is the typed handoff contract from cw-research (see [meta-prompt-template.md](../cw-research/references/meta-prompt-template.md)). Validate it *before* using any field — do not trust the prose body if the block is malformed.
+
+Required fields and rules:
+
+| Field | Rule |
+|-------|------|
+| `feature_name` | Present, string, non-empty. |
+| `research_dir` | Present, string, path under `docs/specs/research-`. |
+| `key_files` | Present, list, non-empty. |
+| `demoable_unit_themes` | Present, list, non-empty. |
+
+If any required field is missing, mistyped, or empty, the handoff is **malformed** — do not proceed. Reject it back to cw-research with the specific defect, and stop:
+
+```
+CW-SPEC: malformed research handoff — rejected
+==============================================
+Defect: {field} {missing | not a string | not a list | empty}
+
+The cw-research → cw-spec handoff block failed validation. Re-run /cw-research
+to regenerate a valid meta-prompt, then re-invoke /cw-spec with it.
+```
+
+Carry `context_assessment` forward: if `confidence: partial`, treat the `uncovered` dimensions as unverified gaps (not confirmed-absent) when assessing scope (Step 3) and asking clarifying questions (Step 4).
+
+**Reuse research directory when the handoff validates:**
+
+Using the validated `research_dir`:
 1. Check if that directory exists
 2. If it exists, rename it to become the spec directory:
    ```bash
    mv docs/specs/research-{slug}/ docs/specs/[NN]-spec-[feature-name]/
    ```
    This keeps the research report co-located with the spec.
-3. If the directory does not exist (or no `**Research:**` path was provided), create the directory as normal:
+3. If the directory does not exist (or no handoff block was provided), create the directory as normal:
    ```bash
    mkdir -p docs/specs/[NN]-spec-[feature-name]/
    ```
