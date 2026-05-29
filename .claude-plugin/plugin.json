@@ -37,17 +37,6 @@
         ]
       }
     ],
-    "TaskCreated": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/validate-task-metadata.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
     "CwdChanged": [
       {
         "hooks": [
