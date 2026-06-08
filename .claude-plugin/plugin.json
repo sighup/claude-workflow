@@ -69,6 +69,17 @@
           }
         ]
       }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/worktree-remove-handler.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
