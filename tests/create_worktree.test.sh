@@ -2,8 +2,10 @@
 #
 # tests/create_worktree.test.sh - Integration tests for create_worktree()
 #
-# Verifies that create_worktree() delegates name derivation to cw_worktree_names
-# and that all three hardcoded "feature-" compositions are gone.
+# Verifies that create_worktree() delegates to provision_worktree (full mode):
+#   - Canonical names are derived via cw_worktree_names
+#   - Worktrees are placed under .claude/worktrees/
+#   - Isolated task list (settings.local.json) is written with the correct ID
 #
 # Usage: bash tests/create_worktree.test.sh
 #
@@ -57,46 +59,32 @@ cleanup() {
     rm -rf "$dir"
 }
 
-run_test() {
-    local label="$1"
-    shift
-    local result
-    if result=$("$@" 2>&1); then
-        PASS=$((PASS + 1))
-        echo "[PASS] $label"
-    else
-        FAIL=$((FAIL + 1))
-        ERRORS+=("FAIL [$label]: $result")
-        echo "[FAIL] $label"
-        echo "       $result"
-    fi
-}
-
 # ---------------------------------------------------------------------------
 # Scenario 1: Default feature slug produces repo-qualified names
+#             under .claude/worktrees/ (delegation to provision_worktree)
 # ---------------------------------------------------------------------------
 
 echo ""
-echo "=== Scenario 1: Default feature slug (login) ==="
+echo "=== Scenario 1: Default feature slug (login) — .claude/worktrees/ ==="
 
 tmp=$(make_scratch_repo "claude-workflow")
 (
     cd "$tmp"
     source "$CW_COMMON"
     create_worktree "login" >/dev/null 2>&1
-    test -d ".worktrees/feature-claude-workflow-login"     || { echo "worktree dir not found"; exit 1; }
+    test -d ".claude/worktrees/feature-claude-workflow-login"     || { echo "worktree dir not found under .claude/worktrees/"; exit 1; }
     got_branch=$(git branch --list "feature/login")
-    test -n "$got_branch"                                  || { echo "branch feature/login not found"; exit 1; }
-    got_id=$(grep -o '"CLAUDE_CODE_TASK_LIST_ID": "[^"]*"' .worktrees/feature-claude-workflow-login/.claude/settings.local.json | grep -o '"[^"]*"$' | tr -d '"')
-    test "$got_id" = "feature-claude-workflow-login"       || { echo "task list id wrong: $got_id"; exit 1; }
+    test -n "$got_branch"                                          || { echo "branch feature/login not found"; exit 1; }
+    got_id=$(jq -r '.env.CLAUDE_CODE_TASK_LIST_ID' .claude/worktrees/feature-claude-workflow-login/.claude/settings.local.json 2>/dev/null)
+    test "$got_id" = "feature-claude-workflow-login"               || { echo "task list id wrong: $got_id"; exit 1; }
 )
 r=$?
 if [ "$r" -eq 0 ]; then
     PASS=$((PASS + 1))
-    echo "[PASS] scenario1: feature-claude-workflow-login created"
+    echo "[PASS] scenario1: feature-claude-workflow-login created under .claude/worktrees/"
 else
     FAIL=$((FAIL + 1))
-    ERRORS+=("FAIL [scenario1: feature slug]")
+    ERRORS+=("FAIL [scenario1: feature slug — .claude/worktrees/]")
     echo "[FAIL] scenario1: feature-claude-workflow-login"
 fi
 cleanup "$tmp"
@@ -113,14 +101,14 @@ tmp=$(make_scratch_repo "claude-workflow")
     cd "$tmp"
     source "$CW_COMMON"
     create_worktree "fix-login" >/dev/null 2>&1
-    test -d ".worktrees/fix-claude-workflow-login"     || { echo "worktree dir not found"; exit 1; }
+    test -d ".claude/worktrees/fix-claude-workflow-login"     || { echo "worktree dir not found under .claude/worktrees/"; exit 1; }
     got_branch=$(git branch --list "fix/login")
-    test -n "$got_branch"                              || { echo "branch fix/login not found"; exit 1; }
+    test -n "$got_branch"                                      || { echo "branch fix/login not found"; exit 1; }
 )
 r=$?
 if [ "$r" -eq 0 ]; then
     PASS=$((PASS + 1))
-    echo "[PASS] scenario2: fix-claude-workflow-login created"
+    echo "[PASS] scenario2: fix-claude-workflow-login created under .claude/worktrees/"
 else
     FAIL=$((FAIL + 1))
     ERRORS+=("FAIL [scenario2: fix slug]")
@@ -140,10 +128,10 @@ tmp=$(make_scratch_repo "myrepo")
     cd "$tmp"
     source "$CW_COMMON"
     create_worktree "fix-login" >/dev/null 2>&1
-    # Find the only worktree under .worktrees/
-    wt_dir=$(ls -d .worktrees/*/ 2>/dev/null | head -1 | sed 's|/$||')
+    # Find the only worktree under .claude/worktrees/
+    wt_dir=$(ls -d .claude/worktrees/*/ 2>/dev/null | head -1 | sed 's|/$||')
     wt_basename=$(basename "$wt_dir")
-    got_id=$(grep -o '"CLAUDE_CODE_TASK_LIST_ID": "[^"]*"' "${wt_dir}/.claude/settings.local.json" | grep -o '"[^"]*"$' | tr -d '"')
+    got_id=$(jq -r '.env.CLAUDE_CODE_TASK_LIST_ID' "${wt_dir}/.claude/settings.local.json" 2>/dev/null)
     test "$got_id" = "$wt_basename" || { echo "task list id '$got_id' != dir basename '$wt_basename'"; exit 1; }
 )
 r=$?
@@ -168,7 +156,7 @@ tmp=$(make_scratch_repo "claude-workflow")
 (
     cd "$tmp"
     source "$CW_COMMON"
-    mkdir -p ".worktrees/feature-claude-workflow-login"
+    mkdir -p ".claude/worktrees/feature-claude-workflow-login"
     if create_worktree "login" >/dev/null 2>&1; then
         echo "expected non-zero exit but got zero"; exit 1
     fi
@@ -198,9 +186,9 @@ tmp=$(make_scratch_repo "claude-workflow")
     if create_worktree "Login Page" >/dev/null 2>&1; then
         echo "expected rejection but got success"; exit 1
     fi
-    # No directory should have been created under .worktrees/
-    if ls -d .worktrees/*/ >/dev/null 2>&1; then
-        echo "unexpected directory created under .worktrees/"; exit 1
+    # No directory should have been created under .claude/worktrees/
+    if ls -d .claude/worktrees/*/ >/dev/null 2>&1; then
+        echo "unexpected directory created under .claude/worktrees/"; exit 1
     fi
 )
 r=$?
@@ -211,6 +199,36 @@ else
     FAIL=$((FAIL + 1))
     ERRORS+=("FAIL [scenario5: invalid slug rejection]")
     echo "[FAIL] scenario5: invalid slug rejected, no dir created"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
+# Scenario 6: CW_WORKTREE_PATH is set to the absolute worktree path
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 6: CW_WORKTREE_PATH is set to absolute path ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    cd "$tmp"
+    source "$CW_COMMON"
+    create_worktree "my-feature" >/dev/null 2>&1
+    test -n "$CW_WORKTREE_PATH" || { echo "CW_WORKTREE_PATH not set"; exit 1; }
+    case "$CW_WORKTREE_PATH" in
+        /*) ;;
+        *) echo "CW_WORKTREE_PATH is not absolute: $CW_WORKTREE_PATH"; exit 1 ;;
+    esac
+    test "$(basename "$CW_WORKTREE_PATH")" = "feature-myrepo-my-feature" || { echo "CW_WORKTREE_PATH basename wrong: $CW_WORKTREE_PATH"; exit 1; }
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario6: CW_WORKTREE_PATH is absolute and correct"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario6: CW_WORKTREE_PATH absolute]")
+    echo "[FAIL] scenario6: CW_WORKTREE_PATH is absolute and correct"
 fi
 cleanup "$tmp"
 

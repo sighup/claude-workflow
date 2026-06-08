@@ -677,6 +677,9 @@ EOF
 #   SLUG may carry a type prefix (fix-, research-, chore-, etc.) — cw_worktree_names
 #   derives the type, repo, and canonical directory/branch names.
 # Sets: CW_WORKTREE_PATH
+#
+# Delegates to provision_worktree (full mode) for the actual provisioning.
+# Worktrees are created under .claude/worktrees/{type}-{repo}-{slug}.
 create_worktree() {
     local feature_name="$1"
 
@@ -691,30 +694,14 @@ create_worktree() {
         return 1
     fi
 
-    # Derive canonical names via the naming helper
+    # Derive canonical names to support CW_RESUME check and logging
     local names
     names=$(cw_worktree_names "$feature_name") || return 1
 
-    local WORKTREE_DIR_ID branch_name
-    WORKTREE_DIR_ID=$(printf '%s' "$names" | sed -n '1p')
-    branch_name=$(printf '%s' "$names" | sed -n '3p')
+    local dir_id
+    dir_id=$(printf '%s' "$names" | sed -n '1p')
 
-    local worktree_dir=".worktrees/${WORKTREE_DIR_ID}"
-
-    # Ensure .worktrees is gitignored (with lock to prevent races)
-    local lockfile=".git/cw-gitignore.lock"
-    if ! git check-ignore -q .worktrees/ 2>/dev/null && ! grep -qx '.worktrees/' .gitignore 2>/dev/null; then
-        # Simple lock: try to create atomically
-        if (set -o noclobber; echo $$ > "$lockfile") 2>/dev/null; then
-            echo ".worktrees/" >> .gitignore
-            git add .gitignore
-            git commit -m "chore: add .worktrees to gitignore" -- .gitignore 2>/dev/null || true
-            rm -f "$lockfile"
-        else
-            # Another process is handling it — wait briefly
-            sleep 2
-        fi
-    fi
+    local worktree_dir=".claude/worktrees/${dir_id}"
 
     # Check for existing worktree
     if [ -d "$worktree_dir" ]; then
@@ -729,32 +716,10 @@ create_worktree() {
         fi
     fi
 
-    # Create worktree (use existing branch if it exists)
-    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
-        log_warning "Branch $branch_name already exists, using it"
-        git worktree add "$worktree_dir" "$branch_name"
-    else
-        git worktree add "$worktree_dir" -b "$branch_name"
-    fi
+    # Delegate to provision_worktree (full mode) — handles naming, dir creation,
+    # gitignore ensure, branch creation, and settings.local.json write.
+    provision_worktree "$feature_name" "" "full" || return 1
 
-    if [ $? -ne 0 ]; then
-        log_error "Failed to create worktree"
-        return 1
-    fi
-
-    # Configure isolated task list — ID equals the worktree directory basename
-    mkdir -p "${worktree_dir}/.claude"
-    cat > "${worktree_dir}/.claude/settings.local.json" << EOF
-{
-  "env": {
-    "CLAUDE_CODE_TASK_LIST_ID": "${WORKTREE_DIR_ID}"
-  }
-}
-EOF
-
-    CW_WORKTREE_PATH="$(cd "$worktree_dir" && pwd)"
-
-    log_success "Worktree created: $worktree_dir (branch: $branch_name)"
     return 0
 }
 
