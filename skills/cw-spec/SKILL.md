@@ -342,8 +342,8 @@ Once the spec is complete and approved, offer next steps based on context.
 
 **First, check if already in a worktree:**
 ```bash
-# If current directory is under .worktrees/, we're already isolated
-pwd | grep -q '\.worktrees/' && echo "IN_WORKTREE"
+# If current directory is under .claude/worktrees/ (new) or .worktrees/ (legacy), we're already isolated
+pwd | grep -qE '(\.claude/worktrees|/\.worktrees)/' && echo "IN_WORKTREE"
 ```
 
 **If IN a worktree (recommended flow):**

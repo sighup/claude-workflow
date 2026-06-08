@@ -303,7 +303,7 @@ Fire the question even under a standing "work without clarifying questions" inst
    ```
 
 2. **Enhance with status info:**
-   For each worktree in `.worktrees/`:
+   For each worktree in `.claude/worktrees/` or `.worktrees/` (both locations):
    - Get branch name
    - Check for uncommitted changes
    - Count commits ahead/behind main
@@ -332,11 +332,12 @@ Fire the question even under a standing "work without clarifying questions" inst
 **Process:**
 
 1. **Resolve worktree directory:**
-   Look up the actual worktree directory under `.worktrees/` by matching against `git worktree list` — do not assume a `feature-` prefix.
+   Look up the actual worktree directory under `.claude/worktrees/` or `.worktrees/` by matching against `git worktree list` — do not assume a `feature-` prefix.
    ```bash
-   # Find the worktree directory for the given name, regardless of prefix
-   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep "/\.worktrees/" \
-     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo ".worktrees/$_b"; break;; esac; done)
+   # Find the worktree directory for the given name, regardless of prefix or location
+   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+     | grep -E "/(\.claude/worktrees|\.worktrees)/" \
+     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'"
      echo "Run /cw-worktree list to see available worktrees"
@@ -400,9 +401,10 @@ Fire the question even under a standing "work without clarifying questions" inst
      exit 1
    fi
 
-   # Resolve worktree directory — match against git worktree list, not a fixed prefix
-   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep "/\.worktrees/" \
-     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo ".worktrees/$_b"; break;; esac; done)
+   # Resolve worktree directory — match against git worktree list, not a fixed prefix or location
+   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+     | grep -E "/(\.claude/worktrees|\.worktrees)/" \
+     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'"
      exit 1
@@ -539,9 +541,10 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 1. **Resolve worktree directory:**
    ```bash
-   # Find the worktree directory by name, regardless of prefix
-   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep "/\.worktrees/" \
-     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo ".worktrees/$_b"; break;; esac; done)
+   # Find the worktree directory by name, regardless of prefix or location
+   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+     | grep -E "/(\.claude/worktrees|\.worktrees)/" \
+     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for feature '${FEATURE}'"
      echo "Run /cw-worktree list to see available worktrees"
@@ -621,9 +624,10 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    FEATURE="$1"
    # Resolve the actual worktree directory — match against git worktree list,
    # not a hardcoded feature- prefix, so both new {type}-{repo}-{slug} and
-   # legacy feature-* directories are found.
-   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep "/\.worktrees/" \
-     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo ".worktrees/$_b"; break;; esac; done)
+   # legacy feature-* directories are found, in both .claude/worktrees/ and .worktrees/.
+   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+     | grep -E "/(\.claude/worktrees|\.worktrees)/" \
+     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'" >&2
      echo "Run /cw-worktree list to see available worktrees." >&2
@@ -710,8 +714,8 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
 2. **Identify candidates for cleanup:**
    - Worktrees with no uncommitted changes whose branches are merged to main
    - Worktrees whose branches no longer exist
-   - Any directory under `.worktrees/*` that is not registered in `git worktree list` (orphaned directories)
-   - Matches both new `{type}-{repo}-{slug}` and legacy `feature-*` naming
+   - Any directory under `.claude/worktrees/*` or `.worktrees/*` not registered in `git worktree list` (orphaned directories)
+   - Matches both new `{type}-{repo}-{slug}` and legacy `feature-*` naming, in both `.claude/worktrees/` and `.worktrees/`
 
 3. **Present cleanup options:**
    ```
