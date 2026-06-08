@@ -80,19 +80,17 @@ Fire the question even under a standing "work without clarifying questions" inst
    BRANCH="${_TYPE}/${_SLUG}"
    ```
 
-2. **Ensure .worktrees is gitignored:**
+2. **Ensure .claude/worktrees is gitignored:**
    ```bash
-   if ! git check-ignore -q .worktrees/ 2>/dev/null && ! grep -qx '.worktrees/' .gitignore 2>/dev/null; then
-     echo ".worktrees/" >> .gitignore
-     git add .gitignore
-     git commit -m "chore: add .worktrees to gitignore"
+   if ! grep -qxF '.claude/worktrees/' .gitignore 2>/dev/null; then
+     printf '\n.claude/worktrees/\n' >> .gitignore
    fi
    ```
 
 3. **Check for existing worktree:**
    ```bash
-   if [ -d ".worktrees/${WORKTREE_DIR}" ]; then
-     echo "ERROR: Worktree already exists at .worktrees/${WORKTREE_DIR}"
+   if [ -d ".claude/worktrees/${WORKTREE_DIR}" ]; then
+     echo "ERROR: Worktree already exists at .claude/worktrees/${WORKTREE_DIR}"
      exit 1
    fi
    ```
@@ -107,18 +105,19 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 5. **Create worktree:**
    ```bash
-   git worktree add ".worktrees/${WORKTREE_DIR}" -b "${BRANCH}"
+   mkdir -p .claude/worktrees
+   git worktree add ".claude/worktrees/${WORKTREE_DIR}" -b "${BRANCH}"
    ```
 
 6. **Configure isolated task list:**
    ```bash
    # WORKTREE_DIR=${_TYPE}-${_REPO}-${_SLUG} and BRANCH=${_TYPE}/${_SLUG} from step 1.
    # Create .claude directory if it doesn't exist
-   mkdir -p ".worktrees/${WORKTREE_DIR}/.claude"
+   mkdir -p ".claude/worktrees/${WORKTREE_DIR}/.claude"
 
    # Create settings.local.json with task list ID matching the worktree directory name
    # Pre-approve workflow agent types so autonomous execution isn't interrupted
-   cat > ".worktrees/${WORKTREE_DIR}/.claude/settings.local.json" << EOF
+   cat > ".claude/worktrees/${WORKTREE_DIR}/.claude/settings.local.json" << EOF
    {
      "env": {
        "CLAUDE_CODE_TASK_LIST_ID": "${WORKTREE_DIR}"
@@ -154,7 +153,7 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 7. **Setup dependencies (auto-detect project type):**
    ```bash
-   cd ".worktrees/${WORKTREE_DIR}"
+   cd ".claude/worktrees/${WORKTREE_DIR}"
 
    # Node.js
    if [ -f package.json ]; then
@@ -197,9 +196,9 @@ Fire the question even under a standing "work without clarifying questions" inst
 
    | `DRIVE_MODE` | Bash invocation |
    |---|---|
-   | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
-   | `autonomous` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
-   | `empty` | `"$HERDR_OPEN_BIN" ".worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `autonomous` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `empty` | `"$HERDR_OPEN_BIN" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
    | `skip_herdr` | `HERDR_EXIT=2` (do not invoke the helper) |
 
    When `DRIVE_MODE=starter` or `autonomous` and this specific feature has an empty `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (rare — only possible when the batch is mixed and the user picked a mode that fits *some* features), fall back to the `empty` invocation for this feature so the tab still opens.
@@ -214,7 +213,7 @@ Fire the question even under a standing "work without clarifying questions" inst
     ```
     WORKTREE CREATED
     ================
-    Path:   .worktrees/{WORKTREE_DIR}/
+    Path:   .claude/worktrees/{WORKTREE_DIR}/
     Branch: {BRANCH}
     Task List: {WORKTREE_DIR} (via .claude/settings.local.json)
     Status: Ready for development
@@ -232,7 +231,7 @@ Fire the question even under a standing "work without clarifying questions" inst
       /cw-worktree cleanup           # Remove merged worktrees
 
     To resume worktree work later:
-      cd .worktrees/{WORKTREE_DIR} && claude
+      cd .claude/worktrees/{WORKTREE_DIR} && claude
       (Tasks persist across sessions)
 
     To sync with main before PR (from worktree session):
@@ -246,13 +245,13 @@ Fire the question even under a standing "work without clarifying questions" inst
     ```
     WORKTREE CREATED
     ================
-    Path:   .worktrees/{WORKTREE_DIR}/
+    Path:   .claude/worktrees/{WORKTREE_DIR}/
     Branch: {BRANCH}
     Task List: {WORKTREE_DIR} (via .claude/settings.local.json)
     Status: Ready for development
 
     Next steps (keep THIS session open as control center):
-    1. Open NEW terminal: cd .worktrees/{WORKTREE_DIR} && claude
+    1. Open NEW terminal: cd .claude/worktrees/{WORKTREE_DIR} && claude
     2. Create spec: /cw-spec {feature-name}
     3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
     4. Create PR: gh pr create (PR contains spec + implementation)
@@ -264,7 +263,7 @@ Fire the question even under a standing "work without clarifying questions" inst
       /cw-worktree cleanup           # Remove merged worktrees
 
     To resume worktree work later:
-      cd .worktrees/{WORKTREE_DIR} && claude
+      cd .claude/worktrees/{WORKTREE_DIR} && claude
       (Tasks persist across sessions)
 
     To sync with main before PR (from worktree session):
@@ -313,16 +312,16 @@ Fire the question even under a standing "work without clarifying questions" inst
    ```
    ACTIVE WORKTREES
    ================
-   PATH                                    BRANCH                    STATUS
-   --------------------------------------- ------------------------- ------------------
-   .                                       main                      (project root)
-   .worktrees/feature-myrepo-auth          feature/myrepo-auth       3 ahead, clean
-   .worktrees/fix-myrepo-billing           fix/myrepo-billing        1 ahead, modified
-   .worktrees/feature-auth                 feature/auth              5 ahead, clean
+   PATH                                           BRANCH                    STATUS
+   ---------------------------------------------- ------------------------- ------------------
+   .                                              main                      (project root)
+   .claude/worktrees/feature-myrepo-auth          feature/auth              3 ahead, clean
+   .claude/worktrees/fix-myrepo-billing           fix/billing               1 ahead, modified
+   .worktrees/feature-auth                        feature/auth              5 ahead, clean    (legacy)
 
    Specs in progress:
-   - 01-spec-auth → .worktrees/feature-myrepo-auth
-   - 02-spec-billing → .worktrees/fix-myrepo-billing
+   - 01-spec-auth → .claude/worktrees/feature-myrepo-auth
+   - 02-spec-billing → .claude/worktrees/fix-myrepo-billing
    ```
 
 ---
@@ -723,14 +722,14 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    ================
 
    Merged (safe to remove):
-   - .worktrees/feature-myrepo-auth (branch merged to main)
-   - .worktrees/feature-login (branch merged to main)
+   - .claude/worktrees/feature-myrepo-auth (branch merged to main)
+   - .worktrees/feature-login (branch merged to main)    (legacy)
 
    Orphaned (directories without worktree):
-   - .worktrees/fix-myrepo-old (no git worktree entry)
+   - .worktrees/fix-myrepo-old (no git worktree entry)   (legacy)
 
    Active (will NOT be removed):
-   - .worktrees/fix-myrepo-billing (3 commits ahead of main)
+   - .claude/worktrees/fix-myrepo-billing (3 commits ahead of main)
    ```
 
 4. **Confirm cleanup:**
@@ -750,12 +749,12 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
 
 5. **Perform cleanup:**
    ```bash
-   # For each merged worktree
-   git worktree remove ".worktrees/${WORKTREE_DIR}"
+   # For each merged or orphaned worktree (WORKTREE_DIR is the full path from git worktree list)
+   git worktree remove "${WORKTREE_DIR}"
    git branch -d "${BRANCH}" 2>/dev/null || true
 
-   # For orphaned directories
-   rm -rf ".worktrees/${WORKTREE_DIR}"
+   # For orphaned directories not in git worktree list
+   rm -rf "${WORKTREE_DIR}"
    ```
 
 6. **Prune worktree references:**

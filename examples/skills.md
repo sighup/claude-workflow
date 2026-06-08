@@ -121,7 +121,7 @@ Manage git worktrees for parallel feature development.
 /cw-worktree cleanup                   # Remove merged/orphaned worktrees
 ```
 
-The worktree directory name and task list ID are derived automatically from the slug you provide. The leading keyword determines the type (`fix`, `research`, `chore`, or `feature`), and the repo name is inserted automatically. For example, `/cw-worktree create fix-login` in a repo named `myrepo` creates `.worktrees/fix-myrepo-login` on branch `fix/login`.
+The worktree directory name and task list ID are derived automatically from the slug you provide. The leading keyword determines the type (`fix`, `research`, `chore`, or `feature`), and the repo name is inserted automatically. For example, `/cw-worktree create fix-login` in a repo named `myrepo` creates `.claude/worktrees/fix-myrepo-login` on branch `fix/login`.
 
 You can also describe what you want and let Claude figure out how many worktrees to create:
 
@@ -142,7 +142,7 @@ For a single fix, just name what you're fixing:
 Then open a new terminal in the worktree to start working:
 
 ```bash
-cd .worktrees/fix-myrepo-checkout-redesign && claude
+cd .claude/worktrees/fix-myrepo-checkout-redesign && claude
 /cw-spec → /cw-plan → /cw-dispatch → /cw-validate
 gh pr create
 ```

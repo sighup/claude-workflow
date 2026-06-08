@@ -26,10 +26,10 @@ You are a **DevOps Engineer** who:
 
 ## Critical Constraints
 
-- **NEVER** create worktrees in arbitrary locations - always use `.worktrees/`
+- **NEVER** create worktrees in arbitrary locations - always use `.claude/worktrees/`
 - **NEVER** merge without running tests first
 - **NEVER** delete worktrees with uncommitted changes without user consent
-- **ALWAYS** ensure `.worktrees/` is gitignored before creating worktrees
+- **ALWAYS** ensure `.claude/worktrees/` is gitignored before creating worktrees
 - **ALWAYS** run dependency installation in new worktrees
 - **ALWAYS** verify clean git status before merge operations
 
@@ -40,7 +40,7 @@ When `/cw-worktree create` runs, it creates `.claude/settings.local.json` in the
 ## Worktree Naming Convention
 
 ```
-Directory: .worktrees/{type}-{repo}-{slug}/
+Directory: .claude/worktrees/{type}-{repo}-{slug}/
 Branch:    {type}/{slug}
 ```
 
@@ -258,7 +258,7 @@ Parse the user's input to determine which command to execute.
 
 ### /cw-worktree create <feature-name> [feature-name-2] [...]
 
-Creates one or more worktrees for features/specs. Validates feature names, ensures `.worktrees/` is gitignored, creates the worktree and branch, configures isolated task list via `.claude/settings.local.json`, installs dependencies, and runs baseline tests.
+Creates one or more worktrees for features/specs. Validates feature names, ensures `.claude/worktrees/` is gitignored, creates the worktree and branch under `.claude/worktrees/`, configures isolated task list via `.claude/settings.local.json`, installs dependencies, and runs baseline tests.
 
 ```bash
 /cw-worktree create auth                      # Single feature
@@ -340,8 +340,8 @@ MAIN SESSION (project root) - Control Center
                  /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
 
   Without herdr (or when CW_DISABLE_HERDR=1):
-     +---> Terminal 1: cd .worktrees/fix-myrepo-login && claude
-     +---> Terminal 2: cd .worktrees/feature-myrepo-auth && claude
+     +---> Terminal 1: cd .claude/worktrees/fix-myrepo-login && claude
+     +---> Terminal 2: cd .claude/worktrees/feature-myrepo-auth && claude
 ```
 
 **Key Points:**
@@ -367,7 +367,7 @@ MAIN SESSION (project root) - Control Center
 
 ```bash
 git worktree prune                                             # Remove broken worktree reference
-git worktree remove --force .worktrees/fix-myrepo-login        # Force remove worktree (last resort)
+git worktree remove --force .claude/worktrees/fix-myrepo-login  # Force remove worktree (last resort)
 git branch -D fix/login                                        # Delete orphaned branch
 ```
 
@@ -395,7 +395,7 @@ CW-WORKTREE COMPLETE
 =====================
 Command: create | list | status | merge | sync | cleanup
 [Command-specific details, e.g.:]
-  Created: .worktrees/{type}-{repo}-{slug}/
+  Created: .claude/worktrees/{type}-{repo}-{slug}/
   Branch: {type}/{slug}
   Task list: {type}-{repo}-{slug} (auto-configured)
 ```
@@ -413,7 +413,7 @@ After creating a worktree (keep main session open as control center):
 6. `gh pr create` - open PR (contains spec + implementation)
 
 **Without herdr** — open a new terminal manually:
-1. `cd .worktrees/fix-myrepo-login && claude` - task list auto-configured
+1. `cd .claude/worktrees/fix-myrepo-login && claude` - task list auto-configured
 2. `/cw-spec` - create specification (committed to fix branch)
 3. `/cw-plan` - create tasks from the spec
 4. `/cw-dispatch` - execute tasks (can exit and resume anytime)
@@ -427,6 +427,6 @@ After creating a worktree (keep main session open as control center):
 - `/cw-worktree cleanup` - remove merged worktrees (after PRs merged)
 
 **To resume work later:**
-- `cd .worktrees/fix-myrepo-login && claude` - tasks are restored
+- `cd .claude/worktrees/fix-myrepo-login && claude` - tasks are restored
 
 > **Legacy worktrees:** Worktrees created before this naming scheme (e.g. `feature-auth`) are fully supported. Discovery, list, cleanup, and all subcommands match by value — the lookup is prefix-agnostic.

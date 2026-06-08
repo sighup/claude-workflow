@@ -60,12 +60,12 @@ End-to-end examples combining skills and shell scripts.
 /cw-worktree create fix-login
 
 # Terminal 1 — feature-myrepo-auth on branch feature/auth
-cd .worktrees/feature-myrepo-auth && claude
+cd .claude/worktrees/feature-myrepo-auth && claude
 /cw-spec → /cw-plan → /cw-dispatch → /cw-validate
 gh pr create
 
 # Terminal 2 — fix-myrepo-login on branch fix/login
-cd .worktrees/fix-myrepo-login && claude
+cd .claude/worktrees/fix-myrepo-login && claude
 /cw-spec → /cw-plan → /cw-dispatch → /cw-validate
 gh pr create
 
