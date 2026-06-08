@@ -9,7 +9,9 @@ CURRENT_DIR=$(pwd)
 # Check if we're in a worktree under .worktrees/*
 if [[ "$CURRENT_DIR" == */.worktrees/* ]]; then
   # Extract worktree name from path (handles nested directories within the worktree)
-  # Example: /project/.worktrees/feature-auth/src/lib -> feature-auth
+  # The worktree directory basename is the task list id — works for any naming scheme:
+  # legacy feature-* or new {type}-{repo}-{slug}.
+  # Example: /project/.worktrees/feature-myrepo-auth/src/lib -> feature-myrepo-auth
   WORKTREE_NAME=$(echo "$CURRENT_DIR" | sed 's|^.*/\.worktrees/||' | cut -d'/' -f1)
 
   if [ -n "$WORKTREE_NAME" ]; then
@@ -30,7 +32,7 @@ if [[ "$CURRENT_DIR" == */.worktrees/* ]]; then
       STATUS="WARNING: Missing .claude/settings.local.json - tasks may go to wrong list. Run: mkdir -p .claude && echo '{\"env\":{\"CLAUDE_CODE_TASK_LIST_ID\":\"${WORKTREE_NAME}\"}}' > .claude/settings.local.json"
     fi
 
-    # Extract branch name from worktree (if it follows feature/* pattern)
+    # Extract branch name from worktree
     BRANCH_NAME=$(cd "$WORKTREE_ROOT" && git branch --show-current 2>/dev/null || echo "unknown")
 
     # Provide context to Claude about the worktree environment

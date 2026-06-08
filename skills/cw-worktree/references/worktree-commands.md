@@ -313,16 +313,16 @@ Fire the question even under a standing "work without clarifying questions" inst
    ```
    ACTIVE WORKTREES
    ================
-   PATH                          BRANCH              STATUS
-   ----------------------------- ------------------- ------------------
-   .                             main                (project root)
-   .worktrees/feature-auth       feature/auth        3 ahead, clean
-   .worktrees/feature-billing    feature/billing     1 ahead, modified
-   .worktrees/feature-search     feature/search      5 ahead, clean
+   PATH                                    BRANCH                    STATUS
+   --------------------------------------- ------------------------- ------------------
+   .                                       main                      (project root)
+   .worktrees/feature-myrepo-auth          feature/myrepo-auth       3 ahead, clean
+   .worktrees/fix-myrepo-billing           fix/myrepo-billing        1 ahead, modified
+   .worktrees/feature-auth                 feature/auth              5 ahead, clean
 
    Specs in progress:
-   - 01-spec-auth → .worktrees/feature-auth
-   - 02-spec-billing → .worktrees/feature-billing
+   - 01-spec-auth → .worktrees/feature-myrepo-auth
+   - 02-spec-billing → .worktrees/fix-myrepo-billing
    ```
 
 ---
@@ -331,10 +331,18 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 **Process:**
 
-1. **Validate worktree exists:**
+1. **Resolve worktree directory:**
+   Look up the actual worktree directory under `.worktrees/` by matching against `git worktree list` — do not assume a `feature-` prefix.
    ```bash
-   if [ ! -d ".worktrees/feature-${FEATURE}" ]; then
-     echo "ERROR: No worktree found for feature '${FEATURE}'"
+   # Find the worktree directory for the given name, regardless of prefix
+   WORKTREE_DIR=$(git worktree list --porcelain \
+     | awk '/^worktree /{wt=$2} /^worktree /{base=wt} {if(/^worktree / && wt ~ "/.worktrees/" && split(wt,a,"/") && a[length(a)]==ENVIRON["FEATURE"]) print wt}' 2>/dev/null)
+   if [ -z "$WORKTREE_DIR" ]; then
+     # Fallback: scan .worktrees/ for a directory whose basename matches FEATURE
+     WORKTREE_DIR=$(find .worktrees -maxdepth 1 -type d -name "*${FEATURE}*" 2>/dev/null | head -1)
+   fi
+   if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
+     echo "ERROR: No worktree found for '${FEATURE}'"
      echo "Run /cw-worktree list to see available worktrees"
      exit 1
    fi
@@ -342,7 +350,7 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 2. **Gather status information:**
    ```bash
-   cd ".worktrees/feature-${FEATURE}"
+   cd "$WORKTREE_DIR"
 
    # Branch info
    git branch -vv
@@ -367,8 +375,8 @@ Fire the question even under a standing "work without clarifying questions" inst
    ```
    WORKTREE STATUS: {feature-name}
    ================================
-   Path:   .worktrees/feature-{feature-name}/
-   Branch: feature/{feature-name}
+   Path:   {resolved-worktree-dir}/
+   Branch: {branch-name}
 
    Commits ahead of main: 5
      abc1234 feat(auth): add login endpoint
@@ -396,14 +404,16 @@ Fire the question even under a standing "work without clarifying questions" inst
      exit 1
    fi
 
-   # Verify worktree exists
-   if [ ! -d ".worktrees/feature-${FEATURE}" ]; then
+   # Resolve worktree directory — match against git worktree list, not a fixed prefix
+   WORKTREE_DIR=$(find .worktrees -maxdepth 1 -type d -name "*${FEATURE}*" 2>/dev/null \
+     | while read d; do git worktree list --porcelain | grep -q "^worktree $(pwd)/${d}$" && echo "$d"; done | head -1)
+   if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'"
      exit 1
    fi
 
    # Check for uncommitted changes in worktree
-   cd ".worktrees/feature-${FEATURE}"
+   cd "$WORKTREE_DIR"
    if [ -n "$(git status --porcelain)" ]; then
      echo "ERROR: Worktree has uncommitted changes"
      echo "Commit or stash changes before merging"
@@ -413,7 +423,7 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 2. **Run tests in feature worktree:**
    ```bash
-   cd ".worktrees/feature-${FEATURE}"
+   cd "$WORKTREE_DIR"
 
    # Auto-detect and run tests
    if [ -f package.json ]; then
@@ -427,7 +437,7 @@ Fire the question even under a standing "work without clarifying questions" inst
    fi
 
    if [ $? -ne 0 ]; then
-     echo "ERROR: Tests failing in feature/${FEATURE}"
+     echo "ERROR: Tests failing in worktree for '${FEATURE}'"
      echo "Fix tests before merging"
      exit 1
    fi
@@ -435,7 +445,7 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 3. **Offer rebase option if main has moved:**
    ```bash
-   cd ".worktrees/feature-${FEATURE}"
+   cd "$WORKTREE_DIR"
    BEHIND=$(git rev-list HEAD..main --count)
 
    if [ "$BEHIND" -gt 0 ]; then
@@ -468,8 +478,11 @@ Fire the question even under a standing "work without clarifying questions" inst
    git checkout main
    git pull origin main 2>/dev/null || true  # May not have remote
 
-   # Merge feature branch
-   git merge "feature/${FEATURE}" --no-ff -m "Merge feature/${FEATURE}: [description from spec or commits]"
+   # Read the branch name from the resolved worktree (works for any prefix)
+   BRANCH=$(cd "$WORKTREE_DIR" && git branch --show-current)
+
+   # Merge the feature branch
+   git merge "${BRANCH}" --no-ff -m "Merge ${BRANCH}: [description from spec or commits]"
    ```
 
 5. **Run full test suite:**
@@ -512,7 +525,7 @@ Fire the question even under a standing "work without clarifying questions" inst
    ```
    MERGE COMPLETE
    ==============
-   Branch: feature/{feature-name} → main
+   Branch: {branch-name} → main
    Commit: {merge-commit-sha}
 
    Cleanup: Completed | Skipped
@@ -528,9 +541,12 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 **Process:**
 
-1. **Validate worktree exists:**
+1. **Resolve worktree directory:**
    ```bash
-   if [ ! -d ".worktrees/feature-${FEATURE}" ]; then
+   # Find the worktree directory by name, regardless of prefix
+   WORKTREE_DIR=$(find .worktrees -maxdepth 1 -type d -name "*${FEATURE}*" 2>/dev/null \
+     | while read d; do git worktree list --porcelain | grep -q "^worktree $(pwd)/${d}$" && echo "$d"; done | head -1)
+   if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for feature '${FEATURE}'"
      echo "Run /cw-worktree list to see available worktrees"
      exit 1
@@ -539,7 +555,7 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 2. **Check for uncommitted changes:**
    ```bash
-   cd ".worktrees/feature-${FEATURE}"
+   cd "$WORKTREE_DIR"
    if [ -n "$(git status --porcelain)" ]; then
      echo "ERROR: Worktree has uncommitted changes"
      echo "Commit or stash changes before syncing"
@@ -588,7 +604,7 @@ Fire the question even under a standing "work without clarifying questions" inst
    ```
    SYNC COMPLETE
    =============
-   Branch: feature/{feature-name}
+   Branch: {branch-name}
    Rebased on: origin/main
    Commits replayed: {count}
 
@@ -604,19 +620,24 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
 
 **Process:**
 
-1. **Parse feature name:**
+1. **Resolve worktree directory:**
    ```bash
    FEATURE="$1"
-   WORKTREE_DIR=".worktrees/feature-${FEATURE}"
-   ```
-
-2. **Validate the worktree exists:**
-   ```bash
-   if [ ! -d "$WORKTREE_DIR" ]; then
-     echo "ERROR: No worktree found for feature '${FEATURE}' (expected: ${WORKTREE_DIR})" >&2
+   # Resolve the actual worktree directory — match against git worktree list,
+   # not a hardcoded feature- prefix, so both new {type}-{repo}-{slug} and
+   # legacy feature-* directories are found.
+   WORKTREE_DIR=$(find .worktrees -maxdepth 1 -type d -name "*${FEATURE}*" 2>/dev/null \
+     | while read d; do git worktree list --porcelain | grep -q "^worktree $(pwd)/${d}$" && echo "$d"; done | head -1)
+   if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
+     echo "ERROR: No worktree found for '${FEATURE}'" >&2
      echo "Run /cw-worktree list to see available worktrees." >&2
      exit 1
    fi
+   ```
+
+2. **Validate and read branch:**
+   ```bash
+   BRANCH=$(cd "$WORKTREE_DIR" && git branch --show-current 2>/dev/null || echo "unknown")
    ```
 
 3. **Resolve helper path and invoke with --focus-if-exists:**
@@ -654,13 +675,13 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    ```
    WORKTREE OPEN
    =============
-   Path:   .worktrees/feature-{feature-name}/
-   Branch: feature/{feature-name}
+   Path:   {resolved-worktree-dir}/
+   Branch: {branch-name}
 
-   Opened (or focused) in herdr: workspace {repo-name} → tab feature-{feature-name}
+   Opened (or focused) in herdr: workspace {repo-name} → tab {worktree-basename}
 
    To resume work in the terminal:
-     cd .worktrees/feature-{feature-name} && claude
+     cd {resolved-worktree-dir} && claude
    ```
 
    **When `HERDR_EXIT!=0` (herdr unavailable or CW_DISABLE_HERDR set — legacy output):**
@@ -670,11 +691,11 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    ```
    WORKTREE OPEN
    =============
-   Path:   .worktrees/feature-{feature-name}/
-   Branch: feature/{feature-name}
+   Path:   {resolved-worktree-dir}/
+   Branch: {branch-name}
 
    Open a terminal and run:
-     cd .worktrees/feature-{feature-name} && claude
+     cd {resolved-worktree-dir} && claude
    ```
 
    The helper's stderr is suppressed (`2>/dev/null`). For diagnosis run `cw-herdr-open --probe; echo $?` directly — see SKILL.md "Diagnosing the herdr integration".
@@ -693,7 +714,8 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
 2. **Identify candidates for cleanup:**
    - Worktrees with no uncommitted changes whose branches are merged to main
    - Worktrees whose branches no longer exist
-   - Worktrees in `.worktrees/` that are not in git worktree list (orphaned directories)
+   - Any directory under `.worktrees/*` that is not registered in `git worktree list` (orphaned directories)
+   - Matches both new `{type}-{repo}-{slug}` and legacy `feature-*` naming
 
 3. **Present cleanup options:**
    ```
@@ -701,14 +723,14 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    ================
 
    Merged (safe to remove):
-   - .worktrees/feature-auth (branch merged to main)
+   - .worktrees/feature-myrepo-auth (branch merged to main)
    - .worktrees/feature-login (branch merged to main)
 
    Orphaned (directories without worktree):
-   - .worktrees/feature-old (no git worktree entry)
+   - .worktrees/fix-myrepo-old (no git worktree entry)
 
    Active (will NOT be removed):
-   - .worktrees/feature-billing (3 commits ahead of main)
+   - .worktrees/fix-myrepo-billing (3 commits ahead of main)
    ```
 
 4. **Confirm cleanup:**
