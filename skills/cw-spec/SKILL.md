@@ -371,7 +371,7 @@ AskUserQuestion({
     question: "The specification is complete. For isolated development (recommended), create a worktree first. How would you like to proceed?",
     header: "Workflow",
     options: [
-      { label: "Create worktree (Recommended)", description: "Move to .worktrees/{type}-{repo}-{slug}/ with isolated branch and task list" },
+      { label: "Create worktree (Recommended)", description: "Move to .claude/worktrees/{type}-{repo}-{slug}/ with isolated branch and task list" },
       { label: "Continue here", description: "Spawn planner subagent to run /cw-plan in current directory (spec stays on current branch)" },
       { label: "Done for now", description: "Save the spec and continue later" }
     ],
@@ -391,7 +391,7 @@ AskUserQuestion({
      /cw-worktree create {feature-name}
 
   2. Switch to it:
-     cd .worktrees/{worktree-dir} && claude
+     cd .claude/worktrees/{worktree-dir} && claude
 
   3. Copy or recreate the spec in the worktree, then run /cw-plan
 
