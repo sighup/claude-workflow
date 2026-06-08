@@ -265,6 +265,77 @@ fi
 cleanup "$tmp"
 
 # ---------------------------------------------------------------------------
+# Scenario 7: Subagent isolation → minimal mode → NO settings.local.json
+#             and NO include copying
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 7: subagent isolation_type → minimal mode → no settings.local.json ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    cd "$tmp"
+    payload='{"worktree_name":"agentisolated","isolation_type":"subagent"}'
+    out=$(run_handler "$payload")
+    r=$?
+    test "$r" -eq 0 || { echo "handler exited $r for subagent isolation"; exit 1; }
+
+    # stdout must still be an absolute .claude/worktrees path
+    test -n "$out" || { echo "stdout was empty"; exit 1; }
+    echo "$out" | grep -q "\.claude/worktrees/" || { echo "path missing .claude/worktrees/: $out"; exit 1; }
+
+    # Directory must exist
+    test -d "$out" || { echo "worktree dir does not exist: $out"; exit 1; }
+
+    # settings.local.json must NOT exist (minimal mode skips it)
+    settings="${out}/.claude/settings.local.json"
+    test ! -f "$settings" || { echo "settings.local.json must NOT be present in minimal mode, found: $settings"; exit 1; }
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario7: subagent isolation → minimal mode → no settings.local.json"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario7: subagent isolation minimal mode]")
+    echo "[FAIL] scenario7: subagent isolation → minimal mode → no settings.local.json"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
+# Scenario 8: Background isolation → minimal mode → NO settings.local.json
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 8: background isolation_type → minimal mode → no settings.local.json ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    cd "$tmp"
+    payload='{"worktree_name":"bgisolated","isolation_type":"background"}'
+    out=$(run_handler "$payload")
+    r=$?
+    test "$r" -eq 0 || { echo "handler exited $r for background isolation"; exit 1; }
+
+    # Worktree directory must exist
+    test -d "$out" || { echo "worktree dir does not exist: $out"; exit 1; }
+
+    # settings.local.json must NOT exist (minimal mode skips it)
+    settings="${out}/.claude/settings.local.json"
+    test ! -f "$settings" || { echo "settings.local.json must NOT be present in minimal mode, found: $settings"; exit 1; }
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario8: background isolation → minimal mode → no settings.local.json"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario8: background isolation minimal mode]")
+    echo "[FAIL] scenario8: background isolation → minimal mode → no settings.local.json"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
 
