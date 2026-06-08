@@ -335,12 +335,8 @@ Fire the question even under a standing "work without clarifying questions" inst
    Look up the actual worktree directory under `.worktrees/` by matching against `git worktree list` — do not assume a `feature-` prefix.
    ```bash
    # Find the worktree directory for the given name, regardless of prefix
-   WORKTREE_DIR=$(git worktree list --porcelain \
-     | awk '/^worktree /{wt=$2} /^worktree /{base=wt} {if(/^worktree / && wt ~ "/.worktrees/" && split(wt,a,"/") && a[length(a)]==ENVIRON["FEATURE"]) print wt}' 2>/dev/null)
-   if [ -z "$WORKTREE_DIR" ]; then
-     # Fallback: scan .worktrees/ for a directory whose basename matches FEATURE
-     WORKTREE_DIR=$(find .worktrees -maxdepth 1 -type d -name "*${FEATURE}*" 2>/dev/null | head -1)
-   fi
+   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep "/\.worktrees/" \
+     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo ".worktrees/$_b"; break;; esac; done)
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'"
      echo "Run /cw-worktree list to see available worktrees"
@@ -405,8 +401,8 @@ Fire the question even under a standing "work without clarifying questions" inst
    fi
 
    # Resolve worktree directory — match against git worktree list, not a fixed prefix
-   WORKTREE_DIR=$(find .worktrees -maxdepth 1 -type d -name "*${FEATURE}*" 2>/dev/null \
-     | while read d; do git worktree list --porcelain | grep -q "^worktree $(pwd)/${d}$" && echo "$d"; done | head -1)
+   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep "/\.worktrees/" \
+     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo ".worktrees/$_b"; break;; esac; done)
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'"
      exit 1
@@ -518,7 +514,7 @@ Fire the question even under a standing "work without clarifying questions" inst
    If cleanup confirmed:
    ```bash
    git branch -d "${BRANCH}"
-   git worktree remove ".worktrees/${WORKTREE_DIR}"
+   git worktree remove "${WORKTREE_DIR}"
    ```
 
 7. **Report success:**
@@ -544,8 +540,8 @@ Fire the question even under a standing "work without clarifying questions" inst
 1. **Resolve worktree directory:**
    ```bash
    # Find the worktree directory by name, regardless of prefix
-   WORKTREE_DIR=$(find .worktrees -maxdepth 1 -type d -name "*${FEATURE}*" 2>/dev/null \
-     | while read d; do git worktree list --porcelain | grep -q "^worktree $(pwd)/${d}$" && echo "$d"; done | head -1)
+   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep "/\.worktrees/" \
+     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo ".worktrees/$_b"; break;; esac; done)
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for feature '${FEATURE}'"
      echo "Run /cw-worktree list to see available worktrees"
@@ -626,8 +622,8 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    # Resolve the actual worktree directory — match against git worktree list,
    # not a hardcoded feature- prefix, so both new {type}-{repo}-{slug} and
    # legacy feature-* directories are found.
-   WORKTREE_DIR=$(find .worktrees -maxdepth 1 -type d -name "*${FEATURE}*" 2>/dev/null \
-     | while read d; do git worktree list --porcelain | grep -q "^worktree $(pwd)/${d}$" && echo "$d"; done | head -1)
+   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep "/\.worktrees/" \
+     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo ".worktrees/$_b"; break;; esac; done)
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'" >&2
      echo "Run /cw-worktree list to see available worktrees." >&2

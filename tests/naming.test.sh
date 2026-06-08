@@ -179,8 +179,8 @@ echo "=== R1.3: Repo derivation inside a worktree ==="
 
 # If a .worktrees/* directory exists, cd into it and verify repo still resolves
 # to the main worktree basename (not the nested dir name).
-WORKTREE_SUBDIR="$REPO_ROOT/.worktrees/feature-research-task-list-prefix"
-if [ -d "$WORKTREE_SUBDIR" ]; then
+WORKTREE_SUBDIR=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}' | grep "/\.worktrees/" | head -1)
+if [ -n "$WORKTREE_SUBDIR" ] && [ -d "$WORKTREE_SUBDIR" ]; then
     # Run in a subshell so we don't affect the rest of the test environment
     result=$(cd "$WORKTREE_SUBDIR" && source "$CW_COMMON" 2>/dev/null && cw_worktree_names "fix-login" 2>/dev/null | sed -n '1p')
     expected_pattern="fix-${REPO_NAME}-login"
@@ -193,7 +193,7 @@ if [ -d "$WORKTREE_SUBDIR" ]; then
         echo "[FAIL] inside-worktree repo derivation  (dir=$result, expected=$expected_pattern)"
     fi
 else
-    echo "[SKIP] inside-worktree test: $WORKTREE_SUBDIR not found"
+    echo "[SKIP] inside-worktree test: no .worktrees/* registered"
 fi
 
 # ---------------------------------------------------------------------------
