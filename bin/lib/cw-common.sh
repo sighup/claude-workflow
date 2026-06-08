@@ -587,6 +587,66 @@ cw_worktree_names() {
     return 0
 }
 
+# Provision a canonical worktree — naming, directory, base-ref, no-commit.
+#
+# Usage: provision_worktree SLUG [BASE_REF]
+#   SLUG     — raw slug (may carry type prefix; passed to cw_worktree_names)
+#   BASE_REF — optional git ref to base the new branch on (default: HEAD)
+#
+# Side effects:
+#   - Creates the worktree directory under .claude/worktrees/{type}-{repo}-{slug}
+#   - Appends ".claude/worktrees/" to .gitignore if not already present (unstaged)
+#   - Sets CW_WORKTREE_PATH to the absolute path of the new worktree
+#
+# Guarantees:
+#   - Never runs git add or git commit
+#   - Checks out an existing branch instead of erroring when the branch exists
+#
+# Returns non-zero on any provisioning failure.
+provision_worktree() {
+    local raw_slug="$1"
+    local base_ref="${2:-}"
+
+    if [ -z "$raw_slug" ]; then
+        log_error "provision_worktree: slug is required"
+        return 1
+    fi
+
+    # Derive canonical names
+    local names
+    names=$(cw_worktree_names "$raw_slug") || return 1
+
+    local dir_id branch_name
+    dir_id=$(printf '%s' "$names" | sed -n '1p')
+    branch_name=$(printf '%s' "$names" | sed -n '3p')
+
+    local worktree_dir=".claude/worktrees/${dir_id}"
+
+    # Ensure .claude/worktrees/ is gitignored — ensure-only, no staging/commit
+    local gitignore_entry=".claude/worktrees/"
+    if ! grep -qxF "$gitignore_entry" .gitignore 2>/dev/null; then
+        printf '\n%s\n' "$gitignore_entry" >> .gitignore
+    fi
+
+    # Create parent directory
+    mkdir -p "$(dirname "$worktree_dir")"
+
+    # Create worktree — checkout existing branch or create new one
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+        log_warning "provision_worktree: branch $branch_name already exists, checking it out"
+        git worktree add "$worktree_dir" "$branch_name" || return 1
+    elif [ -n "$base_ref" ]; then
+        git worktree add -b "$branch_name" "$worktree_dir" "$base_ref" || return 1
+    else
+        git worktree add -b "$branch_name" "$worktree_dir" || return 1
+    fi
+
+    CW_WORKTREE_PATH="$(cd "$worktree_dir" && pwd)"
+
+    log_success "provision_worktree: created $worktree_dir (branch: $branch_name)"
+    return 0
+}
+
 # Create a git worktree for a feature
 # Usage: create_worktree SLUG
 #   SLUG may carry a type prefix (fix-, research-, chore-, etc.) — cw_worktree_names
