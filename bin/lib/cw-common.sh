@@ -589,14 +589,18 @@ cw_worktree_names() {
 
 # Provision a canonical worktree — naming, directory, base-ref, no-commit.
 #
-# Usage: provision_worktree SLUG [BASE_REF]
+# Usage: provision_worktree SLUG [BASE_REF] [MODE]
 #   SLUG     — raw slug (may carry type prefix; passed to cw_worktree_names)
 #   BASE_REF — optional git ref to base the new branch on (default: HEAD)
+#   MODE     — "full" (default) or "minimal"
+#              full:    writes .claude/settings.local.json with CLAUDE_CODE_TASK_LIST_ID
+#              minimal: skips the settings write entirely
 #
 # Side effects:
 #   - Creates the worktree directory under .claude/worktrees/{type}-{repo}-{slug}
 #   - Appends ".claude/worktrees/" to .gitignore if not already present (unstaged)
 #   - Sets CW_WORKTREE_PATH to the absolute path of the new worktree
+#   - In full mode: writes {worktree}/.claude/settings.local.json (CLAUDE_CODE_TASK_LIST_ID = dir_id)
 #
 # Guarantees:
 #   - Never runs git add or git commit
@@ -606,11 +610,20 @@ cw_worktree_names() {
 provision_worktree() {
     local raw_slug="$1"
     local base_ref="${2:-}"
+    local mode="${3:-full}"
 
     if [ -z "$raw_slug" ]; then
         log_error "provision_worktree: slug is required"
         return 1
     fi
+
+    case "$mode" in
+        full|minimal) ;;
+        *)
+            log_error "provision_worktree: mode must be 'full' or 'minimal', got: $mode"
+            return 1
+            ;;
+    esac
 
     # Derive canonical names
     local names
@@ -641,9 +654,21 @@ provision_worktree() {
         git worktree add -b "$branch_name" "$worktree_dir" || return 1
     fi
 
+    # Full mode: write isolated task-list settings (dir==id invariant)
+    if [ "$mode" = "full" ]; then
+        mkdir -p "${worktree_dir}/.claude"
+        cat > "${worktree_dir}/.claude/settings.local.json" << EOF
+{
+  "env": {
+    "CLAUDE_CODE_TASK_LIST_ID": "${dir_id}"
+  }
+}
+EOF
+    fi
+
     CW_WORKTREE_PATH="$(cd "$worktree_dir" && pwd)"
 
-    log_success "provision_worktree: created $worktree_dir (branch: $branch_name)"
+    log_success "provision_worktree: created $worktree_dir (branch: $branch_name, mode: $mode)"
     return 0
 }
 

@@ -299,6 +299,63 @@ fi
 cleanup "$tmp"
 
 # ---------------------------------------------------------------------------
+# Scenario 8: Full mode writes settings.local.json with correct task list ID
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 8: Full mode writes settings.local.json ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    cd "$tmp"
+    source "$CW_COMMON"
+    provision_worktree "full-mode" "" "full" >/dev/null 2>&1
+
+    settings_file=".claude/worktrees/feature-myrepo-full-mode/.claude/settings.local.json"
+    test -f "$settings_file" || { echo "settings.local.json not found: $settings_file"; exit 1; }
+
+    got_id=$(jq -r '.env.CLAUDE_CODE_TASK_LIST_ID' "$settings_file" 2>/dev/null)
+    test "$got_id" = "feature-myrepo-full-mode" || { echo "wrong CLAUDE_CODE_TASK_LIST_ID: $got_id"; exit 1; }
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario8: full mode writes settings.local.json with correct id"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario8: full mode settings write]")
+    echo "[FAIL] scenario8: full mode writes settings.local.json with correct id"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
+# Scenario 9: Minimal mode produces no settings.local.json
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 9: Minimal mode skips settings write ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    cd "$tmp"
+    source "$CW_COMMON"
+    provision_worktree "minimal-mode" "" "minimal" >/dev/null 2>&1
+
+    settings_file=".claude/worktrees/feature-myrepo-minimal-mode/.claude/settings.local.json"
+    test ! -f "$settings_file" || { echo "settings.local.json unexpectedly present in minimal mode"; exit 1; }
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario9: minimal mode produces no settings.local.json"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario9: minimal mode no settings]")
+    echo "[FAIL] scenario9: minimal mode produces no settings.local.json"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
 
