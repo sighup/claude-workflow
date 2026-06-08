@@ -333,15 +333,15 @@ MAIN SESSION (project root) - Control Center
      |
      +---> herdr workspace: {repo-name}   (one per repo, reused across calls)
              |
-             +-- tab: feature-auth     (auto-opened when herdr is running)
+             +-- tab: fix-myrepo-login      (auto-opened when herdr is running)
              |   /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
              |
-             +-- tab: feature-billing  (auto-opened when herdr is running)
+             +-- tab: feature-myrepo-auth   (auto-opened when herdr is running)
                  /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
 
   Without herdr (or when CW_DISABLE_HERDR=1):
-     +---> Terminal 1: cd .worktrees/feature-auth && claude
-     +---> Terminal 2: cd .worktrees/feature-billing && claude
+     +---> Terminal 1: cd .worktrees/fix-myrepo-login && claude
+     +---> Terminal 2: cd .worktrees/feature-myrepo-auth && claude
 ```
 
 **Key Points:**
@@ -366,9 +366,9 @@ MAIN SESSION (project root) - Control Center
 ### Recovery Commands
 
 ```bash
-git worktree prune                                        # Remove broken worktree reference
-git worktree remove --force .worktrees/feature-{name}     # Force remove worktree (last resort)
-git branch -D feature/{name}                              # Delete orphaned branch
+git worktree prune                                             # Remove broken worktree reference
+git worktree remove --force .worktrees/fix-myrepo-login        # Force remove worktree (last resort)
+git branch -D fix/login                                        # Delete orphaned branch
 ```
 
 ### Diagnosing the herdr integration
@@ -395,9 +395,9 @@ CW-WORKTREE COMPLETE
 =====================
 Command: create | list | status | merge | sync | cleanup
 [Command-specific details, e.g.:]
-  Created: .worktrees/feature-{name}/
-  Branch: feature/{name}
-  Task list: {name} (auto-configured)
+  Created: .worktrees/{type}-{repo}-{slug}/
+  Branch: {type}/{slug}
+  Task list: {type}-{repo}-{slug} (auto-configured)
 ```
 
 ## What Comes Next
@@ -413,8 +413,8 @@ After creating a worktree (keep main session open as control center):
 6. `gh pr create` - open PR (contains spec + implementation)
 
 **Without herdr** — open a new terminal manually:
-1. `cd .worktrees/feature-{name} && claude` - task list auto-configured
-2. `/cw-spec` - create specification (committed to feature branch)
+1. `cd .worktrees/fix-myrepo-login && claude` - task list auto-configured
+2. `/cw-spec` - create specification (committed to fix branch)
 3. `/cw-plan` - create tasks from the spec
 4. `/cw-dispatch` - execute tasks (can exit and resume anytime)
 5. `/cw-validate` - verify completion
@@ -427,4 +427,6 @@ After creating a worktree (keep main session open as control center):
 - `/cw-worktree cleanup` - remove merged worktrees (after PRs merged)
 
 **To resume work later:**
-- `cd .worktrees/feature-{name} && claude` - tasks are restored
+- `cd .worktrees/fix-myrepo-login && claude` - tasks are restored
+
+> **Legacy worktrees:** Worktrees created before this naming scheme (e.g. `feature-auth`) are fully supported. Discovery, list, cleanup, and all subcommands match by value — the lookup is prefix-agnostic.
