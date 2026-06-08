@@ -336,6 +336,86 @@ fi
 cleanup "$tmp"
 
 # ---------------------------------------------------------------------------
+# Scenario 9: Full-mode create copies .worktreeinclude-listed gitignored file
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 9: full-mode create copies .worktreeinclude-listed .env ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    cd "$tmp"
+    # Create a gitignored .env file
+    echo "SECRET=1" > .env
+    printf '\n.env\n' >> .gitignore
+    # Create .worktreeinclude listing .env
+    echo ".env" > .worktreeinclude
+
+    payload='{"worktree_name":"fullcopy","isolation_type":"user"}'
+    out=$(run_handler "$payload")
+    r=$?
+    test "$r" -eq 0 || { echo "handler exited $r"; exit 1; }
+
+    # .env must exist in the new worktree with the correct content
+    copied="${out}/.env"
+    test -f "$copied" || { echo ".env not copied into worktree: $copied"; exit 1; }
+    content=$(cat "$copied")
+    test "$content" = "SECRET=1" || { echo ".env content wrong: $content"; exit 1; }
+
+    # Copied .env must NOT be staged or committed in the new worktree
+    staged=$(git -C "$out" diff --cached --name-only)
+    test -z "$staged" || { echo "copied .env was staged in worktree: $staged"; exit 1; }
+
+    # HEAD of new worktree must not contain .env
+    files_in_head=$(git -C "$out" show --name-only HEAD 2>/dev/null | tail -n +5)
+    echo "$files_in_head" | grep -qF ".env" && { echo ".env was committed in new worktree"; exit 1; } || true
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario9: full-mode create copies .worktreeinclude .env, not staged/committed"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario9: full-mode include file copy]")
+    echo "[FAIL] scenario9: full-mode create copies .worktreeinclude .env, not staged/committed"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
+# Scenario 10: Subagent/minimal create does NOT copy .env even when .worktreeinclude exists
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 10: subagent/minimal create does NOT copy .env ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    cd "$tmp"
+    # Create a gitignored .env and .worktreeinclude listing it
+    echo "SECRET=1" > .env
+    printf '\n.env\n' >> .gitignore
+    echo ".env" > .worktreeinclude
+
+    payload='{"worktree_name":"nocopy","isolation_type":"subagent"}'
+    out=$(run_handler "$payload")
+    r=$?
+    test "$r" -eq 0 || { echo "handler exited $r for subagent isolation"; exit 1; }
+
+    # .env must NOT be present in the new worktree
+    test ! -f "${out}/.env" || { echo ".env was incorrectly copied into minimal-mode worktree"; exit 1; }
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario10: subagent/minimal create does NOT copy .env"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario10: subagent minimal no include copy]")
+    echo "[FAIL] scenario10: subagent/minimal create does NOT copy .env"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
 

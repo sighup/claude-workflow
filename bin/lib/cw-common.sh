@@ -594,13 +594,22 @@ cw_worktree_names() {
 #   BASE_REF — optional git ref to base the new branch on (default: HEAD)
 #   MODE     — "full" (default) or "minimal"
 #              full:    writes .claude/settings.local.json with CLAUDE_CODE_TASK_LIST_ID
-#              minimal: skips the settings write entirely
+#                       and copies gitignored include files into the new worktree
+#              minimal: skips the settings write and include copying entirely
+#
+# Include file copying (full mode only):
+#   Reads the list of files to copy from ".worktreeinclude" in the source tree root.
+#   If ".worktreeinclude" is absent, falls back to a default list containing ".env".
+#   Each listed file is copied from the source tree into the new worktree only if it
+#   exists at the source path. Files are NOT staged or committed — they are expected
+#   to be gitignored in the new worktree (same gitignore rules apply).
 #
 # Side effects:
 #   - Creates the worktree directory under .claude/worktrees/{type}-{repo}-{slug}
 #   - Appends ".claude/worktrees/" to .gitignore if not already present (unstaged)
 #   - Sets CW_WORKTREE_PATH to the absolute path of the new worktree
 #   - In full mode: writes {worktree}/.claude/settings.local.json (CLAUDE_CODE_TASK_LIST_ID = dir_id)
+#   - In full mode: copies gitignored include files from source tree into new worktree
 #
 # Guarantees:
 #   - Never runs git add or git commit
@@ -664,6 +673,37 @@ provision_worktree() {
   }
 }
 EOF
+
+        # Copy gitignored include files into the new worktree.
+        # Source list: .worktreeinclude in the repo root (one path per line, blank lines
+        # and lines starting with '#' are ignored). Fallback when absent: ".env" only.
+        local source_root
+        source_root="$(pwd)"
+        local include_files=()
+        if [ -f "${source_root}/.worktreeinclude" ]; then
+            while IFS= read -r inc_line; do
+                # Strip leading/trailing whitespace
+                inc_line="${inc_line#"${inc_line%%[![:space:]]*}"}"
+                inc_line="${inc_line%"${inc_line##*[![:space:]]}"}"
+                # Skip blank lines and comments
+                [ -z "$inc_line" ] && continue
+                [[ "$inc_line" == \#* ]] && continue
+                include_files+=("$inc_line")
+            done < "${source_root}/.worktreeinclude"
+        else
+            include_files=(".env")
+        fi
+
+        local src_file dst_file
+        for inc_entry in "${include_files[@]}"; do
+            src_file="${source_root}/${inc_entry}"
+            dst_file="${worktree_dir}/${inc_entry}"
+            if [ -f "$src_file" ]; then
+                mkdir -p "$(dirname "$dst_file")"
+                cp "$src_file" "$dst_file"
+                log_info "provision_worktree: copied include file $inc_entry into worktree"
+            fi
+        done
     fi
 
     CW_WORKTREE_PATH="$(cd "$worktree_dir" && pwd)"
