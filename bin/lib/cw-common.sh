@@ -506,6 +506,87 @@ get_task_subject() {
 # Worktree Management
 # =============================================================================
 
+# Derive deterministic worktree names from a raw slug.
+#
+# Usage: cw_worktree_names SLUG
+#   Prints three lines:
+#     1. directory basename (= task list ID): {type}-{repo}-{slug}
+#     2. task list ID (same as line 1)
+#     3. branch name: {type}/{slug}
+#
+# Type inference (first matching rule wins):
+#   fix|bug|hotfix        -> fix
+#   research|spike|explore -> research
+#   chore|refactor|docs|build|ci -> chore
+#   (anything else)       -> feature
+#
+# The matching leading keyword and its separating hyphen are stripped from slug.
+# Repo is derived from the main worktree (not a nested worktree directory).
+# Returns non-zero if the post-strip slug is empty or contains chars outside [a-z0-9-].
+cw_worktree_names() {
+    local raw_slug="$1"
+
+    if [ -z "$raw_slug" ]; then
+        log_error "cw_worktree_names: slug is required"
+        return 1
+    fi
+
+    # Infer type and strip leading keyword
+    local type slug
+    if [[ "$raw_slug" =~ ^(fix|bug|hotfix)(-|$) ]]; then
+        type="fix"
+        slug="${raw_slug#"${BASH_REMATCH[1]}"}"
+        slug="${slug#-}"
+    elif [[ "$raw_slug" =~ ^(research|spike|explore)(-|$) ]]; then
+        type="research"
+        slug="${raw_slug#"${BASH_REMATCH[1]}"}"
+        slug="${slug#-}"
+    elif [[ "$raw_slug" =~ ^(chore|refactor|docs|build|ci)(-|$) ]]; then
+        type="chore"
+        slug="${raw_slug#"${BASH_REMATCH[1]}"}"
+        slug="${slug#-}"
+    else
+        type="feature"
+        slug="$raw_slug"
+    fi
+
+    # Reject empty or invalid slug after stripping
+    if [ -z "$slug" ]; then
+        log_error "cw_worktree_names: slug is empty after keyword stripping (input: $raw_slug)"
+        return 1
+    fi
+    if [[ ! "$slug" =~ ^[a-z0-9-]+$ ]]; then
+        log_error "cw_worktree_names: slug contains invalid characters (must match ^[a-z0-9-]+$): $slug"
+        return 1
+    fi
+
+    # Derive repo name from the main worktree (not a nested worktree path)
+    local main_worktree
+    main_worktree=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
+    if [ -z "$main_worktree" ]; then
+        # Fallback: parent of git-common-dir
+        local common_dir
+        common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+        if [ -n "$common_dir" ]; then
+            main_worktree=$(cd "$common_dir/.." 2>/dev/null && pwd)
+        fi
+    fi
+    if [ -z "$main_worktree" ]; then
+        log_error "cw_worktree_names: could not determine main worktree"
+        return 1
+    fi
+
+    # Sanitize repo name to [a-z0-9-]
+    local repo
+    repo=$(basename "$main_worktree" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//; s/-$//')
+
+    local dir_id="${type}-${repo}-${slug}"
+    local branch="${type}/${slug}"
+
+    printf '%s\n%s\n%s\n' "$dir_id" "$dir_id" "$branch"
+    return 0
+}
+
 # Create a git worktree for a feature
 # Usage: create_worktree FEATURE_NAME
 # Sets: CW_WORKTREE_PATH
