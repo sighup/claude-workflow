@@ -588,7 +588,9 @@ cw_worktree_names() {
 }
 
 # Create a git worktree for a feature
-# Usage: create_worktree FEATURE_NAME
+# Usage: create_worktree SLUG
+#   SLUG may carry a type prefix (fix-, research-, chore-, etc.) — cw_worktree_names
+#   derives the type, repo, and canonical directory/branch names.
 # Sets: CW_WORKTREE_PATH
 create_worktree() {
     local feature_name="$1"
@@ -598,14 +600,21 @@ create_worktree() {
         return 1
     fi
 
-    # Validate feature name
+    # Validate slug characters before calling the helper
     if [[ ! "$feature_name" =~ ^[a-z0-9-]+$ ]]; then
         log_error "Feature name must be lowercase alphanumeric with hyphens: $feature_name"
         return 1
     fi
 
-    local worktree_dir=".worktrees/feature-${feature_name}"
-    local branch_name="feature/${feature_name}"
+    # Derive canonical names via the naming helper
+    local names
+    names=$(cw_worktree_names "$feature_name") || return 1
+
+    local WORKTREE_DIR_ID branch_name
+    WORKTREE_DIR_ID=$(printf '%s' "$names" | sed -n '1p')
+    branch_name=$(printf '%s' "$names" | sed -n '3p')
+
+    local worktree_dir=".worktrees/${WORKTREE_DIR_ID}"
 
     # Ensure .worktrees is gitignored (with lock to prevent races)
     local lockfile=".git/cw-gitignore.lock"
@@ -648,12 +657,12 @@ create_worktree() {
         return 1
     fi
 
-    # Configure isolated task list
+    # Configure isolated task list — ID equals the worktree directory basename
     mkdir -p "${worktree_dir}/.claude"
     cat > "${worktree_dir}/.claude/settings.local.json" << EOF
 {
   "env": {
-    "CLAUDE_CODE_TASK_LIST_ID": "feature-${feature_name}"
+    "CLAUDE_CODE_TASK_LIST_ID": "${WORKTREE_DIR_ID}"
   }
 }
 EOF
