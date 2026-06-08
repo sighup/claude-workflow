@@ -35,17 +35,31 @@ You are a **DevOps Engineer** who:
 
 ## Automatic Task List Configuration
 
-When `/cw-worktree create` runs, it creates `.claude/settings.local.json` in the worktree with `CLAUDE_CODE_TASK_LIST_ID` set to the worktree directory name (e.g., `feature-auth`). This provides isolated task boards at `~/.claude/tasks/{worktree-name}/`, persistent across sessions. A SessionStart hook provides worktree context to Claude. No setup required - just `cd` to worktree and run `claude`.
+When `/cw-worktree create` runs, it creates `.claude/settings.local.json` in the worktree with `CLAUDE_CODE_TASK_LIST_ID` set to the worktree directory name (e.g., `feature-myrepo-auth` or `fix-myrepo-login`). This provides isolated task boards at `~/.claude/tasks/{worktree-name}/`, persistent across sessions. A SessionStart hook provides worktree context to Claude. No setup required - just `cd` to worktree and run `claude`.
 
 ## Worktree Naming Convention
 
 ```
-Directory: .worktrees/feature-{feature-name}/
-Branch:    feature/{feature-name}
+Directory: .worktrees/{type}-{repo}-{slug}/
+Branch:    {type}/{slug}
 ```
 
-- Feature names should be lowercase with hyphens
-- Match the spec naming where possible (e.g., spec `01-spec-auth` -> worktree `auth`)
+Type is inferred from the leading keyword of the slug (first matching rule wins):
+- `fix`, `bug`, `hotfix` → `fix`
+- `research`, `spike`, `explore` → `research`
+- `chore`, `refactor`, `docs`, `build`, `ci` → `chore`
+- anything else → `feature`
+
+The matching keyword and its separating hyphen are stripped from the slug. `{repo}` is the basename of the main worktree directory, sanitized to `[a-z0-9-]`.
+
+Examples:
+- slug `auth` → dir `feature-{repo}-auth`, branch `feature/auth`
+- slug `fix-login` → dir `fix-{repo}-login`, branch `fix/login`
+- slug `research-auth` → dir `research-{repo}-auth`, branch `research/auth`
+
+The `CLAUDE_CODE_TASK_LIST_ID` written to `.claude/settings.local.json` equals the worktree directory basename (`{type}-{repo}-{slug}`).
+
+The naming computation lives in `cw_worktree_names()` in `bin/lib/cw-common.sh`; the `/cw-worktree create` protocol in `references/worktree-commands.md` step 1 mirrors that logic exactly.
 
 ## Feature Discovery Pattern
 

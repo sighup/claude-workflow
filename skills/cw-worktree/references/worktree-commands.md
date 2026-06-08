@@ -46,13 +46,38 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 **Process (for each feature):**
 
-1. **Validate feature name:**
+1. **Validate feature name and compute worktree names:**
    ```bash
    # Feature name should be lowercase, alphanumeric with hyphens only
    if [[ ! "$FEATURE" =~ ^[a-z0-9-]+$ ]]; then
      echo "ERROR: Feature name must be lowercase alphanumeric with hyphens"
      exit 1
    fi
+
+   # Compute WORKTREE_DIR and BRANCH using the same inference rules as cw_worktree_names():
+   #   fix|bug|hotfix        -> type=fix
+   #   research|spike|explore -> type=research
+   #   chore|refactor|docs|build|ci -> type=chore
+   #   (anything else)       -> type=feature
+   # The matching leading keyword and its separating hyphen are stripped from the slug.
+   # Repo is derived from the main worktree basename, sanitized to [a-z0-9-].
+   if [[ "$FEATURE" =~ ^(fix|bug|hotfix)(-|$) ]]; then
+     _TYPE="fix"; _SLUG="${FEATURE#"${BASH_REMATCH[1]}"}"; _SLUG="${_SLUG#-}"
+   elif [[ "$FEATURE" =~ ^(research|spike|explore)(-|$) ]]; then
+     _TYPE="research"; _SLUG="${FEATURE#"${BASH_REMATCH[1]}"}"; _SLUG="${_SLUG#-}"
+   elif [[ "$FEATURE" =~ ^(chore|refactor|docs|build|ci)(-|$) ]]; then
+     _TYPE="chore"; _SLUG="${FEATURE#"${BASH_REMATCH[1]}"}"; _SLUG="${_SLUG#-}"
+   else
+     _TYPE="feature"; _SLUG="$FEATURE"
+   fi
+   if [ -z "$_SLUG" ]; then
+     echo "ERROR: slug is empty after keyword stripping (input: $FEATURE)"
+     exit 1
+   fi
+   _MAIN_WT=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
+   _REPO=$(basename "$_MAIN_WT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//')
+   WORKTREE_DIR="${_TYPE}-${_REPO}-${_SLUG}"
+   BRANCH="${_TYPE}/${_SLUG}"
    ```
 
 2. **Ensure .worktrees is gitignored:**
@@ -66,34 +91,32 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 3. **Check for existing worktree:**
    ```bash
-   if [ -d ".worktrees/feature-${FEATURE}" ]; then
-     echo "ERROR: Worktree already exists at .worktrees/feature-${FEATURE}"
+   if [ -d ".worktrees/${WORKTREE_DIR}" ]; then
+     echo "ERROR: Worktree already exists at .worktrees/${WORKTREE_DIR}"
      exit 1
    fi
    ```
 
 4. **Check for existing branch:**
    ```bash
-   if git show-ref --verify --quiet "refs/heads/feature/${FEATURE}"; then
-     echo "WARNING: Branch feature/${FEATURE} already exists"
+   if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
+     echo "WARNING: Branch ${BRANCH} already exists"
      # Ask user: use existing branch or create fresh?
    fi
    ```
 
 5. **Create worktree:**
    ```bash
-   git worktree add ".worktrees/feature-${FEATURE}" -b "feature/${FEATURE}"
+   git worktree add ".worktrees/${WORKTREE_DIR}" -b "${BRANCH}"
    ```
 
 6. **Configure isolated task list:**
    ```bash
-   # Determine worktree directory name (e.g., "feature-auth", "bugfix-login")
-   WORKTREE_DIR="feature-${FEATURE}"
-
+   # WORKTREE_DIR=${_TYPE}-${_REPO}-${_SLUG} and BRANCH=${_TYPE}/${_SLUG} from step 1.
    # Create .claude directory if it doesn't exist
    mkdir -p ".worktrees/${WORKTREE_DIR}/.claude"
 
-   # Create settings.local.json with task list ID matching directory name
+   # Create settings.local.json with task list ID matching the worktree directory name
    # Pre-approve workflow agent types so autonomous execution isn't interrupted
    cat > ".worktrees/${WORKTREE_DIR}/.claude/settings.local.json" << EOF
    {
@@ -131,7 +154,7 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 7. **Setup dependencies (auto-detect project type):**
    ```bash
-   cd ".worktrees/feature-${FEATURE}"
+   cd ".worktrees/${WORKTREE_DIR}"
 
    # Node.js
    if [ -f package.json ]; then
@@ -174,9 +197,9 @@ Fire the question even under a standing "work without clarifying questions" inst
 
    | `DRIVE_MODE` | Bash invocation |
    |---|---|
-   | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
-   | `autonomous` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
-   | `empty` | `"$HERDR_OPEN_BIN" ".worktrees/feature-${FEATURE}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `autonomous` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `empty` | `"$HERDR_OPEN_BIN" ".worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
    | `skip_herdr` | `HERDR_EXIT=2` (do not invoke the helper) |
 
    When `DRIVE_MODE=starter` or `autonomous` and this specific feature has an empty `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (rare — only possible when the batch is mixed and the user picked a mode that fits *some* features), fall back to the `empty` invocation for this feature so the tab still opens.
@@ -191,13 +214,13 @@ Fire the question even under a standing "work without clarifying questions" inst
     ```
     WORKTREE CREATED
     ================
-    Path:   .worktrees/feature-{feature-name}/
-    Branch: feature/{feature-name}
-    Task List: feature-{feature-name} (via .claude/settings.local.json)
+    Path:   .worktrees/{WORKTREE_DIR}/
+    Branch: {BRANCH}
+    Task List: {WORKTREE_DIR} (via .claude/settings.local.json)
     Status: Ready for development
 
     Next steps (keep THIS session open as control center):
-    1. Opened in herdr: workspace {repo-name} → tab feature-{feature-name}
+    1. Opened in herdr: workspace {repo-name} → tab {WORKTREE_DIR}
     2. Create spec: /cw-spec {feature-name}
     3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
     4. Create PR: gh pr create (PR contains spec + implementation)
@@ -209,7 +232,7 @@ Fire the question even under a standing "work without clarifying questions" inst
       /cw-worktree cleanup           # Remove merged worktrees
 
     To resume worktree work later:
-      cd .worktrees/feature-{feature-name} && claude
+      cd .worktrees/{WORKTREE_DIR} && claude
       (Tasks persist across sessions)
 
     To sync with main before PR (from worktree session):
@@ -223,13 +246,13 @@ Fire the question even under a standing "work without clarifying questions" inst
     ```
     WORKTREE CREATED
     ================
-    Path:   .worktrees/feature-{feature-name}/
-    Branch: feature/{feature-name}
-    Task List: feature-{feature-name} (via .claude/settings.local.json)
+    Path:   .worktrees/{WORKTREE_DIR}/
+    Branch: {BRANCH}
+    Task List: {WORKTREE_DIR} (via .claude/settings.local.json)
     Status: Ready for development
 
     Next steps (keep THIS session open as control center):
-    1. Open NEW terminal: cd .worktrees/feature-{feature-name} && claude
+    1. Open NEW terminal: cd .worktrees/{WORKTREE_DIR} && claude
     2. Create spec: /cw-spec {feature-name}
     3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
     4. Create PR: gh pr create (PR contains spec + implementation)
@@ -241,7 +264,7 @@ Fire the question even under a standing "work without clarifying questions" inst
       /cw-worktree cleanup           # Remove merged worktrees
 
     To resume worktree work later:
-      cd .worktrees/feature-{feature-name} && claude
+      cd .worktrees/{WORKTREE_DIR} && claude
       (Tasks persist across sessions)
 
     To sync with main before PR (from worktree session):
@@ -481,8 +504,8 @@ Fire the question even under a standing "work without clarifying questions" inst
 
    If cleanup confirmed:
    ```bash
-   git branch -d "feature/${FEATURE}"
-   git worktree remove ".worktrees/feature-${FEATURE}"
+   git branch -d "${BRANCH}"
+   git worktree remove ".worktrees/${WORKTREE_DIR}"
    ```
 
 7. **Report success:**
@@ -706,11 +729,11 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
 5. **Perform cleanup:**
    ```bash
    # For each merged worktree
-   git worktree remove ".worktrees/feature-${FEATURE}"
-   git branch -d "feature/${FEATURE}" 2>/dev/null || true
+   git worktree remove ".worktrees/${WORKTREE_DIR}"
+   git branch -d "${BRANCH}" 2>/dev/null || true
 
    # For orphaned directories
-   rm -rf ".worktrees/feature-${FEATURE}"
+   rm -rf ".worktrees/${WORKTREE_DIR}"
    ```
 
 6. **Prune worktree references:**
