@@ -644,9 +644,12 @@ provision_worktree() {
 
     local worktree_dir=".claude/worktrees/${dir_id}"
 
-    # Ensure .claude/worktrees/ is gitignored — ensure-only, no staging/commit
+    # Ensure .claude/worktrees/ is gitignored — ensure-only, no staging/commit.
+    # Respect any pre-existing broader ignore rule (via git check-ignore) before
+    # appending, so we don't add a redundant exact-match line.
     local gitignore_entry=".claude/worktrees/"
-    if ! grep -qxF "$gitignore_entry" .gitignore 2>/dev/null; then
+    if ! git check-ignore -q "$gitignore_entry" 2>/dev/null \
+        && ! grep -qxF "$gitignore_entry" .gitignore 2>/dev/null; then
         printf '\n%s\n' "$gitignore_entry" >> .gitignore
     fi
 

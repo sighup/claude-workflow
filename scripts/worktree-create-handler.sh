@@ -33,6 +33,7 @@ if [ ! -f "$CW_COMMON" ]; then
     exit 1
 fi
 
+# shellcheck source=/dev/null
 source "$CW_COMMON"
 
 # Override log functions after sourcing so all output goes to stderr.
@@ -54,6 +55,9 @@ base_ref=$(printf '%s' "$INPUT" | jq -r '.base_ref // empty' 2>/dev/null || true
 isolation_type=$(printf '%s' "$INPUT" | jq -r '.isolation_type // "user"' 2>/dev/null || echo "user")
 cwd=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
 session_id=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
+
+# Informational debug line (also keeps session_id referenced for shellcheck)
+log_info "worktree-create-handler: isolation=${isolation_type} session=${session_id:-none}"
 
 # ---------------------------------------------------------------------------
 # Validate worktree_name
