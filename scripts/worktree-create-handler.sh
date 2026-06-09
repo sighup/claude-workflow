@@ -77,6 +77,13 @@ if [ -n "$cwd" ]; then
     cd "$cwd" || { log_error "Cannot cd to cwd: $cwd"; exit 1; }
 fi
 
+# Anchor to the git repo root so that provision_worktree's relative paths
+# (.claude/worktrees/, .gitignore) always resolve at the repo root, regardless
+# of the subdirectory from which the hook was invoked.
+_repo_root=$(git rev-parse --show-toplevel 2>/dev/null) \
+    || { log_error "Not inside a git repository (cwd: $(pwd))"; exit 1; }
+cd "$_repo_root" || { log_error "Cannot cd to repo root: $_repo_root"; exit 1; }
+
 # ---------------------------------------------------------------------------
 # Subagent-isolation guard: determine provisioning mode from isolation_type
 #

@@ -451,6 +451,59 @@ fi
 cleanup "$tmp"
 
 # ---------------------------------------------------------------------------
+# Scenario 12: Handler invoked from a repo subdirectory → worktree and
+#              .gitignore land at the repo root, not the subdirectory
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 12: handler invoked from repo subdirectory → paths land at repo root ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    # Create a subdirectory inside the repo and invoke the handler from there.
+    mkdir -p "${tmp}/deep/nested/subdir"
+    cd "${tmp}/deep/nested/subdir"
+
+    payload='{"worktree_name":"fromsubdir","isolation_type":"user"}'
+    out=$(run_handler "$payload")
+    r=$?
+    test "$r" -eq 0 || { echo "handler exited $r when invoked from subdirectory"; exit 1; }
+
+    # stdout must be an absolute path
+    test -n "$out" || { echo "stdout was empty"; exit 1; }
+    case "$out" in
+        /*) ;;
+        *) echo "stdout not absolute: $out"; exit 1 ;;
+    esac
+
+    # The worktree must live under the repo root, not under the subdirectory.
+    # Resolve symlinks (macOS /var → /private/var) before comparing.
+    repo_root_real=$(cd "$tmp" && git rev-parse --show-toplevel)
+    expected_worktree="${repo_root_real}/.claude/worktrees/feature-myrepo-fromsubdir"
+    test "$out" = "$expected_worktree" || { echo "expected worktree at $expected_worktree, got $out"; exit 1; }
+    test -d "$out" || { echo "worktree dir does not exist: $out"; exit 1; }
+
+    # .gitignore at repo root must contain the worktrees entry
+    root_gitignore="${repo_root_real}/.gitignore"
+    grep -qxF ".claude/worktrees/" "$root_gitignore" \
+        || { echo ".gitignore at repo root missing .claude/worktrees/ entry; contents: $(cat "$root_gitignore" 2>/dev/null)"; exit 1; }
+
+    # No .gitignore must have been created inside the subdirectory
+    test ! -f "${repo_root_real}/deep/nested/subdir/.gitignore" \
+        || { echo ".gitignore was created inside subdirectory instead of repo root"; exit 1; }
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario12: subdirectory invocation → worktree and .gitignore at repo root"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario12: subdirectory invocation → repo-root paths]")
+    echo "[FAIL] scenario12: subdirectory invocation → worktree and .gitignore at repo root"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
 
