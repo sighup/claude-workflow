@@ -206,7 +206,7 @@ The choice applies uniformly to every feature in the call. If a user wants to mi
 
 ### When and what to ask
 
-The available options collapse based on (a) whether **any** feature in the batch has a non-empty `STARTER_PROMPT` and (b) whether herdr is available (the once-per-invocation probe from worktree-commands.md `create` § per-invocation setup).
+The available options collapse based on (a) whether **any** feature in the batch has a non-empty `STARTER_PROMPT` and (b) whether herdr is available (the once-per-invocation probe from worktree-commands.md `create` § per-invocation setup). The probe reports available **only when this session is running inside a herdr pane** (`HERDR_ENV` set); from a plain terminal it reports unavailable, so the herdr options never surface and the batch falls through to the manual flow.
 
 | Any STARTER_PROMPT? | herdr available? | Options surfaced |
 |---|---|---|
@@ -351,7 +351,7 @@ MAIN SESSION (project root) - Control Center
 - **Automatic task isolation** - `.claude/settings.local.json` configures task list ID
 - **Persistent tasks** - Tasks stored in `~/.claude/tasks/{worktree-name}/`, survive session restarts
 - **Seamless resume** - Just `cd` to worktree and run `claude`, tasks are there
-- **herdr integration** - When [herdr](https://github.com/ogulcancelik/herdr) is installed and running, `create` automatically opens a Claude session in the new worktree. On hosts without herdr, the manual terminal flow is unchanged.
+- **herdr integration** - When [herdr](https://github.com/ogulcancelik/herdr) is installed, running, and **this session is inside a herdr pane**, `create` automatically opens a Claude session in the new worktree. From a plain terminal (not inside herdr) the manual terminal flow is used — a tab spawned in a detached herdr window would be invisible to you.
 
 ## Error Handling
 
@@ -377,7 +377,7 @@ If `create` or `open` falls back to the manual `cd ... && claude` output unexpec
 
 ```bash
 cw-herdr-open --probe; echo $?
-# 0 = working   2 = not installed or CW_DISABLE_HERDR=1   3 = daemon down
+# 0 = working   2 = not installed, not inside herdr, or CW_DISABLE_HERDR=1   3 = daemon down
 ```
 
 For a full trace of what the helper does, prefix the invocation with `bash -x`:
@@ -404,7 +404,7 @@ Command: create | list | status | merge | sync | cleanup
 
 After creating a worktree (keep main session open as control center):
 
-**When herdr is running** — a Claude session opens automatically in the new worktree's tab (inside the repo's workspace). Switch to that tab and:
+**When running inside herdr** — a Claude session opens automatically in the new worktree's tab (inside the repo's workspace). Switch to that tab and:
 1. `/cw-spec` - create specification (committed to feature branch)
 2. `/cw-plan` - create tasks from the spec
 3. `/cw-dispatch` - execute tasks (can exit and resume anytime)

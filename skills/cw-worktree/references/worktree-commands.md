@@ -36,7 +36,7 @@ if [ -x "$HERDR_OPEN_BIN" ]; then
 fi
 ```
 
-`HERDR_PROBE_EXIT` carries the original 0/2/3 exit code. Step 9 reuses it as `HERDR_EXIT` when herdr is unavailable, so step 10 can distinguish exit 3 (daemon down — say so in the fallback summary) from exit 2 (not installed or `CW_DISABLE_HERDR=1` — stay silent). For diagnosis run `cw-herdr-open --probe; echo $?` directly — see SKILL.md "Diagnosing the herdr integration".
+`HERDR_PROBE_EXIT` carries the original 0/2/3 exit code. The probe returns 0 (available) **only when this session is running inside a herdr pane** — `cw-herdr-open` checks `HERDR_ENV` and exits 2 from a plain terminal even when the daemon is reachable, because opening a tab in a detached herdr window the user isn't watching is never the right default. So `HERDR_AVAILABLE=0` covers both "no herdr" and "herdr running but we're not inside it", and the whole batch falls through to the manual flow with no extra branching. Step 9 reuses `HERDR_PROBE_EXIT` as `HERDR_EXIT` when herdr is unavailable, so step 10 can distinguish exit 3 (daemon down — say so in the fallback summary) from exit 2 (not installed, not inside herdr, or `CW_DISABLE_HERDR=1` — stay silent). For diagnosis run `cw-herdr-open --probe; echo $?` directly — see SKILL.md "Diagnosing the herdr integration".
 
 **Drive-mode selection (runs once for the whole batch):**
 
@@ -614,7 +614,7 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 ## open
 
-Retrospectively attaches a herdr pane to an existing worktree. If a matching workspace and claude pane already exist (matched on both cwd and command), the workspace is focused rather than spawning a duplicate. When herdr is unavailable the command prints legacy manual instructions and exits 0.
+Retrospectively attaches a herdr pane to an existing worktree. If a matching workspace and claude pane already exist (matched on both cwd and command), the workspace is focused rather than spawning a duplicate. When herdr is unavailable — including when this session is **not running inside a herdr pane** (`HERDR_ENV` unset), where attaching would open a tab in a detached window the user can't see — the command prints legacy manual instructions and exits 0.
 
 **Process:**
 
