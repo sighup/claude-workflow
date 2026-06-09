@@ -695,15 +695,17 @@ EOF
         fi
 
         local src_file dst_file
-        for inc_entry in "${include_files[@]}"; do
-            src_file="${source_root}/${inc_entry}"
-            dst_file="${worktree_dir}/${inc_entry}"
-            if [ -f "$src_file" ]; then
-                mkdir -p "$(dirname "$dst_file")"
-                cp "$src_file" "$dst_file"
-                log_info "provision_worktree: copied include file $inc_entry into worktree"
-            fi
-        done
+        if [ "${#include_files[@]}" -gt 0 ]; then
+            for inc_entry in "${include_files[@]}"; do
+                src_file="${source_root}/${inc_entry}"
+                dst_file="${worktree_dir}/${inc_entry}"
+                if [ -f "$src_file" ]; then
+                    mkdir -p "$(dirname "$dst_file")"
+                    cp "$src_file" "$dst_file"
+                    log_info "provision_worktree: copied include file $inc_entry into worktree"
+                fi
+            done
+        fi
     fi
 
     CW_WORKTREE_PATH="$(cd "$worktree_dir" && pwd)"

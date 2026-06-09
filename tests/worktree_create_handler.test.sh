@@ -416,6 +416,41 @@ fi
 cleanup "$tmp"
 
 # ---------------------------------------------------------------------------
+# Scenario 11: Comment-only .worktreeinclude → empty array, hook succeeds (bash 3.2 guard)
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Scenario 11: comment-only .worktreeinclude → no crash, hook succeeds ==="
+
+tmp=$(make_scratch_repo "myrepo")
+(
+    cd "$tmp"
+    # .worktreeinclude exists but contains only comments and blank lines
+    printf '# this file is intentionally blank\n\n# another comment\n' > .worktreeinclude
+
+    payload='{"worktree_name":"emptyinclude","isolation_type":"user"}'
+    out=$(run_handler "$payload")
+    r=$?
+    test "$r" -eq 0 || { echo "handler exited $r with comment-only .worktreeinclude"; exit 1; }
+
+    # Worktree directory must exist
+    test -d "$out" || { echo "worktree dir does not exist: $out"; exit 1; }
+
+    # No unexpected files copied (no .env or similar)
+    test ! -f "${out}/.env" || { echo ".env was unexpectedly copied"; exit 1; }
+)
+r=$?
+if [ "$r" -eq 0 ]; then
+    PASS=$((PASS + 1))
+    echo "[PASS] scenario11: comment-only .worktreeinclude → empty array guard, hook succeeds"
+else
+    FAIL=$((FAIL + 1))
+    ERRORS+=("FAIL [scenario11: comment-only .worktreeinclude empty array guard]")
+    echo "[FAIL] scenario11: comment-only .worktreeinclude → empty array guard"
+fi
+cleanup "$tmp"
+
+# ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
 
