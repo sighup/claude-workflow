@@ -176,6 +176,8 @@ Task({
 
 Repeat for each batch in a single message for parallel execution.
 
+As each spawn returns, capture its reported token usage from the Task result — Step 2d records it and Step 5 relays it upward per the guardrails (a child's cost is invisible to your caller unless you relay it).
+
 #### Inline Fallback (spawning tool unavailable)
 
 When Task is missing from your allowed tools or a spawn attempt returns a tool-unavailable error:
@@ -192,9 +194,11 @@ After all reviewers complete (spawned or inline-fallback batches consolidate ide
 
 1. **Collect findings**: `TaskGet` each review-batch task to read findings from metadata (top-level); in nested mode, read each sub-reviewer's final-message findings and record them on your own task's metadata
 2. **Check for failures**: If a batch task is not completed or has no `findings` in metadata, record those files as **unreviewed** (do not attempt to review them inline)
-3. **Flatten**: Merge all findings arrays into one list
-4. **Deduplicate**: Remove findings with the same file + overlapping line range
-5. **Sort**: Order by severity — B (Security) first, then A (Correctness), C (Spec Compliance), D (Quality)
+3. **Funnel accounting**: Record `returned/spawned` — spawned = sub-reviewers dispatched in Step 2c, returned = those whose findings landed — plus a **degraded list**: sub-reviewers that failed, timed out, or returned unusable output, each with its reason and unreviewed files. Inline-fallback batches count as `0` spawned (note "inline fallback")
+4. **Token relay**: Record each returned sub-reviewer's token usage as captured from its Task result in Step 2c. In nested mode, mirror the funnel counts and per-child tokens onto your own task's metadata alongside the findings
+5. **Flatten**: Merge all findings arrays into one list
+6. **Deduplicate**: Remove findings with the same file + overlapping line range
+7. **Sort**: Order by severity — B (Security) first, then A (Correctness), C (Spec Compliance), D (Quality)
 
 Mark each review-batch task as completed (cleanup, top-level only — nested mode has no batch tasks):
 
@@ -263,6 +267,12 @@ Produce a structured review report from the consolidated findings:
 - **Files Reviewed**: X / Y changed files
 - **FIX Tasks Created**: [list of task IDs]
 
+## Sub-Reviewer Fan-Out
+
+- **Funnel**: [returned]/[spawned] returned
+- **Degraded**: [sub-reviewer: reason — unreviewed files] | none
+- **Token usage**: batch 1: [N] · batch 2: [N] · children total: [sum]
+
 ## Blocking Issues
 
 ### [ISSUE-1] [Category A/B/C]: [Title]
@@ -299,13 +309,15 @@ Produce a structured review report from the consolidated findings:
 - [ ] No obvious performance regressions
 ```
 
+The **Sub-Reviewer Fan-Out** section appears only when batch mode ran (Step 2b–2d). Spawned batches carry real funnel and token numbers from Step 2d; if every batch ran via the inline fallback, the funnel line reads `0/0 — inline fallback` and the token line is omitted. Omit the whole section for inline review (≤200-line diffs).
+
 Save the report to: `./docs/specs/[NN]-spec-[feature-name]/[NN]-review-[feature-name].md`
 
 If no spec directory is found, output the report directly.
 
 ### Step 5: Output Summary
 
-**CRITICAL**: Always output a summary so the caller can relay results.
+**CRITICAL**: Always output a summary so the caller can relay results. When batch mode ran, the funnel and token lines are the [guardrails-mandated](../cw-dispatch/references/nesting-guardrails.md) upward relay — without them your caller cannot see sub-reviewer cost or coverage.
 
 ```
 CW-REVIEW COMPLETE
@@ -320,10 +332,15 @@ Advisory Notes: X
 
 FIX Tasks Created: [task IDs or "none"]
 
+Sub-Reviewer Funnel: [returned]/[spawned] (degraded: [list or "none"])
+Child Tokens: [batch 1: N · batch 2: N] = [sum total]
+
 [If CHANGES REQUESTED: List each blocking issue on one line]
 
 Report saved: [path to review report]
 ```
+
+Funnel and token lines follow the Step 4 rules: real numbers when sub-reviewers were spawned, `0/0 — inline fallback` when batches ran inline, omitted entirely for inline review.
 
 ## Error Handling
 
@@ -332,7 +349,7 @@ Report saved: [path to review report]
 | No diff (branch matches main) | Report "No changes to review" and exit |
 | Cannot find spec | Review without spec compliance checks, note in report |
 | Git commands fail | Report error, suggest manual review |
-| Sub-agent failure | List unreviewed files in report, let user decide (re-run or manual review) |
+| Sub-agent failure | Record it in the degraded list with unreviewed files (Step 2d funnel), let user decide (re-run or manual review) |
 | Task tool unavailable | Inline fallback (Step 2c): review batches sequentially in your own context — complete the review with no spawn error |
 | Too many files (>24) | Cap at 3 batches of 8, prioritize new files and security-sensitive paths |
 
