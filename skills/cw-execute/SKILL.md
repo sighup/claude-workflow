@@ -360,7 +360,7 @@ Proof Artifacts (on disk):
 Commit: abc1234 feat(scope): description
   - Implementation files: X
 
-Verifier: PASS (spawned, haiku, tokens: N) | PASS (inline)
+Verifier: PASS (spawned, haiku, tokens: N) | PASS (inline) | PASS (inline-degraded)
 
 Progress: X/Y tasks complete
 ```

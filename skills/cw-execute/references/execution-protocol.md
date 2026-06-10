@@ -155,7 +155,7 @@ Proof commands run inline here because the on-disk artifacts must be written (th
        completed_at: "<ISO timestamp>",
        verification_mode: "spawned | inline | inline-degraded",
        verifier_verdict: "PASS",
-       verifier_tokens: "<child usage, or n/a when inline>"
+       verifier_tokens: "<number (relayed child usage) when spawned; literal n/a when inline>"
      }
    })
    ```
