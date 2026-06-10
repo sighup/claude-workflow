@@ -87,6 +87,8 @@ Rules:
 
 See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidance.
 
+Proof commands run inline here because the on-disk artifacts must be written (the verifier child is read-only). Step 9's proof-verifier child independently re-runs these same commands — keep each command and its expected result for that spawn prompt.
+
 **Exit criteria**: All proof artifacts collected, all PASS.
 
 ## Step 7: Sanitize
@@ -117,15 +119,17 @@ See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidanc
 
 ## Step 9: Verify Full
 
-**Goal**: Confirm nothing broke after commit.
+**Goal**: Confirm nothing broke after commit, with the result independently confirmed by one proof-verifier child ([proof-verifier.md](../../../agents/proof-verifier.md)) covering both the Step 6 proof commands and `verification.post`. Policy: [nesting guardrails](../../cw-dispatch/references/nesting-guardrails.md).
 
-1. Run each command in `metadata.verification.post` (full test suite)
-2. If failures:
-   - If your changes caused it: fix, amend commit, re-verify
-   - If pre-existing: document in proof_results
-   - Max 3 fix attempts
+1. Spawn one proof-verifier child per verification attempt (never concurrent, never an implementer-type child), with `model: haiku` pinned explicitly
+2. Spawn prompt: task id, repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn sub-agents" — never the skill's all-caps context marker or raw task metadata JSON (SubagentStop hook pattern-matches both)
+3. Gate on the verdict:
+   - `Overall: PASS`: record verdict + verifier tokens, proceed to Step 10
+   - `Overall: FAIL`: do NOT mark completed; if your changes caused it: fix, amend commit, re-verify with a fresh verifier (max 3 attempts); if pre-existing: document in proof_results
+   - No usable verdict (spawn error, timeout, malformed): re-run checks inline for this attempt, record `verification_mode: "inline-degraded"`
+4. **Inline fallback**: if the Task tool is not in your toolset, run each `verification.post` command yourself exactly as before (fix, amend, re-verify on failure, max 3 attempts) and record `verification_mode: "inline"` — spawn unavailability is never a task failure
 
-**Exit criteria**: All verification.post commands pass.
+**Exit criteria**: PASS verdict (spawned) or all checks green (inline). The completion gate applies in both modes.
 
 ## Step 10: Report
 
@@ -148,12 +152,17 @@ See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidanc
        proof_results: [...],
        proof_summary: "X/Y proofs passed",
        commit_sha: "<sha from git log --oneline -1>",
-       completed_at: "<ISO timestamp>"
+       completed_at: "<ISO timestamp>",
+       verification_mode: "spawned | inline | inline-degraded",
+       verifier_verdict: "PASS",
+       verifier_tokens: "<child usage, or n/a when inline>"
      }
    })
    ```
 
-**Exit criteria**: Task marked completed with proof_dir, proof_results, proof_summary, commit_sha, and completed_at in metadata.
+Never set `status: "completed"` unless `verifier_verdict` is PASS.
+
+**Exit criteria**: Task marked completed with proof_dir, proof_results, proof_summary, commit_sha, completed_at, verification_mode, and verifier_verdict in metadata.
 
 ## Step 11: Clean Exit
 

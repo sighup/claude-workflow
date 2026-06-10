@@ -2,7 +2,7 @@
 name: cw-execute
 description: "Executes a single task from the task board using the 11-step implementation protocol. This skill should be used after cw-plan or cw-dispatch assigns a task, or when manually implementing a specific task by ID."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, LSP
+allowed-tools: Glob, Grep, Read, Edit, Write, Bash, Task, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, LSP
 effort: high
 ---
 
@@ -35,6 +35,7 @@ You have no memory of previous executions.
 - **ALWAYS** leave codebase clean — no uncommitted changes after completion
 - **NEVER** proceed to commit without proof files — proof artifacts are BLOCKING
 - **NEVER** commit unsanitized proofs — security sanitization is BLOCKING
+- **NEVER** mark a task completed without a PASS verification verdict recorded in metadata (Step 9)
 
 ## MANDATORY FIRST ACTION
 
@@ -244,6 +245,8 @@ If proof artifacts cannot be executed (e.g., environment issues):
 
 See [proof-artifact-types.md](references/proof-artifact-types.md) for type-specific instructions.
 
+**Independent re-verification:** proof commands run inline here because the on-disk artifacts must be written (the verifier child is read-only). Step 9 spawns one proof-verifier child that independently re-runs these same proof commands alongside the post checks — keep each command and its expected result for that spawn prompt.
+
 ### Step 7: Sanitize (Blocking)
 
 Remove sensitive data from proof files. **Cannot proceed until clean.**
@@ -280,13 +283,26 @@ grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proof
 
 ### Step 9: Verify Full
 
-Post-commit verification.
+Post-commit verification, independently confirmed by one [proof-verifier](../../agents/proof-verifier.md) child covering both the Step 6 proof commands and `metadata.verification.post`. Policy: [nesting guardrails](../cw-dispatch/references/nesting-guardrails.md).
 
-1. Run each command in `metadata.verification.post`
-2. If your changes caused failure:
-   - Fix the issue
-   - Amend commit
-   - Re-verify (max 3 attempts)
+**Spawn the verifier:**
+
+1. One verifier per verification attempt — never concurrent verifiers, never implementer-type children
+2. Pin the model explicitly: `model: haiku` — unpinned children inherit yours
+3. Spawn prompt contains: the task id, the repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn sub-agents"
+4. Spawn prompt must NOT contain this skill's all-caps context marker or raw task metadata JSON — the SubagentStop hook pattern-matches both (see the verifier's stop-hook contract)
+
+**Gate on the verdict (BLOCKING):**
+
+| Verdict | Action |
+|---------|--------|
+| `Overall: PASS` | Record verdict + verifier tokens, proceed to Step 10 |
+| `Overall: FAIL` | Task must NOT be marked completed. Fix the issue, amend commit, re-verify with a fresh verifier — existing loop, max 3 attempts |
+| No usable verdict (spawn error, timeout, malformed) | Re-run the checks inline for this attempt; record `verification_mode: "inline-degraded"` |
+
+After 3 FAIL attempts: failure handler with `failed_step: "Verify Full"` and the last verdict in `failure_reason`.
+
+**Inline fallback (zero regression):** if the Task tool is not in your toolset, run this step inline exactly as before — execute each `verification.post` command yourself; if your changes caused a failure, fix, amend commit, re-verify (max 3 attempts) — and record `verification_mode: "inline"`. Spawn unavailability is never a task failure. The PASS gate applies in both modes: completion requires all checks green.
 
 ### Step 10: Report
 
@@ -311,13 +327,17 @@ TaskUpdate({
     proof_summary: "T01-proofs.md",
     commit_sha: "<sha from git log>",
     completed_at: "2026-01-24T15:30:00Z",
-    model_used: "sonnet"  // The model you are running as (sonnet, opus, haiku)
+    model_used: "sonnet",  // The model you are running as (sonnet, opus, haiku)
+    verification_mode: "spawned",  // "spawned" | "inline" | "inline-degraded"
+    verifier_verdict: "PASS",      // verbatim Overall verdict; inline: result of inline checks
+    verifier_tokens: 12345         // child usage relayed upward per guardrails; "n/a" when inline
   }
 })
 ```
 
 The `proof_dir` and `proof_summary` fields allow cw-validate to locate artifacts.
 The `model_used` field records which model actually executed the task for auditability.
+Completion is gated: never set `status: "completed"` unless `verifier_verdict` is PASS.
 
 ### Step 11: Clean Exit
 
@@ -339,6 +359,8 @@ Proof Artifacts (on disk):
 
 Commit: abc1234 feat(scope): description
   - Implementation files: X
+
+Verifier: PASS (spawned, haiku, tokens: N) | PASS (inline)
 
 Progress: X/Y tasks complete
 ```
