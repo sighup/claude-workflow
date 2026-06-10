@@ -58,7 +58,7 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 
 ## Prerequisites
 
-Shell scripts require `jq`. The `gh` CLI is needed for PR creation in `cw-pipeline`.
+`jq` is required by the worktree hooks and `cw-status`. The `gh` CLI is needed for PR creation.
 
 Most skills work out of the box. `/cw-dispatch-team` uses [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) which requires two env vars:
 
@@ -141,6 +141,3 @@ Every task on the board carries self-contained metadata enabling autonomous exec
 }
 ```
 
-## Shell Scripts
-
-Shell scripts in `bin/` are optional and enable autonomous (unattended) execution without an interactive Claude session — useful for CI pipelines or scripted workflows. All core functionality is available through the skills above. See [examples/shell-scripts.md](examples/shell-scripts.md) for usage and environment variable reference.
