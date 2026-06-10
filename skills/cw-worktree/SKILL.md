@@ -26,26 +26,40 @@ You are a **DevOps Engineer** who:
 
 ## Critical Constraints
 
-- **NEVER** create worktrees in arbitrary locations - always use `.worktrees/`
+- **NEVER** create worktrees in arbitrary locations - always use `.claude/worktrees/`
 - **NEVER** merge without running tests first
 - **NEVER** delete worktrees with uncommitted changes without user consent
-- **ALWAYS** ensure `.worktrees/` is gitignored before creating worktrees
+- **ALWAYS** ensure `.claude/worktrees/` is gitignored before creating worktrees
 - **ALWAYS** run dependency installation in new worktrees
 - **ALWAYS** verify clean git status before merge operations
 
 ## Automatic Task List Configuration
 
-When `/cw-worktree create` runs, it creates `.claude/settings.local.json` in the worktree with `CLAUDE_CODE_TASK_LIST_ID` set to the worktree directory name (e.g., `feature-auth`). This provides isolated task boards at `~/.claude/tasks/{worktree-name}/`, persistent across sessions. A SessionStart hook provides worktree context to Claude. No setup required - just `cd` to worktree and run `claude`.
+When `/cw-worktree create` runs, it creates `.claude/settings.local.json` in the worktree with `CLAUDE_CODE_TASK_LIST_ID` set to the worktree directory name (e.g., `feature-myrepo-auth` or `fix-myrepo-login`). This provides isolated task boards at `~/.claude/tasks/{worktree-name}/`, persistent across sessions. A SessionStart hook provides worktree context to Claude. No setup required - just `cd` to worktree and run `claude`.
 
 ## Worktree Naming Convention
 
 ```
-Directory: .worktrees/feature-{feature-name}/
-Branch:    feature/{feature-name}
+Directory: .claude/worktrees/{type}-{repo}-{slug}/
+Branch:    {type}/{slug}
 ```
 
-- Feature names should be lowercase with hyphens
-- Match the spec naming where possible (e.g., spec `01-spec-auth` -> worktree `auth`)
+Type is inferred from the leading keyword of the slug (first matching rule wins):
+- `fix`, `bug`, `hotfix` → `fix`
+- `research`, `spike`, `explore` → `research`
+- `chore`, `refactor`, `docs`, `build`, `ci` → `chore`
+- anything else → `feature`
+
+The matching keyword and its separating hyphen are stripped from the slug. `{repo}` is the basename of the main worktree directory, sanitized to `[a-z0-9-]`.
+
+Examples:
+- slug `auth` → dir `feature-{repo}-auth`, branch `feature/auth`
+- slug `fix-login` → dir `fix-{repo}-login`, branch `fix/login`
+- slug `research-auth` → dir `research-{repo}-auth`, branch `research/auth`
+
+The `CLAUDE_CODE_TASK_LIST_ID` written to `.claude/settings.local.json` equals the worktree directory basename (`{type}-{repo}-{slug}`).
+
+The naming computation lives in `cw_worktree_names()` in `bin/lib/cw-common.sh`; the `/cw-worktree create` protocol in `references/worktree-commands.md` step 1 mirrors that logic exactly.
 
 ## Feature Discovery Pattern
 
@@ -192,7 +206,7 @@ The choice applies uniformly to every feature in the call. If a user wants to mi
 
 ### When and what to ask
 
-The available options collapse based on (a) whether **any** feature in the batch has a non-empty `STARTER_PROMPT` and (b) whether herdr is available (the once-per-invocation probe from worktree-commands.md `create` § per-invocation setup).
+The available options collapse based on (a) whether **any** feature in the batch has a non-empty `STARTER_PROMPT` and (b) whether herdr is available (the once-per-invocation probe from worktree-commands.md `create` § per-invocation setup). The probe reports available **only when this session is running inside a herdr pane** (`HERDR_ENV` set); from a plain terminal it reports unavailable, so the herdr options never surface and the batch falls through to the manual flow.
 
 | Any STARTER_PROMPT? | herdr available? | Options surfaced |
 |---|---|---|
@@ -244,7 +258,7 @@ Parse the user's input to determine which command to execute.
 
 ### /cw-worktree create <feature-name> [feature-name-2] [...]
 
-Creates one or more worktrees for features/specs. Validates feature names, ensures `.worktrees/` is gitignored, creates the worktree and branch, configures isolated task list via `.claude/settings.local.json`, installs dependencies, and runs baseline tests.
+Creates one or more worktrees for features/specs. Validates feature names, ensures `.claude/worktrees/` is gitignored, creates the worktree and branch under `.claude/worktrees/`, configures isolated task list via `.claude/settings.local.json`, installs dependencies, and runs baseline tests.
 
 ```bash
 /cw-worktree create auth                      # Single feature
@@ -319,15 +333,15 @@ MAIN SESSION (project root) - Control Center
      |
      +---> herdr workspace: {repo-name}   (one per repo, reused across calls)
              |
-             +-- tab: feature-auth     (auto-opened when herdr is running)
+             +-- tab: fix-myrepo-login      (auto-opened when herdr is running)
              |   /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
              |
-             +-- tab: feature-billing  (auto-opened when herdr is running)
+             +-- tab: feature-myrepo-auth   (auto-opened when herdr is running)
                  /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
 
   Without herdr (or when CW_DISABLE_HERDR=1):
-     +---> Terminal 1: cd .worktrees/feature-auth && claude
-     +---> Terminal 2: cd .worktrees/feature-billing && claude
+     +---> Terminal 1: cd .claude/worktrees/fix-myrepo-login && claude
+     +---> Terminal 2: cd .claude/worktrees/feature-myrepo-auth && claude
 ```
 
 **Key Points:**
@@ -337,7 +351,7 @@ MAIN SESSION (project root) - Control Center
 - **Automatic task isolation** - `.claude/settings.local.json` configures task list ID
 - **Persistent tasks** - Tasks stored in `~/.claude/tasks/{worktree-name}/`, survive session restarts
 - **Seamless resume** - Just `cd` to worktree and run `claude`, tasks are there
-- **herdr integration** - When [herdr](https://github.com/ogulcancelik/herdr) is installed and running, `create` automatically opens a Claude session in the new worktree. On hosts without herdr, the manual terminal flow is unchanged.
+- **herdr integration** - When [herdr](https://github.com/ogulcancelik/herdr) is installed, running, and **this session is inside a herdr pane**, `create` automatically opens a Claude session in the new worktree. From a plain terminal (not inside herdr) the manual terminal flow is used — a tab spawned in a detached herdr window would be invisible to you.
 
 ## Error Handling
 
@@ -352,9 +366,9 @@ MAIN SESSION (project root) - Control Center
 ### Recovery Commands
 
 ```bash
-git worktree prune                                        # Remove broken worktree reference
-git worktree remove --force .worktrees/feature-{name}     # Force remove worktree (last resort)
-git branch -D feature/{name}                              # Delete orphaned branch
+git worktree prune                                             # Remove broken worktree reference
+git worktree remove --force .claude/worktrees/fix-myrepo-login  # Force remove worktree (last resort)
+git branch -D fix/login                                        # Delete orphaned branch
 ```
 
 ### Diagnosing the herdr integration
@@ -363,7 +377,7 @@ If `create` or `open` falls back to the manual `cd ... && claude` output unexpec
 
 ```bash
 cw-herdr-open --probe; echo $?
-# 0 = working   2 = not installed or CW_DISABLE_HERDR=1   3 = daemon down
+# 0 = working   2 = not installed, not inside herdr, or CW_DISABLE_HERDR=1   3 = daemon down
 ```
 
 For a full trace of what the helper does, prefix the invocation with `bash -x`:
@@ -381,16 +395,16 @@ CW-WORKTREE COMPLETE
 =====================
 Command: create | list | status | merge | sync | cleanup
 [Command-specific details, e.g.:]
-  Created: .worktrees/feature-{name}/
-  Branch: feature/{name}
-  Task list: {name} (auto-configured)
+  Created: .claude/worktrees/{type}-{repo}-{slug}/
+  Branch: {type}/{slug}
+  Task list: {type}-{repo}-{slug} (auto-configured)
 ```
 
 ## What Comes Next
 
 After creating a worktree (keep main session open as control center):
 
-**When herdr is running** — a Claude session opens automatically in the new worktree's tab (inside the repo's workspace). Switch to that tab and:
+**When running inside herdr** — a Claude session opens automatically in the new worktree's tab (inside the repo's workspace). Switch to that tab and:
 1. `/cw-spec` - create specification (committed to feature branch)
 2. `/cw-plan` - create tasks from the spec
 3. `/cw-dispatch` - execute tasks (can exit and resume anytime)
@@ -399,8 +413,8 @@ After creating a worktree (keep main session open as control center):
 6. `gh pr create` - open PR (contains spec + implementation)
 
 **Without herdr** — open a new terminal manually:
-1. `cd .worktrees/feature-{name} && claude` - task list auto-configured
-2. `/cw-spec` - create specification (committed to feature branch)
+1. `cd .claude/worktrees/fix-myrepo-login && claude` - task list auto-configured
+2. `/cw-spec` - create specification (committed to fix branch)
 3. `/cw-plan` - create tasks from the spec
 4. `/cw-dispatch` - execute tasks (can exit and resume anytime)
 5. `/cw-validate` - verify completion
@@ -413,4 +427,6 @@ After creating a worktree (keep main session open as control center):
 - `/cw-worktree cleanup` - remove merged worktrees (after PRs merged)
 
 **To resume work later:**
-- `cd .worktrees/feature-{name} && claude` - tasks are restored
+- `cd .claude/worktrees/fix-myrepo-login && claude` - tasks are restored
+
+> **Legacy worktrees:** Worktrees created before this naming scheme (e.g. `feature-auth`) are fully supported. Discovery, list, cleanup, and all subcommands match by value — the lookup is prefix-agnostic.

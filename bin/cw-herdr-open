@@ -38,13 +38,18 @@
 #
 # Exit Codes:
 #   0   Success — pane running claude was opened (or focused), or --probe ok
-#   2   Not installed, unsupported platform, or opt-out (CW_DISABLE_HERDR set)
+#   2   Not installed, unsupported platform, not inside a herdr session
+#       (HERDR_ENV unset), or opt-out (CW_DISABLE_HERDR set)
 #   3   Socket unreachable — herdr binary found but daemon not responding
 #   4   Pane creation failed — herdr available but the agent start command failed
 #
 # Environment Variables:
 #   CW_DISABLE_HERDR   If set to any non-empty value, exit 2 immediately
 #                      without touching the herdr socket (explicit opt-out).
+#   HERDR_ENV          Set by herdr in panes it spawns. When unset, this process
+#                      is not inside a herdr session and the helper exits 2 —
+#                      opening a tab in a detached herdr window the caller can't
+#                      see is never the right default.
 #   HERDR_BIN          Override the herdr binary path (default: herdr from PATH).
 #                      Useful for test injection without a running herdr daemon.
 #
@@ -90,12 +95,13 @@ show_help() {
     echo ""
     echo "Exit Codes:"
     echo "  0   Success — claude pane opened (or focused), or --probe ok"
-    echo "  2   Not installed, unsupported platform, or CW_DISABLE_HERDR opt-out"
+    echo "  2   Not installed, unsupported platform, not inside herdr, or opt-out"
     echo "  3   Socket unreachable — herdr daemon not responding within 2s"
     echo "  4   Pane creation failed"
     echo ""
     echo "Environment Variables:"
     echo "  CW_DISABLE_HERDR   Set to any non-empty value to skip herdr (exits 2)"
+    echo "  HERDR_ENV          Set by herdr inside its panes; when unset the helper exits 2"
     echo "  HERDR_BIN          Override herdr binary path (default: herdr)"
     echo ""
     echo "Examples:"
@@ -321,6 +327,22 @@ fi
 # =============================================================================
 
 if [[ -n "${CW_DISABLE_HERDR:-}" ]]; then
+    exit 2
+fi
+
+# =============================================================================
+# Inside-herdr Check (runs for both --probe and normal flows)
+# =============================================================================
+#
+# Only operate when THIS process is running inside a herdr pane. herdr sets
+# HERDR_ENV in panes it spawns; a plain terminal leaves it unset. Opening a
+# tab from outside herdr would place it in a detached herdr window the caller
+# can't see, so we treat "outside herdr" exactly like "herdr not installed"
+# (exit 2). Callers in the create/open flow suppress stderr, so this is silent
+# there; run `cw-herdr-open --probe` directly to surface the reason.
+
+if [[ -z "${HERDR_ENV:-}" ]]; then
+    echo "cw-herdr-open: not running inside a herdr session (HERDR_ENV unset); treating herdr as unavailable" >&2
     exit 2
 fi
 

@@ -114,12 +114,14 @@ E2E testing with auto-fix. Generate tests, execute them, and auto-fix applicatio
 Manage git worktrees for parallel feature development.
 
 ```
-/cw-worktree create auth               # Create a single worktree
+/cw-worktree create fix-login          # Create a fix worktree
 /cw-worktree create auth billing       # Create multiple at once
 /cw-worktree list                      # Show all worktrees and their status
 /cw-worktree sync                      # Rebase current worktree on main
 /cw-worktree cleanup                   # Remove merged/orphaned worktrees
 ```
+
+The worktree directory name and task list ID are derived automatically from the slug you provide. The leading keyword determines the type (`fix`, `research`, `chore`, or `feature`), and the repo name is inserted automatically. For example, `/cw-worktree create fix-login` in a repo named `myrepo` creates `.claude/worktrees/fix-myrepo-login` on branch `fix/login`.
 
 You can also describe what you want and let Claude figure out how many worktrees to create:
 
@@ -129,18 +131,20 @@ dialog and one using an inline expandable panel. Set up worktrees so I can
 develop both approaches side by side.
 ```
 
-Claude will create the worktrees (e.g., `feature-modal-dialog` and `feature-inline-panel`), each with an isolated task list and feature branch. You can then open separate terminals to develop each variant independently and compare the results.
+Claude will create the worktrees (e.g., `feature-myrepo-modal-dialog` and `feature-myrepo-inline-panel`), each with an isolated task list and feature branch. You can then open separate terminals to develop each variant independently and compare the results.
 
-For a single feature, just name what you're building:
+For a single fix, just name what you're fixing:
 
 ```
-/cw-worktree create checkout-redesign
+/cw-worktree create fix-checkout-redesign
 ```
 
 Then open a new terminal in the worktree to start working:
 
 ```bash
-cd .worktrees/feature-checkout-redesign && claude
+cd .claude/worktrees/fix-myrepo-checkout-redesign && claude
 /cw-spec → /cw-plan → /cw-dispatch → /cw-validate
 gh pr create
 ```
+
+> **Legacy worktrees:** Worktrees created before this naming scheme (e.g. `feature-checkout-redesign`) are fully supported — all commands are prefix-agnostic.

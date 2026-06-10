@@ -51,8 +51,8 @@ This document describes the states and transitions of worktrees throughout the f
 The worktree has been created but development hasn't started.
 
 **Characteristics:**
-- Directory exists at `.worktrees/feature-{name}/`
-- Branch `feature/{name}` created and checked out
+- Directory exists at `.claude/worktrees/{type}-{repo}-{slug}/` (e.g. `.claude/worktrees/fix-myrepo-login/`)
+- Branch `{type}/{slug}` created and checked out (e.g. `fix/login`)
 - Dependencies installed
 - Baseline tests passing
 - No feature-specific commits yet
@@ -149,8 +149,13 @@ Worktree and branch have been removed.
 Use `/cw-worktree status <feature-name>` to see:
 
 ```bash
-# Check for commits on feature branch
-COMMITS=$(git log main..feature/${FEATURE} --oneline | wc -l)
+# Check for commits on branch (branch name is {type}/{slug}, e.g. fix/login)
+# Resolve the worktree path via git (matches both .claude/worktrees/ and legacy .worktrees/)
+WT=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+  | grep -E "/(\.claude/worktrees|\.worktrees)/" \
+  | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
+BRANCH=$(cd "$WT" && git branch --show-current)
+COMMITS=$(git log main..${BRANCH} --oneline | wc -l)
 
 # Check for task board activity (in worktree session)
 # Use TaskList to see pending/completed tasks
@@ -159,7 +164,7 @@ COMMITS=$(git log main..feature/${FEATURE} --oneline | wc -l)
 ls docs/specs/*-spec-*/validation-report.md
 
 # Check if merged
-git branch --merged main | grep "feature/${FEATURE}"
+git branch --merged main | grep "${BRANCH}"
 ```
 
 ## State Indicators in `/cw-worktree list`
@@ -167,12 +172,14 @@ git branch --merged main | grep "feature/${FEATURE}"
 ```
 ACTIVE WORKTREES
 ================
-PATH                          BRANCH              STATE           STATUS
------------------------------ ------------------- --------------- ------------------
-.worktrees/feature-auth       feature/auth        READY           5 commits, clean
-.worktrees/feature-billing    feature/billing     DEVELOPING      2 commits, modified
-.worktrees/feature-search     feature/search      CREATED         0 commits, clean
+PATH                                      BRANCH              STATE           STATUS
+----------------------------------------- ------------------- --------------- ------------------
+.claude/worktrees/fix-myrepo-login        fix/login           READY           5 commits, clean
+.claude/worktrees/feature-myrepo-auth     feature/auth        DEVELOPING      2 commits, modified
+.claude/worktrees/feature-myrepo-search   feature/search      CREATED         0 commits, clean
 ```
+
+> **Legacy worktrees:** Worktrees with the old `feature-*` naming (e.g. `.worktrees/feature-auth`) continue to appear here. The list command is prefix-agnostic and matches all registered worktrees by value.
 
 ## Persistence
 
@@ -220,9 +227,9 @@ When resuming work in a worktree:
 Multiple worktrees can exist in different states simultaneously:
 
 ```
-.worktrees/feature-auth     → READY (waiting for merge)
-.worktrees/feature-billing  → DEVELOPING (3 tasks in progress)
-.worktrees/feature-search   → VALIDATING (running validation)
+.claude/worktrees/fix-myrepo-login        → READY (waiting for merge)
+.claude/worktrees/feature-myrepo-auth     → DEVELOPING (3 tasks in progress)
+.claude/worktrees/feature-myrepo-search   → VALIDATING (running validation)
 ```
 
 **Important:** Each worktree has its own:

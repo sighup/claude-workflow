@@ -55,17 +55,17 @@ End-to-end examples combining skills and shell scripts.
 ## Parallel features (interactive)
 
 ```
-# Main session — create worktrees
+# Main session — create worktrees (repo name inserted automatically, e.g. myrepo)
 /cw-worktree create auth
-/cw-worktree create billing
+/cw-worktree create fix-login
 
-# Terminal 1
-cd .worktrees/feature-auth && claude
+# Terminal 1 — feature-myrepo-auth on branch feature/auth
+cd .claude/worktrees/feature-myrepo-auth && claude
 /cw-spec → /cw-plan → /cw-dispatch → /cw-validate
 gh pr create
 
-# Terminal 2
-cd .worktrees/feature-billing && claude
+# Terminal 2 — fix-myrepo-login on branch fix/login
+cd .claude/worktrees/fix-myrepo-login && claude
 /cw-spec → /cw-plan → /cw-dispatch → /cw-validate
 gh pr create
 
