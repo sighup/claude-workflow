@@ -111,6 +111,20 @@ herdr integration install claude
 
 That skill is maintained by the herdr project (AGPL-3.0) and self-disables outside a herdr pane via the `HERDR_ENV=1` guard, so it stays out of your way on hosts without herdr.
 
+### Frontier model routing (Claude Fable 5)
+
+claude-workflow can route the thinking-heavy stages — research, spec, plan, and complex implementation tasks — to Claude Fable 5 (`claude-fable-5`) for higher capability on challenging problems. This is entirely optional and does not affect users who choose to stay on the default model ladder (Haiku → Sonnet → Opus).
+
+**Decision protocol:** Frontier mode is decided with zero configuration required. At planning time, the system checks in this order: (1) if `CW_FABLE=on` or `CW_FABLE=off` is set in your environment, that takes precedence; (2) if the current session is already running Fable, frontier mode activates automatically; (3) otherwise, you are asked once ("Use Claude Fable 5 for frontier stages?") and the answer is saved to `.claude/settings.local.json` in your worktree. This decision is made only at plan time — dispatch and execution never prompt.
+
+**Fallback guarantee:** If Fable becomes unavailable for any reason (org policy, credit exhaustion, API error, unknown model error), every affected stage falls back silently to Opus 4.8 and records the substitution (`model_requested` and `fallback_reason` in task metadata). Nothing in the workflow requires Fable — it is always optional, and your work completes uninterrupted.
+
+**Cost:** Fable pricing is approximately 2× Opus; the tokenizer is ~30% heavier, so effective cost per task is roughly 2.6× Opus. Plan-provided Fable credits are available through 2026-06-22; after that, Fable usage is credit-metered. The `complex`-tier tasks and subagent spawns (planner, spec writer, research deep-dive) request Fable when frontier mode is on; trivial and standard tasks, review, validation, and testing remain on the default ladder.
+
+**Advisor alternative:** If you prefer not to route full tasks to Fable, you can use Claude Code's native advisor tool to get Fable guidance at decision points while keeping the main session on a cheaper model. Set `"advisorModel": "fable"` in your `.claude/settings.json` (or use `--advisor fable` / `/advisor fable` in Claude), then frontier mode will use your chosen main model for execution. This requires Claude Code v2.1.170+ and Fable access. Note: `fable` is absent from the `/advisor` dropdown menu — you must pass it explicitly. A Fable main session accepts only a Fable advisor (complementary routing, not a replacement for per-task subagent `model` selection).
+
+Nothing in the plugin requires Fable. The feature is fully backward-compatible: with `CW_FABLE=off` or when Fable is unavailable, behavior is identical to v2.13.0.
+
 ## Task Metadata
 
 Every task on the board carries self-contained metadata enabling autonomous execution:
