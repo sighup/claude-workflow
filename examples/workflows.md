@@ -1,6 +1,6 @@
 # Common Workflows
 
-End-to-end examples combining skills and shell scripts.
+End-to-end examples combining skills.
 
 ## Quick feature (interactive)
 
@@ -12,44 +12,26 @@ End-to-end examples combining skills and shell scripts.
 /cw-validate
 ```
 
-## Quick feature (unattended)
-
-```bash
-# From terminal — single command does everything
-./bin/cw-pipeline --prompt "Build JWT authentication" --name auth
-```
-
 ## Plan first, execute later
 
-```bash
+```
 # Generate spec + plan, review before executing
-./bin/cw-init --prompt "Build JWT authentication"
-./bin/cw-status --list              # Review the task plan
+/cw-spec "Build JWT authentication"
+/cw-plan
 
-# Execute when ready
-./bin/cw-loop --dispatch --verbose
-
-# Validate
-./bin/cw-loop-interactive           # Or use cw-loop for unattended
+# Review the task list, then execute when ready
+/cw-dispatch
+/cw-validate
 ```
 
 ## Recover from failures
 
-```bash
-# Check what failed
-./bin/cw-status --failed
-
-# Re-run — Claude will pick up failed tasks and retry
-./bin/cw-loop --verbose
 ```
+# Check what failed
+/cw-validate
 
-## Parallel features (unattended)
-
-```bash
-./bin/cw-pipeline \
-  --feature "auth:prompt:Build JWT authentication" \
-  --feature "billing:prompt:Add Stripe billing integration" \
-  --feature "search:prompt:Full-text search with Elasticsearch"
+# Re-run dispatch — Claude picks up failed tasks and retries
+/cw-dispatch
 ```
 
 ## Parallel features (interactive)
