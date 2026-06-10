@@ -68,6 +68,32 @@ grep -qxF 'docs/specs/' .gitignore 2>/dev/null || echo 'docs/specs/' >> .gitigno
 
 ### Step 2: Context Assessment
 
+#### Frontier Decision
+
+Evaluate once, in priority order. Carry the result forward — do not re-read `CW_FABLE` mid-session.
+
+**Priority 1 — Env override:** If `CW_FABLE` is set in the environment (or in `.claude/settings.local.json` under `env.CW_FABLE`), read its value and set `frontier = (value == "on")`. Skip to the project review below.
+
+**Priority 2 — Session model identity:** If the skill's own model identity (from system context, same mechanism as cw-execute's `model_used`) is `fable`, set `frontier = true`. Skip to the project review below.
+
+**Priority 3 — Ask once:** Ask the user:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Use Claude Fable 5 for frontier stages — research, spec, plan, complex tasks?",
+    header: "Frontier model routing",
+    options: [
+      { label: "Yes", description: "Thinking-heavy stages use Fable; Opus is the automatic fallback" },
+      { label: "No", description: "Keep existing model ladder — complex tasks use Opus" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Set `frontier = (answer == "Yes")`. Persist by writing `env.CW_FABLE` (`"on"` or `"off"`) into `.claude/settings.local.json`, merging with existing keys (same pattern as `CLAUDE_CODE_TASK_LIST_ID`).
+
 If working in a pre-existing project, review:
 
 - Current plannerure patterns and conventions

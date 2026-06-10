@@ -2,12 +2,18 @@
 
 When the user selects **Run /cw-plan**, use this two-pass flow to create and refine the task graph before handing off to execution.
 
+## Frontier Planner Spawn
+
+Use the `frontier` value resolved in cw-spec Step 2. When `frontier = true`, spawn the planner with `model: "fable"`; otherwise use `model: "opus"`. This applies to every planner spawn in this file.
+
+**Fable Fallback**: If a planner spawn with `model: "fable"` fails for an availability-class reason (unknown model, permission/org-policy error, credit exhaustion, API error, or `refusal` stop reason), respawn that planner exactly once with `model: "opus"`. Record the substitution. A Fable failure never aborts the flow.
+
 ## Pass 1 — Parent Task Creation
 
 Spawn the planner for Steps 1 and 2 only:
 
 ```
-Task({ subagent_type: "claude-workflow:planner", description: "Create parent tasks (Step 1+2)", prompt: "The spec is ready. Run /cw-plan to complete Step 1 and Step 2 (parent task creation) only. Output the CW-PLAN COMPLETE summary and exit — do not proceed to Step 3." })
+Task({ subagent_type: "claude-workflow:planner", model: frontier ? "fable" : "opus", description: "Create parent tasks (Step 1+2)", prompt: "The spec is ready. Run /cw-plan to complete Step 1 and Step 2 (parent task creation) only. Output the CW-PLAN COMPLETE summary and exit — do not proceed to Step 3." })
 ```
 
 Relay the CW-PLAN COMPLETE summary to the user, then present the decomposition question. Use the planner's `Recommendation` field to mark the suggested option:
@@ -33,14 +39,14 @@ AskUserQuestion({
 
 - **Generate sub-tasks**: spawn planner for Step 3:
   ```
-  Task({ subagent_type: "claude-workflow:planner", description: "Generate sub-tasks (Step 3)", prompt: "The parent tasks are already on the board. Run /cw-plan Step 3 only — create sub-tasks for each parent task, then exit." })
+  Task({ subagent_type: "claude-workflow:planner", model: frontier ? "fable" : "opus", description: "Generate sub-tasks (Step 3)", prompt: "The parent tasks are already on the board. Run /cw-plan Step 3 only — create sub-tasks for each parent task, then exit." })
   ```
 
 - **Execute as-is**: proceed directly to execution options below.
 
 - **Adjust tasks**: ask the user for their feedback, then re-run Pass 1 with that feedback:
   ```
-  Task({ subagent_type: "claude-workflow:planner", description: "Revise parent tasks (Step 1+2)", prompt: "Revise the parent task graph based on this feedback: [user feedback]. Clear existing tasks if needed, recreate them, output an updated CW-PLAN COMPLETE summary, and exit." })
+  Task({ subagent_type: "claude-workflow:planner", model: frontier ? "fable" : "opus", description: "Revise parent tasks (Step 1+2)", prompt: "Revise the parent task graph based on this feedback: [user feedback]. Clear existing tasks if needed, recreate them, output an updated CW-PLAN COMPLETE summary, and exit." })
   ```
   Then re-present the decomposition question with the updated summary.
 
