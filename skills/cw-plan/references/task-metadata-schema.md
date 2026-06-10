@@ -55,7 +55,7 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
   // Worker Assignment
   "role": "implementer",                 // implementer | validator | spec-writer
   "complexity": "standard",             // trivial | standard | complex
-  "model": "sonnet",                    // Model: "haiku" (trivial) | "sonnet" (standard) | "opus" (complex)
+  "model": "sonnet",                    // Model: "haiku" (trivial) | "sonnet" (standard) | "opus" (complex) | "fable" (fallback)
 
   // Results (filled by worker after execution)
   "proof_results": null,                 // Filled with pass/fail per artifact
@@ -97,7 +97,7 @@ Each requirement must be:
 |-------|------|----------|-------------|
 | `role` | string | Yes | Worker role: `implementer`, `validator`, `spec-writer` |
 | `complexity` | string | Yes | Task complexity: `trivial`, `standard`, `complex` |
-| `model` | string | Yes | Intended model: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex). After execution, the worker records the actual model in `model_used` (see Result Schema). |
+| `model` | string | Yes | Intended model: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex), `"fable"` (fallback). After execution, the worker records the actual model in `model_used` (see Result Schema). If a substitution occurred, also fill `model_requested` and `fallback_reason` (see Result Schema). |
 
 ### Proof Artifact Types
 
@@ -138,14 +138,18 @@ When a worker completes a task, it fills:
     { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
   ],
   "completed_at": "2026-01-24T15:30:00Z",
-  "model_used": "sonnet"                  // Actual model that executed this task
+  "model_used": "sonnet",                  // Actual model that executed this task
+  "model_requested": "opus",               // Optional: original tier if substitution occurred
+  "fallback_reason": "spawn-failed"        // Optional: category if substitution occurred (e.g. spawn-failed, model-unavailable)
 }
 ```
 
 ### Result Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `proof_results` | array | Pass/fail per proof artifact with output file references |
-| `completed_at` | string\|null | ISO 8601 timestamp when task was completed |
-| `model_used` | string\|null | The model that actually executed the task (e.g. `sonnet`, `opus`, `haiku`). Filled by the worker at completion. |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `proof_results` | array | Yes | Pass/fail per proof artifact with output file references |
+| `completed_at` | string | Yes | ISO 8601 timestamp when task was completed |
+| `model_used` | string | Yes | The model that actually executed the task (e.g. `sonnet`, `opus`, `haiku`, `fable`). Filled by the worker at completion. |
+| `model_requested` | string | No | Original intended model tier if a substitution occurred (e.g. `opus`, `sonnet`). Omitted if no substitution. |
+| `fallback_reason` | string | No | Short category describing why substitution occurred (e.g. `spawn-failed`, `model-unavailable`). Omitted if no substitution. |
