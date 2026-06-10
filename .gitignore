@@ -1,3 +1,5 @@
 .worktrees/
 .claude/worktrees/
 docs/specs/
+
+tests/
