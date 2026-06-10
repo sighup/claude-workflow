@@ -414,4 +414,3 @@ After task completion:
 - Next worker picks up the next unblocked task
 - `/cw-dispatch` can spawn parallel workers
 - `/cw-validate` checks coverage after all tasks complete
-- `cw-loop` shell script automates sequential execution
