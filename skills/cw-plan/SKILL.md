@@ -93,6 +93,38 @@ After restarting, run /cw-plan again to continue.
 
 5. **If user skips**: Proceed to Step 1 immediately. Note that `/cw-dispatch-team` will not be available until the env var is configured.
 
+### Step 0b: Frontier Decision
+
+Evaluate exactly once per planning session, in priority order. Carry the result forward in memory — do not re-read `CW_FABLE` mid-session.
+
+**Priority 1 — Env override:** If `CW_FABLE` is set in the environment (or in `.claude/settings.local.json` under `env.CW_FABLE`), read its value and set `frontier = (value == "on")`. Skip to Step 1.
+
+**Priority 2 — Session model identity:** If the skill's own model identity (from system context, same mechanism cw-execute uses for `model_used`) is `fable`, set `frontier = true`. Skip to Step 1.
+
+**Priority 3 — Ask once:** Ask the user:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Use Claude Fable 5 for frontier stages — research, spec, plan, complex tasks?",
+    header: "Frontier model routing",
+    options: [
+      { label: "Yes", description: "Complex tasks and thinking-heavy stages use Fable; Opus is the automatic fallback" },
+      { label: "No", description: "Keep existing model ladder — complex tasks use Opus" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Set `frontier = (answer == "Yes")`. Persist by writing `env.CW_FABLE` (`"on"` or `"off"`) into `.claude/settings.local.json`, merging with existing keys:
+
+```javascript
+// Read existing settings.local.json (create {} if absent)
+// Merge: settings.env.CW_FABLE = frontier ? "on" : "off"
+// Write back — all other keys (e.g. CLAUDE_CODE_TASK_LIST_ID) are preserved
+```
+
 ### Step 1: Analysis
 
 1. **Locate Spec**: User provides path or find the most recent spec in `./docs/specs/` without an accompanying task graph
