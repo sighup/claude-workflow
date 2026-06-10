@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.0.0 (2026-06-10)
+
+### Refactoring
+
+- **bin**: Remove autonomous shell runners, relocate worktree provisioning
+  ([#32](https://github.com/sighup/claude-workflow/pull/32),
+  [`be3d9f2`](https://github.com/sighup/claude-workflow/commit/be3d9f29dfdcbc8e556cf887a9c43bd0dbb2ab7c))
+
+
 ## v2.13.0 (2026-06-10)
 
 ### Features
