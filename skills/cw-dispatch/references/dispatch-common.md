@@ -2,6 +2,12 @@
 
 Shared protocols for `cw-dispatch` and `cw-dispatch-team`.
 
+## Nested Sub-Agents
+
+Workers may spawn children of their own (reviewer fan-out, implementer proof-verifier). All nesting policy — depth, fan-out caps, board-mirroring, upward relay, model pinning — is defined in [nesting-guardrails.md](nesting-guardrails.md); consult it rather than restating it.
+
+**Hidden child cost:** a worker's reported cost excludes the cost of that worker's children — the dispatcher sees only the immediate child's tokens (probe-verified 2026-06-10). Nested spend reaches dispatch reports only through the upward token relay the guardrails require; sum relayed child tokens into worker cost figures.
+
 ## Serialize Task-Tool Calls
 
 Never combine a task write (`TaskUpdate`, `TaskCreate`) with a task read (`TaskList`, `TaskGet`) for the same task list in one parallel tool batch — issue them in separate messages, write first. A concurrent write+read can race the task store and wipe every task file on the board (observed 2026-06-10: all 13 tasks deleted, `.highwatermark` recreated). If a TaskList result contradicts a TaskUpdate you just made (stale status), STOP issuing task calls and re-read with TaskGet before continuing — that staleness is the precursor to the wipe.
