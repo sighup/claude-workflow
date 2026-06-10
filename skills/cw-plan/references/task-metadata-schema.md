@@ -55,7 +55,7 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
   // Worker Assignment
   "role": "implementer",                 // implementer | validator | spec-writer
   "complexity": "standard",             // trivial | standard | complex
-  "model": "sonnet",                    // Model: "haiku" (trivial) | "sonnet" (standard) | "opus" (complex) | "fable" (fallback)
+  "model": "sonnet",                    // Model: "haiku" (trivial) | "sonnet" (standard) | "opus" (complex, frontier off) | "fable" (complex, frontier on)
 
   // Results (filled by worker after execution)
   "proof_results": null,                 // Filled with pass/fail per artifact
@@ -97,7 +97,7 @@ Each requirement must be:
 |-------|------|----------|-------------|
 | `role` | string | Yes | Worker role: `implementer`, `validator`, `spec-writer` |
 | `complexity` | string | Yes | Task complexity: `trivial`, `standard`, `complex` |
-| `model` | string | Yes | Intended model: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex), `"fable"` (fallback). After execution, the worker records the actual model in `model_used` (see Result Schema). If a substitution occurred, also fill `model_requested` and `fallback_reason` (see Result Schema). |
+| `model` | string | Yes | Intended model: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex when frontier routing is off), `"fable"` (complex when frontier routing is on; opus is the automatic fallback). After execution, the worker records the actual model in `model_used` (see Result Schema). If a substitution occurred, also fill `model_requested` and `fallback_reason` (see Result Schema). |
 
 ### Proof Artifact Types
 
