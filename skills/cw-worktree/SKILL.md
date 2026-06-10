@@ -59,7 +59,7 @@ Examples:
 
 The `CLAUDE_CODE_TASK_LIST_ID` written to `.claude/settings.local.json` equals the worktree directory basename (`{type}-{repo}-{slug}`).
 
-The naming computation lives in `cw_worktree_names()` in `bin/lib/cw-common.sh`; the `/cw-worktree create` protocol in `references/worktree-commands.md` step 1 mirrors that logic exactly.
+The naming computation lives in `cw_worktree_names()` in `scripts/lib/cw-common.sh`; the `/cw-worktree create` protocol in `references/worktree-commands.md` step 1 mirrors that logic exactly.
 
 ## Feature Discovery Pattern
 
