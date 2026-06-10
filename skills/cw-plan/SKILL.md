@@ -339,8 +339,6 @@ AskUserQuestion({
 })
 ```
 
-> **Tip**: For fully hands-off execution outside of a Claude session, run `./bin/cw-loop` directly in your terminal.
-
 Based on user selection:
 - **Parallel**: `Skill({ skill: "cw-dispatch" })`
 - **Team**: `Skill({ skill: "cw-dispatch-team" })`

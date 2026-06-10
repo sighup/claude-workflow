@@ -22,8 +22,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CW_COMMON="$REPO_ROOT/bin/lib/cw-common.sh"
+CW_COMMON="$SCRIPT_DIR/lib/cw-common.sh"
 
 if [ -f "$CW_COMMON" ]; then
     source "$CW_COMMON"

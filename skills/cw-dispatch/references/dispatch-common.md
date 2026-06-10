@@ -2,6 +2,10 @@
 
 Shared protocols for `cw-dispatch` and `cw-dispatch-team`.
 
+## Serialize Task-Tool Calls
+
+Never combine a task write (`TaskUpdate`, `TaskCreate`) with a task read (`TaskList`, `TaskGet`) for the same task list in one parallel tool batch — issue them in separate messages, write first. A concurrent write+read can race the task store and wipe every task file on the board (observed 2026-06-10: all 13 tasks deleted, `.highwatermark` recreated). If a TaskList result contradicts a TaskUpdate you just made (stale status), STOP issuing task calls and re-read with TaskGet before continuing — that staleness is the precursor to the wipe.
+
 ## Mandatory First Action
 
 **Call TaskList() immediately before any other action.**
