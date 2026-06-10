@@ -44,14 +44,14 @@ if [ -n "$WORKTREE_NAME" ]; then
   # Provide context to Claude about the worktree environment
   # Report the actual containing directory (new or legacy)
   CONTAINING_DIR="$WORKTREE_ROOT"
-  cat << EOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "WORKTREE SESSION: You are working in git worktree '${CONTAINING_DIR}/' on branch '${BRANCH_NAME}'. ${STATUS}. Tasks persist across sessions in ~/.claude/tasks/${WORKTREE_NAME}/. Use /cw-spec, /cw-plan, /cw-dispatch, /cw-validate to manage the workflow. When complete, create a PR with 'gh pr create'."
-  }
-}
-EOF
+  # Prefer the configured task-list id from settings; fall back to the dir name
+  # (keeps this hook consistent with cwd-changed-worktree.sh)
+  TASK_ID="${CONFIGURED_ID:-$WORKTREE_NAME}"
+  # Build the JSON with jq so quotes/backslashes in path-derived values
+  # cannot break the hook output
+  jq -n \
+    --arg ctx "WORKTREE SESSION: You are working in git worktree '${CONTAINING_DIR}/' on branch '${BRANCH_NAME}'. ${STATUS}. Tasks persist across sessions in ~/.claude/tasks/${TASK_ID}/. Use /cw-spec, /cw-plan, /cw-dispatch, /cw-validate to manage the workflow. When complete, create a PR with 'gh pr create'." \
+    '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$ctx}}'
 fi
 
 exit 0
