@@ -109,6 +109,34 @@ LSP available:    {yes/no}
 
 When `lsp_available = true`, pass this flag to subagent prompts so they use LSP operations (documentSymbol, goToDefinition, findReferences, hover, goToImplementation, incomingCalls, outgoingCalls) alongside Glob, Grep, and Read. When `lsp_available = false`, subagents use only Glob, Grep, and Read as before.
 
+### Frontier Detection
+
+Evaluate once, in priority order. Carry the result forward — do not re-read `CW_FABLE` mid-session.
+
+**Priority 1 — Env override:** If `CW_FABLE` is set in the environment (or in `.claude/settings.local.json` under `env.CW_FABLE`), read its value and set `frontier = (value == "on")`. Skip to Step 1 below.
+
+**Priority 2 — Session model identity:** If the skill's own model identity is `fable`, set `frontier = true`. Skip to Step 1 below.
+
+**Priority 3 — Ask once:** Ask the user:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Use Claude Fable 5 for frontier stages — research, spec, plan, complex tasks?",
+    header: "Frontier model routing",
+    options: [
+      { label: "Yes", description: "Thinking-heavy stages use Fable; Opus is the automatic fallback" },
+      { label: "No", description: "Keep existing model ladder — complex tasks use Opus" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Set `frontier = (answer == "Yes")`. Persist by writing `env.CW_FABLE` (`"on"` or `"off"`) into `.claude/settings.local.json`, merging with existing keys (same pattern as `CLAUDE_CODE_TASK_LIST_ID`).
+
+**Inline synthesis constraint:** The inline portions of cw-research (Steps 3, 7, 9 — report compilation, deep-dive integration, and meta-prompt generation) run within this session and therefore inherit the session model. Only spawned subagents can be explicitly routed to Fable.
+
 ## Process
 
 ### Step 1: Parse Topic, Scope, and Depth
@@ -261,6 +289,8 @@ Classify each source by type (Web URL, GitHub URL, local file, local directory, 
 
 Launch targeted `Task(Explore)` subagents for deeper exploration of the focus areas identified in Step 4. Deep-dives go beyond the initial auto-explore by investigating specific patterns, tracing data flows, and answering focused questions.
 
+**Fable Fallback**: If a deep-dive `Task()` spawn with `model: "fable"` fails for an availability-class reason (unknown model, permission/org-policy error, credit exhaustion, API error, or `refusal` stop reason), respawn that subagent exactly once with `model: "opus"`. Record the substitution. A Fable failure never aborts exploration.
+
 **6a. Formulate deep-dive prompts:**
 
 For each focus area selected by the user (or all five dimensions if the user confirmed without changes), create a targeted subagent prompt that builds on the initial findings:
@@ -268,6 +298,7 @@ For each focus area selected by the user (or all five dimensions if the user con
 ```
 Task({
   subagent_type: "Explore",
+  model: frontier ? "fable" : "opus",  // deep-dive agents use Fable when frontier is on
   description: "Deep-Dive: {dimension name}",
   prompt: "Perform a deep-dive exploration of {dimension name} in this codebase. Initial findings from auto-explore: {summary of initial findings for this dimension}. Go deeper: {specific questions or areas to investigate based on initial findings and user direction}. Topic filter: {topic or 'none'}. Return detailed markdown findings with specific file references, code pattern examples, and actionable insights. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}"
 })
@@ -290,6 +321,7 @@ When the user provided custom exploration directions, formulate subagent prompts
 ```
 Task({
   subagent_type: "Explore",
+  model: frontier ? "fable" : "opus",  // deep-dive agents use Fable when frontier is on
   description: "Deep-Dive: {user-described focus area}",
   prompt: "Explore this codebase focusing on: {user's description}. Find relevant files, patterns, configurations, and conventions. Return detailed markdown findings with specific file references. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}"
 })
