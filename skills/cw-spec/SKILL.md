@@ -70,13 +70,10 @@ grep -qxF 'docs/specs/' .gitignore 2>/dev/null || echo 'docs/specs/' >> .gitigno
 
 #### Frontier Decision
 
-Evaluate once, in priority order. Carry the result forward — do not re-read `CW_FABLE` mid-session.
+Decide once per session whether frontier stages use Fable:
 
-**Priority 1 — Env override:** If `CW_FABLE` is set in the environment (or in `.claude/settings.local.json` under `env.CW_FABLE`), read its value and set `frontier = (value == "on")`. Skip to the project review below.
-
-**Priority 2 — Session model identity:** If the skill's own model identity (from system context, same mechanism as cw-execute's `model_used`) is `fable`, set `frontier = true`. Skip to the project review below.
-
-**Priority 3 — Ask once:** Ask the user:
+- If your own model identity (from system context, same mechanism as cw-execute's `model_used`) is `fable`, set `frontier = true` — the user already chose Fable by running it.
+- Otherwise ask once:
 
 ```
 AskUserQuestion({
@@ -92,7 +89,7 @@ AskUserQuestion({
 })
 ```
 
-Set `frontier = (answer == "Yes")`. Persist by writing `env.CW_FABLE` (`"on"` or `"off"`) into `.claude/settings.local.json`, merging with existing keys (same pattern as `CLAUDE_CODE_TASK_LIST_ID`).
+Set `frontier = (answer == "Yes")` and carry it for the session — pass it to every planner spawn (see planning-orchestration.md). Write nothing to settings files; once tasks exist, their `metadata.model` values record the decision for later stages.
 
 If working in a pre-existing project, review:
 

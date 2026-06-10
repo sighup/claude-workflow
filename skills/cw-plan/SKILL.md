@@ -95,13 +95,11 @@ After restarting, run /cw-plan again to continue.
 
 ### Step 0b: Frontier Decision
 
-Evaluate exactly once per planning session, in priority order. Carry the result forward in memory — do not re-read `CW_FABLE` mid-session.
+Decide once per session whether complex tasks and planner-tier work use Fable:
 
-**Priority 1 — Env override:** If `CW_FABLE` is set in the environment (or in `.claude/settings.local.json` under `env.CW_FABLE`), read its value and set `frontier = (value == "on")`. Skip to Step 1.
-
-**Priority 2 — Session model identity:** If the skill's own model identity (from system context, same mechanism cw-execute uses for `model_used`) is `fable`, set `frontier = true`. Skip to Step 1.
-
-**Priority 3 — Ask once:** Ask the user:
+- If your own model identity (from system context, same mechanism cw-execute uses for `model_used`) is `fable`, set `frontier = true` — the user already chose Fable by running it.
+- Else if the board already has tasks whose `metadata.model` reflects a prior decision (complex tasks stamped `"fable"` → on; `"opus"` → off), adopt it.
+- Otherwise ask once:
 
 ```
 AskUserQuestion({
@@ -117,13 +115,7 @@ AskUserQuestion({
 })
 ```
 
-Set `frontier = (answer == "Yes")`. Persist by writing `env.CW_FABLE` (`"on"` or `"off"`) into `.claude/settings.local.json`, merging with existing keys:
-
-```javascript
-// Read existing settings.local.json (create {} if absent)
-// Merge: settings.env.CW_FABLE = frontier ? "on" : "off"
-// Write back — all other keys (e.g. CLAUDE_CODE_TASK_LIST_ID) are preserved
-```
+Set `frontier = (answer == "Yes")` and carry it for the session. Write nothing to settings files — the `model` values stamped into task metadata in Steps 2–3 are the durable record; dispatch and execution read the board and never re-ask.
 
 ### Step 1: Analysis
 

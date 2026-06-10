@@ -111,13 +111,10 @@ When `lsp_available = true`, pass this flag to subagent prompts so they use LSP 
 
 ### Frontier Detection
 
-Evaluate once, in priority order. Carry the result forward — do not re-read `CW_FABLE` mid-session.
+Decide once per session whether deep-dive subagents use Fable:
 
-**Priority 1 — Env override:** If `CW_FABLE` is set in the environment (or in `.claude/settings.local.json` under `env.CW_FABLE`), read its value and set `frontier = (value == "on")`. Skip to Step 1 below.
-
-**Priority 2 — Session model identity:** If the skill's own model identity is `fable`, set `frontier = true`. Skip to Step 1 below.
-
-**Priority 3 — Ask once:** Ask the user:
+- If your own model identity is `fable`, set `frontier = true` — the user already chose Fable by running it.
+- Otherwise ask once:
 
 ```
 AskUserQuestion({
@@ -133,7 +130,7 @@ AskUserQuestion({
 })
 ```
 
-Set `frontier = (answer == "Yes")`. Persist by writing `env.CW_FABLE` (`"on"` or `"off"`) into `.claude/settings.local.json`, merging with existing keys (same pattern as `CLAUDE_CODE_TASK_LIST_ID`).
+Set `frontier = (answer == "Yes")` and carry it for the session. Write nothing to settings files.
 
 **Inline synthesis constraint:** The inline portions of cw-research (Steps 3, 7, 9 — report compilation, deep-dive integration, and meta-prompt generation) run within this session and therefore inherit the session model. Only spawned subagents can be explicitly routed to Fable.
 
