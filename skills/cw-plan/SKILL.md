@@ -133,12 +133,12 @@ Set `frontier = (answer == "Yes")`. Persist by writing `env.CW_FABLE` (`"on"` or
 4. **Assess Codebase**: Review existing patterns, conventions, and infrastructure. Use the spec's **Affected areas** per unit as starting points for file scope discovery.
 5. **Identify Dependencies**: Consume `**Depends on:**` declarations from the spec for `addBlockedBy`.
 6. **Evaluate Complexity**: Assign `trivial`, `standard`, or `complex` to each unit
-6. **Assign Model**: Map complexity to model recommendation:
-   - `trivial` → `"haiku"` (fast, cost-effective)
-   - `standard` → `"sonnet"` (capable for most implementation tasks)
-   - `complex` → `"opus"` (maximum capability)
+6. **Assign Model**: Map complexity to model using the `frontier` flag from Step 0b:
+   - `trivial` → `"haiku"` (always)
+   - `standard` → `"sonnet"` (always)
+   - `complex` → `"fable"` when `frontier = true`; `"opus"` when `frontier = false`
 
-   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`).
+   The model field can be set to any valid value (`sonnet`, `opus`, `haiku`, `fable`).
 
 ### Step 1b: Proof Capture Capability
 
@@ -230,7 +230,7 @@ TaskCreate({
     },
     role: "implementer",
     complexity: "trivial|standard|complex",
-    model: "sonnet",  // "haiku" for trivial, "sonnet" for standard, "opus" for complex
+    model: "sonnet",  // "haiku" for trivial, "sonnet" for standard, "fable"/"opus" for complex (frontier on/off)
     proof_results: null,
     completed_at: null
   }
@@ -327,7 +327,7 @@ Before presenting to user:
 - [ ] Every task has `metadata` with `complexity` and `model` fields set
 - [ ] Every task has `demoable_unit` and `demoable_unit_title` in metadata
 - [ ] Sub-tasks inherit `demoable_unit` and `demoable_unit_title` from their parent
-- [ ] Model assignments match complexity (`trivial`→haiku, `standard`→sonnet, `complex`→opus)
+- [ ] Model assignments match complexity (`trivial`→haiku, `standard`→sonnet, `complex`→fable/opus per frontier flag)
 - [ ] Explicit `Depends on` declarations from the spec are respected in `addBlockedBy`
 - [ ] Requirement IDs match the spec's R-IDs (R1.1, R2.1 format)
 - [ ] Verification arrays are empty for pre-bootstrap greenfield tasks
