@@ -115,14 +115,14 @@ Apply the same conflict checks as Step 2 — verify no file overlaps between ass
 
 Send a **single message** with multiple Task tool calls for parallel launch. Spawn **one teammate per ready task** — no arbitrary cap.
 
-**Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override.
+**Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override. Never prompt the user about model choice — the decision was made at plan time.
 
 **CRITICAL: Use EXACTLY this prompt template. Do NOT give teammates direct implementation instructions.**
 
 ```
 Task({
   subagent_type: "claude-workflow:implementer",
-  model: "sonnet",  // from task metadata: "haiku" | "sonnet" | "opus"
+  model: "sonnet",  // from task metadata: "haiku" | "sonnet" | "opus" | "fable"
   team_name: "{task-list-id}-team",
   name: "worker-1",
   description: "Execute task T01",
@@ -152,6 +152,8 @@ SHUTDOWN:
 - Approve shutdown_request unless mid-commit (Phases 8-10)"
 })
 ```
+
+**Fable Fallback**: If a Task() spawn with `model: "fable"` fails for an availability-class reason (unknown model, permission/org-policy error, credit exhaustion, API error, or `refusal` stop reason), respawn that worker exactly once with `model: "opus"`. Record the substitution in the dispatch report. Continue the run — a Fable failure never aborts or pauses dispatch.
 
 Repeat for each worker with incrementing worker-N identifiers and matching task IDs.
 
@@ -226,6 +228,8 @@ Tasks completed: X/Y
   worker-1: T01 -> COMPLETED, T05 -> COMPLETED
   worker-2: T04 -> COMPLETED
   ...
+
+Fable substitutions: [none | T01: fable→opus (spawn-failed)]
 
 Integration Check:
   Build: PASS | FAIL

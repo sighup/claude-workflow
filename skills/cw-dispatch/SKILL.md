@@ -68,14 +68,14 @@ TaskUpdate({
 
 Send a **single message** with multiple Task tool calls for parallel execution.
 
-**Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override.
+**Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override. Never prompt the user about model choice — the decision was made at plan time.
 
 **CRITICAL: Use EXACTLY this prompt template. Do NOT give workers direct implementation instructions.**
 
 ```
 Task({
   subagent_type: "claude-workflow:implementer",
-  model: "sonnet",  // from task metadata: "haiku" | "sonnet" | "opus"
+  model: "sonnet",  // from task metadata: "haiku" | "sonnet" | "opus" | "fable"
   description: "Execute task T01",
   prompt: "You are worker-1. Your assigned task is T01. Run cw-execute to implement it.
 
@@ -84,6 +84,8 @@ Constraints:
 - Do not touch tasks owned by other workers"
 })
 ```
+
+**Fable Fallback**: If a Task() spawn with `model: "fable"` fails for an availability-class reason (unknown model, permission/org-policy error, credit exhaustion, API error, or `refusal` stop reason), respawn that worker exactly once with `model: "opus"`. Record the substitution in the dispatch report. Continue the run — a Fable failure never aborts or pauses dispatch.
 
 Repeat for each worker with incrementing worker-N identifiers.
 
@@ -101,6 +103,8 @@ CW-DISPATCH COMPLETE
 Workers spawned: 2
   worker-1: T01 - [subject] -> COMPLETED
   worker-2: T04 - [subject] -> COMPLETED
+
+Fable substitutions: [none | T01: fable→opus (spawn-failed)]
 
 Integration Check:
   Build: PASS | FAIL
