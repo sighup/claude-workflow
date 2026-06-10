@@ -14,7 +14,7 @@ Always begin your response with: **CW-REVIEW**
 
 ## Overview
 
-You are the **Code Review Orchestrator** in the Claude Workflow system. For small diffs you review inline; for larger diffs you partition changed files into batches and spawn parallel reviewer sub-agents. In both cases you create actionable FIX tasks for anything that needs correction. You are the last quality gate before a PR is created.
+You are the **Code Review Orchestrator** in the Claude Workflow system. For small diffs you review inline; for larger diffs you partition changed files into batches and spawn parallel reviewer sub-agents — falling back to inline sequential batch review when the spawning tool is unavailable. In both cases you create actionable FIX tasks for anything that needs correction. You are the last quality gate before a PR is created.
 
 ## Your Role
 
@@ -146,31 +146,57 @@ TaskUpdate({
 })
 ```
 
+**Nested mode (no TaskCreate):** when this review runs as a dispatched sub-agent, the reviewer agent cannot and must not create tasks. Board-mirror the partition on your own task instead — `TaskUpdate` your task's metadata with the batch partition (files per batch) and sub-reviewer count before spawning. Assignments travel inline in the spawn prompt (Step 2c); results land back on your task's metadata (Step 2d).
+
 ### Step 2c: Spawn Reviewer Sub-Agents
 
+Fan-out follows the [nesting guardrails](../cw-dispatch/references/nesting-guardrails.md) and works at any depth — the reviewer agent carries the Task grant, so batch mode is the same when this review itself runs as a dispatched sub-agent. Sub-reviewers are leaf children: every spawn prompt forbids further spawning. If the Task tool is unavailable in your context, use the **Inline Fallback** below — never surface a spawn failure.
+
 Send a **single message** with multiple Task tool calls for parallel execution. Spawn up to 3 reviewers.
+
+Top-level (batch tasks from Step 2b):
 
 ```
 Task({
   subagent_type: "claude-workflow:reviewer",
   description: "Review batch [N]",
-  prompt: "Review assigned files. Task ID: [batch-task-id]. Read protocol at: skills/cw-review/references/reviewer-protocol.md"
+  prompt: "Review assigned files. Task ID: [batch-task-id]. Read protocol at: skills/cw-review/references/reviewer-protocol.md. Do not spawn sub-agents."
+})
+```
+
+Nested mode (no batch tasks — the assignment travels inline):
+
+```
+Task({
+  subagent_type: "claude-workflow:reviewer",
+  description: "Review batch [N]",
+  prompt: "Review these files: [file list]. Base branch: [base]. Spec: [spec_path or none]. Read protocol at: skills/cw-review/references/reviewer-protocol.md. Report findings as JSON in your final message. Do not spawn sub-agents."
 })
 ```
 
 Repeat for each batch in a single message for parallel execution.
 
+#### Inline Fallback (spawning tool unavailable)
+
+When Task is missing from your allowed tools or a spawn attempt returns a tool-unavailable error:
+
+1. Review each batch yourself — sequentially, one batch at a time — using the Step 2a per-file procedure on the batch's files
+2. Record each batch's findings where the spawned path would have: batch task metadata (top-level) or your own task's metadata (nested mode)
+3. Proceed to Step 2d — consolidation is identical for spawned and inline batches
+
+Flat contexts are unaffected: the fallback engages only when spawning is impossible.
+
 ### Step 2d: Consolidate Findings
 
-After all reviewers complete:
+After all reviewers complete (spawned or inline-fallback batches consolidate identically):
 
-1. **Collect findings**: `TaskGet` each review-batch task to read findings from metadata
+1. **Collect findings**: `TaskGet` each review-batch task to read findings from metadata (top-level); in nested mode, read each sub-reviewer's final-message findings and record them on your own task's metadata
 2. **Check for failures**: If a batch task is not completed or has no `findings` in metadata, record those files as **unreviewed** (do not attempt to review them inline)
 3. **Flatten**: Merge all findings arrays into one list
 4. **Deduplicate**: Remove findings with the same file + overlapping line range
 5. **Sort**: Order by severity — B (Security) first, then A (Correctness), C (Spec Compliance), D (Quality)
 
-Mark each review-batch task as completed (cleanup):
+Mark each review-batch task as completed (cleanup, top-level only — nested mode has no batch tasks):
 
 ```
 TaskUpdate({
@@ -307,6 +333,7 @@ Report saved: [path to review report]
 | Cannot find spec | Review without spec compliance checks, note in report |
 | Git commands fail | Report error, suggest manual review |
 | Sub-agent failure | List unreviewed files in report, let user decide (re-run or manual review) |
+| Task tool unavailable | Inline fallback (Step 2c): review batches sequentially in your own context — complete the review with no spawn error |
 | Too many files (>24) | Cap at 3 batches of 8, prioritize new files and security-sensitive paths |
 
 ## What Comes Next

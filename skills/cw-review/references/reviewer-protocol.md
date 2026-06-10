@@ -26,6 +26,8 @@ Load the review task and understand what to examine.
    "Spec: [spec_path or 'none']"
 ```
 
+**Inline assignment (nested dispatch)**: if your spawn prompt carries the file list directly (no Task ID), skip `TaskGet` and take `assigned_files`, `base_branch`, and `spec_path` from the prompt.
+
 ### Step 2: Examine
 
 For each file in `assigned_files`, read the full file and its diff, then evaluate.
@@ -137,6 +139,8 @@ TaskUpdate({
 })
 ```
 
+**Inline assignment (no batch task)**: report the same structure — `findings` and `files_reviewed` — as JSON in your final message instead of `TaskUpdate`; your parent records it on its own task's metadata.
+
 Output result and exit:
 
 ```
@@ -149,7 +153,8 @@ Output result and exit:
 
 - Never modify implementation code
 - Never create FIX tasks or any new tasks
-- Only examine files listed in assigned_files metadata
-- Always update task status before exiting
+- Only examine files in your assignment (task metadata or inline prompt)
+- Always update task status before exiting (batch-task mode; inline assignment reports via final message)
+- Never spawn sub-agents — sub-reviewers are leaf children ([nesting-guardrails.md](../../cw-dispatch/references/nesting-guardrails.md))
 - Always include file paths and line numbers in findings
 - Read each file in full — do not rely solely on the diff
