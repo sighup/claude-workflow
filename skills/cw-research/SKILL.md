@@ -298,7 +298,8 @@ For each focus area selected by the user (or all five dimensions if the user con
 ```
 Task({
   subagent_type: "Explore",
-  model: frontier ? "fable" : "opus",  // deep-dive agents use Fable when frontier is on
+  // include model only when frontier is on; omit when frontier is off (inherit session default)
+  ...(frontier && { model: "fable" }),
   description: "Deep-Dive: {dimension name}",
   prompt: "Perform a deep-dive exploration of {dimension name} in this codebase. Initial findings from auto-explore: {summary of initial findings for this dimension}. Go deeper: {specific questions or areas to investigate based on initial findings and user direction}. Topic filter: {topic or 'none'}. Return detailed markdown findings with specific file references, code pattern examples, and actionable insights. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}"
 })
@@ -321,7 +322,8 @@ When the user provided custom exploration directions, formulate subagent prompts
 ```
 Task({
   subagent_type: "Explore",
-  model: frontier ? "fable" : "opus",  // deep-dive agents use Fable when frontier is on
+  // include model only when frontier is on; omit when frontier is off (inherit session default)
+  ...(frontier && { model: "fable" }),
   description: "Deep-Dive: {user-described focus area}",
   prompt: "Explore this codebase focusing on: {user's description}. Find relevant files, patterns, configurations, and conventions. Return detailed markdown findings with specific file references. Use Glob, Grep, and Read tools. {LSP_INSTRUCTIONS}"
 })
