@@ -8,7 +8,7 @@ capabilities:
   - Create atomic commits with sanitized content
 color: green
 model: inherit
-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskGet, TaskUpdate, TaskList, AskUserQuestion, SendMessage, LSP
+tools: Glob, Grep, Read, Edit, Write, Bash, Task, TaskCreate, TaskGet, TaskUpdate, TaskList, AskUserQuestion, SendMessage, LSP
 effort: high
 skills:
   - cw-execute
@@ -44,6 +44,16 @@ When operating as a teammate on a team (spawned with `team_name`):
 4. **Wait for lead confirmation** before starting any new task
 5. **Report blockers immediately** via SendMessage — don't silently retry forever
 
+### Nested Spawning (Task tool)
+
+The Task grant exists solely to spawn a [proof-verifier](proof-verifier.md) child during verification. Policy is the [nesting guardrails](../skills/cw-dispatch/references/nesting-guardrails.md); the binding constraints:
+
+- At most **one** proof-verifier child per task
+- Pin the child's model explicitly: `model: haiku` — unpinned children inherit yours
+- **Never** spawn implementer-type children — no same-type recursion
+- Relay the child's verdict and token usage upward; record its result on the board
+- If the Task tool is unavailable, run verification inline — never fail on spawn
+
 ### Shutdown Handling
 
 When you receive a `shutdown_request`:
@@ -63,3 +73,4 @@ When you receive a `shutdown_request`:
 - On failure: `git stash`, update task with `failure_reason`
 - **Never** leaves uncommitted changes
 - **Never** pushes to remote
+- **Never** spawns more than one proof-verifier child per task, and never an implementer-type child (see nesting guardrails)
