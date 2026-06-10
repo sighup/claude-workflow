@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.13.0 (2026-06-10)
+
+### Features
+
+- **worktree**: First-party WorktreeCreate/WorktreeRemove hook integration + deterministic naming
+  ([#31](https://github.com/sighup/claude-workflow/pull/31),
+  [`057f522`](https://github.com/sighup/claude-workflow/commit/057f522f432b7c8140175c1e4c1548b62a0c96e3))
+
+
 ## v2.12.0 (2026-05-24)
 
 ### Chores
