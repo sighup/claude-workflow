@@ -296,9 +296,14 @@ Update task board with proof artifact locations.
 without calling TaskUpdate. If you attempt to exit after Step 8 but before completing
 this step, you will be prompted to call TaskUpdate before stopping.
 
-**Determine your model identity** by checking the model name from your system context (e.g. `sonnet`, `opus`, `haiku`). Record this in `model_used`.
+**Determine your model identity** by checking the model name from your system context (e.g. `sonnet`, `opus`, `haiku`, `fable`). Record this in `model_used`.
+
+**Detect substitution:** compare your actual model identity against `metadata.model` (the model requested during planning). If they differ, a substitution occurred — set `model_requested` to the value from `metadata.model` and `fallback_reason` to a short category. If no substitution occurred, omit both fields.
+
+Common `fallback_reason` categories: `spawn-failed`, `model-unavailable`.
 
 ```
+// No substitution (actual model matches metadata.model):
 TaskUpdate({
   taskId: "<native-id>",
   status: "completed",
@@ -311,13 +316,32 @@ TaskUpdate({
     proof_summary: "T01-proofs.md",
     commit_sha: "<sha from git log>",
     completed_at: "2026-01-24T15:30:00Z",
-    model_used: "sonnet"  // The model you are running as (sonnet, opus, haiku)
+    model_used: "fable"
+  }
+})
+
+// Substitution occurred (e.g. fable requested but sonnet is running):
+TaskUpdate({
+  taskId: "<native-id>",
+  status: "completed",
+  metadata: {
+    proof_dir: "docs/specs/[spec-dir]/[NN]-proofs",
+    proof_results: [
+      { type: "test", status: "pass", output_file: "T01-01-test.txt" },
+      { type: "cli", status: "pass", output_file: "T01-02-cli.txt" }
+    ],
+    proof_summary: "T01-proofs.md",
+    commit_sha: "<sha from git log>",
+    completed_at: "2026-01-24T15:30:00Z",
+    model_used: "sonnet",
+    model_requested: "fable",      // original tier from metadata.model
+    fallback_reason: "spawn-failed" // short category: spawn-failed | model-unavailable
   }
 })
 ```
 
 The `proof_dir` and `proof_summary` fields allow cw-validate to locate artifacts.
-The `model_used` field records which model actually executed the task for auditability.
+The `model_used` field records which model actually executed the task. `model_requested` and `fallback_reason` are set only when a substitution occurred.
 
 ### Step 11: Clean Exit
 
