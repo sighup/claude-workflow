@@ -15,10 +15,6 @@ set -euo pipefail
 # Read hook input from stdin
 INPUT=$(cat)
 
-# Extract metadata from task - TaskCreated hook provides task data
-# The spec assumes task data is nested under .task.metadata
-METADATA=$(echo "$INPUT" | jq -r '.task.metadata // {} | to_entries | map(.key) | @json' 2>/dev/null || echo '[]')
-
 # Required fields that /cw-plan should populate
 REQUIRED_FIELDS=("task_id" "demoable_unit" "spec_path" "scope" "requirements")
 

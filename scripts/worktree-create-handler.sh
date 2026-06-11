@@ -39,6 +39,7 @@ source "$CW_COMMON"
 # The stdout contract is: only the absolute worktree path on success.
 log_error()   { echo "[ERROR] $*" >&2; }
 log_info()    { echo "[INFO] $*" >&2; }
+# shellcheck disable=SC2329
 log_success() { echo "[OK] $*" >&2; }
 log_warning() { echo "[WARN] $*" >&2; }
 export -f log_error log_info log_success log_warning
