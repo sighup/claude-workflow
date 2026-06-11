@@ -21,7 +21,7 @@ Roles without a Task grant (validator, bug-fixer, test-executor, spec-writer, pl
 
 ## Board-Mirroring
 
-**No nested spawn without a corresponding task-board artifact.** Before spawning, the parent ensures the child's work is represented on the board — a task (via TaskCreate) or a metadata entry on the parent's task. Children record results there (TaskUpdate). The board, not the transcript, is the observability plane: anything a grandchild produces is invisible to the orchestrator unless it lands on durable surfaces (board, proof files, git).
+**No nested spawn without a corresponding task-board artifact.** Before spawning, the parent ensures the child's work is represented on the board — a task (via TaskCreate) or a metadata entry on the parent's task. Children holding Task tools record results there (TaskUpdate); read-only children (no Task* tools, e.g. proof-verifier) report in their final message and the parent records the result on the board. The board, not the transcript, is the observability plane: anything a grandchild produces is invisible to the orchestrator unless it lands on durable surfaces (board, proof files, git).
 
 ## Upward Relay: Funnel + Token Accounting
 
@@ -46,7 +46,12 @@ Rationale (probe-verified 2026-06-10): a parent's `subagent_tokens` covers only 
 
 Observed: a plugin-typed child at depth 2 that ended its turn without a TaskUpdate was blocked by the hook and re-prompted to update the board; a deterministic replay of `verify-task-update.sh` confirmed `{"decision":"block"}` on the trigger transcript and silent pass on completed and non-worker transcripts. The depth-1 parent was not blocked for its child's omission.
 
-Design consequence: plugin-typed children at any depth carry the same board-update obligation as depth-1 workers — child definitions and prompts must have the child record its result via TaskUpdate before stopping, or its stop will be blocked. This is the enforcement half of the board-mirroring rule.
+Design consequence: the hook's trigger is conditional, not blanket (probe T01.1). It blocks a stop only when the child's transcript shows the execution skill's all-caps context marker **plus** commit evidence (a commit invocation or a quoted commit-hash metadata key) **without** a completing TaskUpdate. Two compliance paths follow:
+
+1. **Board-updating children** (Task tools granted) record their result via TaskUpdate(status: completed) before stopping — same obligation as depth-1 workers.
+2. **Read-only children** (no Task* tools, e.g. proof-verifier) cannot call TaskUpdate and instead must never emit the trigger signature — no all-caps worker marker, no raw task-metadata JSON, no commit invocations in their output (see the verifier's stop-hook contract). Their transcript never matches the trigger, so they stop silently and the parent records the result.
+
+This is the enforcement half of the board-mirroring rule.
 
 Raw observations: `docs/specs/01-spec-nested-subagent-adoption/proofs/T01.1-01-cli.txt` (transcript alongside at `proofs/subagentstop-probe.md`; spec-local, not committed).
 
