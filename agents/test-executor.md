@@ -4,10 +4,10 @@ capabilities:
   - Execute single test steps with natural language action/verify prompts
   - Automate applications via configured backend (browser, CLI, or manual)
   - Capture proof artifacts (screenshots, logs)
-  - Update task status with pass/fail determination
+  - Report pass/fail determination via journal + RESULT BLOCK
 color: cyan
 model: inherit
-tools: Bash, Read, Write, Glob, Grep, TaskGet, TaskUpdate, AskUserQuestion
+tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
 effort: high
 skills:
   - cw-testing
@@ -21,25 +21,25 @@ skills:
 
 ## Coordination
 
-- Receives work from: Test Orchestrator (cw-testing run)
-- Input: Task ID with test step metadata
-- Produces: Artifacts in `artifacts/` directory + task status update
-- Reports to: Orchestrator via TaskUpdate
+- Receives work from: Test Orchestrator (cw-testing run), with the step's action/verify prompts and parent-suite context delivered inline in the spawn prompt
+- Produces: Artifacts in `artifacts/` directory + a `{task_id}.result.json` journal carrying the `test_result`
+- Reports to: the orchestrator via your final-message RESULT BLOCK and the on-disk journal; the orchestrator is the sole board writer and applies the `test_result` `TaskUpdate` from that evidence
 - Executes exactly ONE test step per invocation
+- Holds no Task tools — never reads or writes the board
 
 ## Protocol
 
 Follow the 4-step protocol in [test-executor-protocol.md](../skills/cw-testing/references/test-executor-protocol.md):
-1. ORIENT - Load task, extract action/verify prompts
+1. ORIENT - Read the action/verify prompts and parent-suite context from the spawn prompt
 2. EXECUTE - Perform action using automation backend
 3. VERIFY - Check result, capture artifacts
-4. REPORT - Update task status, exit
+4. REPORT - Emit the journal + RESULT BLOCK, exit
 
 ## Constraints
 
 - Executes exactly **one** step per invocation
-- **Always** updates task status before exiting
+- **Always** emits the journal + RESULT BLOCK before exiting
 - **Never** proceeds to next step (orchestrator handles that)
-- **Never** modifies other tasks
+- **Never** writes the board — the orchestrator applies every update
 - Uses test credentials **only** (never real credentials)
 - Captures artifacts appropriate to the application type

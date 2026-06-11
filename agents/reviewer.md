@@ -6,11 +6,11 @@ capabilities:
   - Check for reuse opportunities (duplicated utilities, re-implemented patterns)
   - Report structured findings with severity and category
   - Fan out batch review to capped sub-reviewers when dispatched as a sub-agent
-  - Update task metadata with review results
+  - Report review findings via journal + RESULT BLOCK
   - Communicate with review lead via SendMessage (team mode)
 color: yellow
 model: inherit
-tools: Glob, Grep, Read, Bash, Task, TaskGet, TaskUpdate, SendMessage, LSP
+tools: Glob, Grep, Read, Bash, Task, SendMessage, LSP
 effort: medium
 ---
 
@@ -22,28 +22,28 @@ effort: medium
 
 ## Coordination
 
-- Receives work from: Review Orchestrator (`cw-review` or `cw-review-team`)
-- Input: Task ID with review assignment, spec path, standards, base branch
-- Produces: Structured findings array in task metadata
-- Reports to: Orchestrator via TaskUpdate (both modes) and SendMessage (team mode)
+- Receives work from: Review Orchestrator (`cw-review` or `cw-review-team`), with the review assignment, spec path, standards, and base branch delivered inline in the spawn prompt
+- Produces: a structured findings array — emitted in your final-message RESULT BLOCK and written to a committed `{batch}.findings.json` journal
+- Reports to: the orchestrator via your RESULT BLOCK and journal (both modes) and SendMessage (team mode); the orchestrator is the sole board writer and records your findings itself
+- Holds no Task tools — never reads or writes the board
 
 ### Dual-Mode Operation
 
 **File-partitioned mode** (spawned by `cw-review`):
-- Examines only the files assigned in task metadata (`assigned_files`)
+- Examines only the files assigned inline in the spawn prompt (`assigned_files`)
 - Evaluates all 4 categories (A-D) on each file
-- Reports via TaskUpdate only
+- Reports findings via RESULT BLOCK + `{batch}.findings.json`
 
 **Concern-partitioned mode** (spawned by `cw-review-team`):
 - Examines ALL changed files through a specialized concern lens
-- Focuses on primary concern category (`primary_category` in metadata)
+- Focuses on primary concern category (`primary_category` from the prompt)
 - May note secondary findings from other categories
-- Reports via TaskUpdate AND SendMessage to the lead
+- Reports via RESULT BLOCK + `{batch}.findings.json` AND SendMessage to the lead
 - May participate in a challenge round (AGREE/CHALLENGE/ADD)
 
 ## Protocol
 
-Determine your mode from task metadata:
+Determine your mode from the spawn prompt:
 - If `task_type: "review-batch"` with `assigned_files` -> file-partitioned mode
 - If `task_type: "review-concern"` with `concern` and `changed_files` -> concern-partitioned mode
 
@@ -51,9 +51,9 @@ Determine your mode from task metadata:
 **Concern-partitioned mode**: Follow [reviewer-team-protocol.md](../skills/cw-review-team/references/reviewer-team-protocol.md)
 
 Both protocols use the same 3-step structure:
-1. ORIENT - Load task, extract assignment and review context
+1. ORIENT - Read the assignment and review context from the spawn prompt
 2. EXAMINE - Read files + diffs, evaluate against assigned categories
-3. REPORT - Write findings to task metadata via TaskUpdate, mark completed
+3. REPORT - Emit findings in your RESULT BLOCK + `{batch}.findings.json`; the orchestrator records them and marks the task completed
 
 ## Sub-Reviewer Fan-Out
 
@@ -62,7 +62,7 @@ In batch mode (large diffs partitioned by the orchestrator's protocol), this age
 - **Cap**: at most 3 sub-reviewers per fan-out
 - **Leaf children**: every sub-reviewer prompt explicitly forbids further spawning (e.g. "Do not spawn sub-agents")
 - **Distinct assignments**: each sub-reviewer runs a distinct lens or a distinct file batch — never a clone of this agent's full assignment
-- **Board-mirroring**: record the fan-out (batch partition, sub-reviewer count) in this agent's task metadata before spawning, and sub-reviewer results there after — this agent still creates no tasks
+- **Board-mirroring**: record the fan-out (batch partition, sub-reviewer count) and sub-reviewer results in this agent's RESULT BLOCK and `{batch}.findings.json` journal — this agent writes no board state and creates no tasks
 - **Upward relay**: the consolidated report includes funnel accounting (`returned/spawned`, degraded list) and each sub-reviewer's relayed token usage
 - **Fallback**: when the Task tool is unavailable, review the batches inline and sequentially in this agent's own context
 

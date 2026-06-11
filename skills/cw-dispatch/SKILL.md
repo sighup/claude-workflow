@@ -70,7 +70,9 @@ Send a **single message** with multiple Task tool calls for parallel execution.
 
 **Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override.
 
-**CRITICAL: Use EXACTLY this prompt template. Do NOT give workers direct implementation instructions.**
+**Workers hold no Task tools** — they cannot read the board. `TaskGet` the task once here and inline its **complete** assignment into the spawn prompt: `task_id`, `requirements`, `scope` (`files_to_create`, `files_to_modify`, `patterns_to_follow`), `proof_artifacts`, `proof_capture`, `spec_path`, `commit.template`, and `verification.pre`/`verification.post`. A worker with stripped tools has no board fallback, so an incomplete prompt cannot be recovered — verify the serialized assignment is complete before spawning.
+
+**CRITICAL: Use EXACTLY this prompt shape. Do NOT give workers direct implementation instructions — inline the task metadata only.**
 
 ```
 Task({
@@ -79,13 +81,31 @@ Task({
   description: "Execute task T01",
   prompt: "You are worker-1. Your assigned task is T01. Run cw-execute to implement it.
 
+ASSIGNMENT (your sole source of task metadata — you hold no Task tools):
+task_id: T01
+requirements:
+  - <requirement 1>
+  - <requirement 2>
+scope:
+  files_to_create: [<path>, ...]
+  files_to_modify: [<path>, ...]
+  patterns_to_follow: [<path>, ...]
+spec_path: docs/specs/<run>/
+proof_artifacts: [<type/command/expected per artifact>, ...]
+proof_capture: { visual_method: <auto|manual|skip>, tool: <tool> }
+verification:
+  pre:  [<command>, ...]
+  post: [<command>, ...]
+commit_template: \"<type(scope): subject>\"
+
 Constraints:
 - Do not modify files outside your task's scope
-- Do not touch tasks owned by other workers"
+- Do not touch tasks owned by other workers
+- You hold no Task tools — orient from this assignment, hand off via journal + RESULT BLOCK"
 })
 ```
 
-Repeat for each worker with incrementing worker-N identifiers.
+Repeat for each worker with incrementing worker-N identifiers, inlining that task's own metadata.
 
 ### Step 5: Monitor and Report
 

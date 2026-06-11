@@ -2,7 +2,7 @@
 name: cw-execute
 description: "Executes a single task from the task board using the 11-step implementation protocol. This skill should be used after cw-plan or cw-dispatch assigns a task, or when manually implementing a specific task by ID."
 user-invocable: true
-allowed-tools: Glob, Grep, Read, Edit, Write, Bash, Task, TaskCreate, TaskUpdate, TaskList, TaskGet, AskUserQuestion, LSP
+allowed-tools: Glob, Grep, Read, Edit, Write, Bash, Task, AskUserQuestion, LSP
 effort: high
 ---
 
@@ -18,34 +18,30 @@ You are the **Implementer** role in the Claude Workflow system. You execute exac
 
 ## Your Role
 
-You are an **autonomous coding agent**. Your entire context comes from:
-1. The native task board via `TaskList()`/`TaskGet()`
-2. The task's metadata (scope, requirements, proof artifacts)
-3. Git history
-4. The codebase itself
+You are an **autonomous coding agent**. You hold no Task tools and never read or write the board. Your entire context comes from:
+1. Your spawn prompt — the complete assignment inline: `task_id`, requirements, scope (files to create/modify, patterns to follow), proof artifacts, and verification commands
+2. Git history
+3. The codebase itself
 
-You have no memory of previous executions.
+You have no memory of previous executions. You hand your result off through a committed `{task_id}.result.json` journal and a final-message RESULT BLOCK; the orchestrator is the sole board writer and applies your completion from that evidence.
 
 ## Critical Constraints
 
 - **ALWAYS** execute exactly ONE task per invocation
 - **NEVER** skip verification steps — they prevent regressions
 - **ALWAYS** commit on success — partial work is lost between sessions
-- **ALWAYS** update task status via TaskUpdate — next worker depends on it
+- **ALWAYS** hand off via the journal + RESULT BLOCK — the orchestrator depends on it to apply your completion
 - **ALWAYS** leave codebase clean — no uncommitted changes after completion
 - **NEVER** proceed to commit without proof files — proof artifacts are BLOCKING
 - **NEVER** commit unsanitized proofs — security sanitization is BLOCKING
-- **NEVER** mark a task completed without a PASS verification verdict recorded in metadata (Step 9)
+- **NEVER** report a task completed without a PASS verification verdict recorded in the journal (Step 9)
+- **NEVER** read or write the task board — you hold no Task tools; your assignment is fully inline
 
 ## MANDATORY FIRST ACTION
 
-**Call TaskList() immediately before any other action.**
+**Read your assignment from the spawn prompt before any other action.**
 
-```
-TaskList()
-```
-
-If TaskList() returns "No tasks found", report that and exit.
+Your prompt carries the complete assignment inline: `task_id`, requirements, scope, proof artifacts, and verification commands. If the prompt carries no assignment, report that and exit.
 
 ## Proof File Requirements (MANDATORY)
 
@@ -68,18 +64,11 @@ Sanitize in Step 7 before exit — proofs live on disk and could leak if inspect
 Understand current state without making changes.
 
 1. `cd "$(git rev-parse --show-toplevel)"` — always operate from the repo root. All metadata paths (scope files, proof dirs, spec paths) are repo-root-relative; running from a subpackage cwd will create files in the wrong location.
-2. Run `TaskList` to see all tasks
-3. Identify your task:
-   - If assigned (owner matches): use that task
-   - Otherwise: find first unblocked pending task
-4. Run `TaskGet(taskId)` to load full metadata
-5. Verify git status is clean: `git status --porcelain`
-6. Read recent history: `git log --oneline -10`
+2. Parse your assignment from the spawn prompt: `task_id`, requirements, scope (`files_to_create`, `files_to_modify`, `patterns_to_follow`), proof artifacts, `proof_capture`, and the `verification.pre`/`verification.post` commands — all delivered inline. This is your sole source of task metadata; you hold no Task tools.
+3. Verify git status is clean: `git status --porcelain`
+4. Read recent history: `git log --oneline -10`
 
-**Mark task as in_progress:**
-```
-TaskUpdate({ taskId: "<id>", status: "in_progress" })
-```
+The orchestrator set this task to `in_progress` on the board before dispatching you; you do not write status yourself.
 
 ### Step 2: Baseline
 
@@ -287,7 +276,7 @@ The Step 8 commit carries an ordinary implementation message — no metadata tra
 
 1. Capture the now-known sha: `commit_sha=$(git rev-parse HEAD)`
 2. Resolve the run's gitignored results dir `docs/specs/[spec-dir]/results/` (create it if absent)
-3. Write `{task_id}.result.json` there, conforming to [result-journal-schema.md](references/result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, and the Step 6 proof paths/results. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict; finalize the journal at the end of Step 9, before the Step 10 dual-write.
+3. Write `{task_id}.result.json` there, conforming to [result-journal-schema.md](references/result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, and the Step 6 proof paths/results. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict; finalize the journal at the end of Step 9, before the Step 10 RESULT BLOCK.
 
 The journal is written once and never edited after finalization. `commit_sha` is the sole commit-to-task link; the dispatcher verifies it against git before accepting the record.
 
@@ -316,43 +305,37 @@ After 3 FAIL attempts: failure handler with `failed_step: "Verify Full"` and the
 
 ### Step 10: Report
 
-Update task board with proof artifact locations.
+Hand off your result through the journal and the RESULT BLOCK. You hold no Task tools — the orchestrator is the sole board writer and applies your completion `TaskUpdate` itself, after harvesting this evidence.
 
-**Note:** A SubagentStop hook enforces that workers cannot stop after committing
-without calling TaskUpdate. If you attempt to exit after Step 8 but before completing
-this step, you will be prompted to call TaskUpdate before stopping.
+**Note:** A SubagentStop hook enforces that workers cannot stop after committing without handing off. If you attempt to exit after Step 8 but before this step, you will be prompted to emit the `CW-RESULT-BLOCK` sentinel (or confirm the on-disk `{task_id}.result.json` journal exists) before stopping.
 
-This step **dual-writes** — emit the journal's sentinel block in your final message AND issue the legacy completing `TaskUpdate`. Both carry the same evidence; the dispatcher harvests the sentinel first (highest precedence) with the on-disk journal as fallback, while the `TaskUpdate` keeps the board backward-compatible. Issue both — dropping either breaks a harvest path.
+**Determine your model identity** by checking the model name from your system context (e.g. `sonnet`, `opus`, `haiku`). Record this in `model_used` inside the journal.
 
-**Determine your model identity** by checking the model name from your system context (e.g. `sonnet`, `opus`, `haiku`). Record this in `model_used`.
+Finalize the Step 8.5 journal with the verifier fields, then emit the `CW-RESULT-BLOCK` sentinel as the last substantive content of your final message, holding exactly the same fields as the on-disk `{task_id}.result.json`:
 
 ```
-TaskUpdate({
-  taskId: "<native-id>",
-  status: "completed",
-  metadata: {
-    proof_dir: "docs/specs/[spec-dir]/[NN]-proofs",
-    proof_results: [
-      { type: "test", status: "pass", output_file: "T01-01-test.txt" },
-      { type: "cli", status: "pass", output_file: "T01-02-cli.txt" }
-    ],
-    proof_summary: "T01-proofs.md",
-    commit_sha: "<sha from git log>",
-    completed_at: "2026-01-24T15:30:00Z",
-    model_used: "sonnet",  // The model you are running as (sonnet, opus, haiku)
-    verification_mode: "spawned",  // "spawned" | "inline" | "inline-degraded"
-    verifier_verdict: "PASS",      // verbatim Overall verdict; inline: result of inline checks
-    verifier_tokens: 12345         // child usage relayed upward per guardrails; literal "n/a" when inline or inline-degraded
-  }
-})
+CW-RESULT-BLOCK-START
+{
+  "task_id": "T01",
+  "status": "completed",
+  "commit_sha": "<sha from git log>",
+  "proof_dir": "docs/specs/[spec-dir]/[NN]-proofs",
+  "proof_results": [
+    { "type": "test", "status": "pass", "output_file": "T01-01-test.txt" },
+    { "type": "cli",  "status": "pass", "output_file": "T01-02-cli.txt" }
+  ],
+  "proof_summary": "T01-proofs.md",
+  "model_used": "sonnet",
+  "verification_mode": "spawned",
+  "verifier_verdict": "PASS",
+  "verifier_tokens": 12345
+}
+CW-RESULT-BLOCK-END
 ```
 
-The `proof_dir` and `proof_summary` fields allow cw-validate to locate artifacts.
-The `model_used` field records which model actually executed the task for auditability.
+Format and contract: [result-journal-schema.md](references/result-journal-schema.md). Keep the sentinel block and the on-disk journal byte-identical — the orchestrator harvests the sentinel first (highest precedence) and falls back to the journal. The `proof_dir`/`proof_summary` fields let the orchestrator and cw-validate locate artifacts; `model_used` records which model executed the task for auditability.
 
-After the `TaskUpdate`, emit the `CW-RESULT-BLOCK` sentinel as the last substantive content of your final message, holding the same fields as the Step 8.5 journal. Format and contract: [result-journal-schema.md](references/result-journal-schema.md). Keep the block and the on-disk journal identical.
-
-Completion is gated: never set `status: "completed"` (in the board write or the sentinel) unless `verifier_verdict` is PASS.
+Completion is gated: never report `status: "completed"` (in the journal or the sentinel) unless `verifier_verdict` is PASS.
 
 ### Step 11: Clean Exit
 
@@ -377,7 +360,7 @@ Commit: abc1234 feat(scope): description
 
 Verifier: PASS (spawned, haiku, tokens: N) | PASS (inline) | PASS (inline-degraded)
 
-Progress: X/Y tasks complete
+Handoff: RESULT BLOCK emitted + {task_id}.result.json written — awaiting orchestrator harvest
 ```
 
 **Final Verification:**
@@ -400,19 +383,19 @@ Each step allows max 3 retries before failure:
 
 1. Stash partial work: `git stash push -m "cw-execute: {task_id} partial"`
 2. Clean working tree: `git checkout -- .`
-3. Update task (keep as pending, add failure info):
+3. Report the failure in your final-message RESULT BLOCK so the orchestrator (sole board writer) can record it and keep the task dispatchable:
    ```
-   TaskUpdate({
-     taskId: "<id>",
-     status: "pending",
-     metadata: {
-       last_failure: "2026-01-24T15:30:00Z",
-       failure_count: N,
-       failure_reason: "...",
-       failed_step: "Proof|Sanitize|Commit|etc",
-       proof_status: "none|partial|complete"
-     }
-   })
+   CW-RESULT-BLOCK-START
+   {
+     "task_id": "<task_id>",
+     "status": "failed",
+     "last_failure": "2026-01-24T15:30:00Z",
+     "failure_count": N,
+     "failure_reason": "...",
+     "failed_step": "Proof|Sanitize|Commit|etc",
+     "proof_status": "none|partial|complete"
+   }
+   CW-RESULT-BLOCK-END
    ```
 4. Exit with error summary including which step failed
 
@@ -431,7 +414,7 @@ If proof artifacts cannot be created:
 
 ### Resuming Interrupted Tasks
 
-If a task has `status: "in_progress"` when you start:
+The orchestrator re-dispatches a task whose prior worker left no evidence. When you start, check for partial work from that earlier attempt:
 
 1. Check git status for partial work
 2. If uncommitted changes: review and continue from Step 5
@@ -448,6 +431,6 @@ If a task has `status: "in_progress"` when you start:
 ## What Comes Next
 
 After task completion:
-- Next worker picks up the next unblocked task
+- The orchestrator harvests your RESULT BLOCK + journal, applies the completion, and dispatches the next unblocked task
 - `/cw-dispatch` can spawn parallel workers
 - `/cw-validate` checks coverage after all tasks complete

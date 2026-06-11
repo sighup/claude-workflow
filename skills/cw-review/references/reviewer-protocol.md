@@ -10,23 +10,21 @@ Examine only your assigned files. Report findings — never fix code or create t
 
 ### Step 1: Orient
 
-Load the review task and understand what to examine.
+Read the review assignment from the spawn prompt and understand what to examine. You hold no Task tools — the orchestrator delivers the assignment inline.
 
 ```
-1. TaskGet({ taskId: "<task-id>" })
-2. Extract from metadata:
+1. Read the assignment from the spawn prompt:
+   - task_id / batch: stable id of this review batch
    - assigned_files: Array of file paths to review
    - spec_path: Path to the feature spec (may be null)
    - standards_summary: Repository conventions and patterns
    - base_branch: Branch to diff against (e.g. "main")
-3. Output orientation:
-   "REVIEWING BATCH: [task subject]"
+2. Output orientation:
+   "REVIEWING BATCH: [batch subject]"
    "Files: [count] files assigned"
    "Base: [base_branch]"
    "Spec: [spec_path or 'none']"
 ```
-
-**Inline assignment (nested dispatch)**: if your spawn prompt carries the file list directly (no Task ID), skip `TaskGet` and take `assigned_files`, `base_branch`, `spec_path`, and `standards_summary` from the prompt.
 
 ### Step 2: Examine
 
@@ -119,40 +117,25 @@ Severity rules:
 - Categories A, B, C are always `"blocking"`
 - Categories D and E are always `"advisory"`
 
-**Update the task with findings:**
+**Report findings via the RESULT BLOCK** (and a committed `{batch}.findings.json` journal with the same content). You hold no Task tools; the orchestrator harvests this block and records the findings on the board itself.
 
 ```
-TaskUpdate({
-  taskId: "<task-id>",
-  status: "completed",
-  metadata: {
-    review_status: "completed",
-    findings: [
-      { "category": "A", "severity": "blocking", "title": "...", "file": "...", "lines": "...", "description": "...", "suggested_fix": "..." },
-      { "category": "D", "severity": "advisory", "title": "...", "file": "...", "lines": "...", "description": "...", "suggested_fix": "..." }
-    ],
-    files_reviewed: ["path/to/file1.ts", "path/to/file2.ts"],
-    completed_at: "<ISO timestamp>"
-  }
-})
+CW-RESULT-BLOCK-START
+{
+  "task_id": "<batch>",
+  "status": "completed",
+  "review_status": "completed",
+  "findings": [
+    { "category": "A", "severity": "blocking", "title": "...", "file": "...", "lines": "...", "description": "...", "suggested_fix": "..." },
+    { "category": "D", "severity": "advisory", "title": "...", "file": "...", "lines": "...", "description": "...", "suggested_fix": "..." }
+  ],
+  "files_reviewed": ["path/to/file1.ts", "path/to/file2.ts"],
+  "completed_at": "<ISO timestamp>"
+}
+CW-RESULT-BLOCK-END
 ```
 
-If no issues are found, report an empty findings array:
-
-```
-TaskUpdate({
-  taskId: "<task-id>",
-  status: "completed",
-  metadata: {
-    review_status: "completed",
-    findings: [],
-    files_reviewed: ["path/to/file1.ts", "path/to/file2.ts"],
-    completed_at: "<ISO timestamp>"
-  }
-})
-```
-
-**Inline assignment (no batch task)**: report the same structure — `findings` and `files_reviewed` — as JSON in your final message instead of `TaskUpdate`; your parent records it on its own task's metadata.
+If no issues are found, report an empty `findings` array in the same block.
 
 Output result and exit:
 
