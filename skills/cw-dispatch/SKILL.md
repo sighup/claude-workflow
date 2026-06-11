@@ -47,7 +47,7 @@ See [dispatch-common.md](references/dispatch-common.md#mandatory-first-action) f
 
 ### Step 1: Survey Task Board
 
-See [dispatch-common.md](references/dispatch-common.md#survey-task-board) for task categorization, exit conditions, and anti-hallucination check.
+See [dispatch-common.md](references/dispatch-common.md#survey-task-board) for task categorization, exit conditions, and anti-hallucination check. Every candidate exit routes through the [Manifest-Authoritative Exit Gate](references/dispatch-common.md#manifest-authoritative-exit-gate): the dispatcher never exits on board counts alone — an empty/thin board while the manifest holds uncompleted `task_id`s is a wipe signal that triggers reconcile, never exit.
 
 ### Step 2: Identify Parallel Groups
 
@@ -157,7 +157,7 @@ Progress: X/Y tasks complete
 
 ## Continuous Execution
 
-Loop Step 1 → Step 5 → Step 1 until termination conditions fire (`Ready=0+Pending=0` or `Ready=0+Blocked>0`). These are the only stop conditions. Findings, build failures, worker errors, and scope discoveries go in the report — the loop continues with whatever remains dispatchable. Never call AskUserQuestion mid-loop.
+Loop Step 1 → Step 5 → Step 1 until termination conditions fire (`Ready=0+Pending=0` or `Ready=0+Blocked>0`). These conditions are **candidate** stops only — each must clear the [Manifest-Authoritative Exit Gate](references/dispatch-common.md#manifest-authoritative-exit-gate) before the loop actually terminates. With a manifest present, exit requires journal/proof evidence for **every** manifest `task_id`; an empty/thin board with uncompleted manifest `task_id`s is a wipe → reconcile and keep looping, never exit. Absent-manifest (legacy) runs fall back to the count-based conditions after the one-time synth-manifest-from-board step, reported as reduced coverage. Findings, build failures, worker errors, and scope discoveries go in the report — the loop continues with whatever remains dispatchable. Never call AskUserQuestion mid-loop.
 
 **Lease across the loop**: acquire once (Step 3, before the first ownership write), refresh every loop (Step 5.1), and **release at loop exit** so the next phase or dispatcher can take it:
 

@@ -144,12 +144,81 @@ Categorize tasks:
 - **In Progress**: already assigned to a worker
 - **Completed**: done
 
-**Exit conditions (ONLY if verified against actual counts):**
-- If TaskList returns "No tasks found" (empty board): exit with "No tasks on board"
-- If Ready count = 0 but Blocked > 0: exit with "No unblocked tasks - waiting on dependencies"
-- If Ready count = 0 and Pending = 0: exit with "All tasks completed"
+**Exit decisions never rest on board counts alone.** Every condition below that would stop the loop or treat the board as empty is a *candidate* exit — it must clear the [Manifest-Authoritative Exit Gate](#manifest-authoritative-exit-gate) before you act on it. The gate decides whether an empty or thin board means "done" or "wiped."
+
+**Candidate exit conditions (each routes through the gate):**
+- TaskList returns "No tasks found" (empty board): a candidate exit — but with a manifest holding uncompleted `task_id`s this is a **wipe signal**, not "no tasks." Route to the gate → reconcile, never exit.
+- Ready count = 0 but Blocked > 0: candidate "waiting on dependencies" — route to the gate; a blocker that vanished from the board while the manifest still expects it is a wipe holding the dependent Blocked, not a real wait.
+- Ready count = 0 and Pending = 0: candidate "all tasks completed" — route to the gate; exit only once the gate confirms journal/proof evidence for **every** manifest `task_id`.
 
 **ANTI-HALLUCINATION CHECK**: Before exiting, verify your exit reason matches the counts you reported above. If you claimed "Pending Unblocked: 32" but are about to say "no tasks", STOP and re-read TaskList output.
+
+## Manifest-Authoritative Exit Gate
+
+The board is a convergent view that the native store can silently wipe mid-run; the planner's manifest is the loss oracle that cannot. **The dispatcher never exits on board counts alone.** Every candidate exit from [Survey Task Board](#survey-task-board) and the [Pre-Exit Verification](#pre-exit-verification) routes through this gate. The gate's job is to tell "the run is genuinely done" apart from "the board was wiped and looks done."
+
+### Step A — Load the manifest
+
+Read `~/.claude/tasks/.manifest/<list-id>/manifest.json` (`<list-id>` is `CLAUDE_CODE_TASK_LIST_ID`). Three outcomes determine which branch of the gate applies:
+
+- **Manifest present, `partial: false`** → authoritative. Its `tasks[]` (each a stable `task_id` + `blockedBy[]` + full `metadata`) is the canonical task set. Proceed to Step B.
+- **Manifest present, `partial: true`** → advisory only (an interrupted plan). Use it as a hint for reconcile but do not block exit on its completeness; fall through to the absent-manifest path for the exit decision.
+- **Manifest absent** → **legacy / absent-manifest fallback.** No cross-check is possible, so exit reverts to the current count-based behavior: the candidate exit conditions in Survey Task Board apply as written (empty board = "no tasks", `Ready=0 ∧ Pending=0` = "all complete"). Before accepting an absent-manifest run, perform the one-time [synth-manifest-from-board](#synth-manifest-from-board) step so subsequent loops gain the gate. Document in the report that this run has **reduced coverage** — the gate cannot detect a wipe that predates the synth.
+
+The absent-manifest case is **explicitly distinct** from a manifest that is present but projects to an empty/thin board. The former is legacy with no oracle (count-based exit allowed); the latter is **suspicious — a wipe — and must reconcile, never exit.** Never collapse the two.
+
+### Step B — Project the board against the manifest
+
+For each manifest `task_id`, classify it by evidence, not by board status:
+
+1. **Evidence-complete** — a sha-verified `{task_id}.result.json` exists (`commit_sha` reachable in git via `git cat-file -e <sha>^{commit}` and `git merge-base --is-ancestor <sha> HEAD`), **or** the proof dir holds `{task_id}-proofs.md` plus at least one `{task_id}-*.txt` with a reconstructable, git-reachable implementation commit. This is the same evidence order as [Harvest-and-Apply](#harvest-and-apply).
+2. **Present-incomplete** — the `task_id` is on the live board (pending/in_progress) with no completion evidence. Normal in-flight work; the loop keeps dispatching it.
+3. **Missing** — the manifest expects the `task_id` but it is **absent from the live board** and has **no** completion evidence on disk. This is the wipe signature.
+
+**Wipe signal:** any `task_id` in class 3 — manifest-expected, board-absent, evidence-absent — means the store dropped task state. Do **not** exit. Trigger [Step C reconcile](#step-c--reconcile-never-burst). An empty or thin board while the manifest holds any class-2 or class-3 `task_id` is never "done."
+
+### Step C — Reconcile (never burst)
+
+Reconcile restores missing `task_id`s before any exit decision. **Prefer filesystem restore first; re-create only what restore could not recover; never a write burst.**
+
+1. **Disambiguate stale-read from real loss.** A `task_id` absent from one `TaskList` snapshot may be a stale per-process read, not a wipe. Before treating it as missing, confirm the loss on disk: `TaskGet` the manifest id directly and stat its `N.json` under `~/.claude/tasks/<list-id>/`. Only a `task_id` with no live native record **and** no on-disk task file is truly lost. Mere absence from one snapshot is not loss.
+
+2. **Prefer the guard's filesystem restore.** The slimmed backstop guard mirrors the board and restores a wiped `N.json` from its shadow whenever no writer lease blocks it. Give it a chance before re-creating anything:
+   - Check `~/.claude/tasks/.guard/incidents.log` for a recent restore entry for the list.
+   - Wait one poll tick, then re-read `TaskList` (separate message). A class-3 `task_id` that reappears was restored by the guard — no re-creation needed.
+   - The guard restores **existence**; the orchestrator/evidence owns **status**. A guard-restored task re-enters as its prior status and converges through normal harvest.
+
+3. **Re-create still-missing tasks ONE at a time, from manifest metadata, with a read-back between each.** For each `task_id` the guard did not restore, apply a single `TaskCreate` from the manifest entry's verbatim `metadata`, then a `TaskGet` read-back before the next — never a burst. A burst of reconcile writes is the proven board-wipe trigger.
+
+   a. Append a reconcile-intent line to the harvest-checkpoint file before the write: `echo "${task_id}:reconcile-recreate:$(date -u +%s)" >> "docs/specs/<run>/results/harvest-checkpoint.log"`.
+
+   b. `TaskCreate` the task from `manifest.tasks[task_id].metadata`. **Resolve native ids at write time:** re-creation assigns a new native id — never reuse a cached one. Record the fresh `task_id → native_id` mapping for this loop.
+
+   c. `TaskGet` read-back (separate message) to confirm the create landed. If it did not, re-apply that single create before moving on.
+
+4. **Rewire edges from stable `task_id`, never native id.** After the missing tasks exist, re-apply `addBlockedBy` from each manifest entry's `blockedBy[]`, resolving every `task_id` to its **current** native id through the loop's mapping (re-created tasks hold new native ids; a cached native id is always wrong). A dependent stays Blocked until its manifest-declared blockers are evidence-complete — a vanished prerequisite never un-blocks its dependent. Apply these edge writes serially with the same checkpoint + read-back cadence.
+
+After reconcile, **re-read `TaskList` and re-run the gate from Step B.** Exit is reconsidered only once no class-3 `task_id` remains.
+
+### Step D — Evidence-gated exit
+
+Exit is permitted **only** when every manifest `task_id` is evidence-complete (class 1 from Step B): a sha-verified `{task_id}.result.json` or a complete, git-reachable proof set for each. Board status alone never satisfies the gate.
+
+- **All manifest `task_id`s evidence-complete** → genuine completion. Exit with "All tasks completed (manifest-verified: N/N)". Release the lease per the loop-exit path.
+- **Any `task_id` present-incomplete (class 2)** → work remains; continue the loop (this is a normal "still running" state, not an exit).
+- **Any `task_id` missing (class 3)** → wipe; reconcile (Step C), never exit.
+
+A blocked-only board (`Ready=0 ∧ Blocked>0`) exits as "waiting on dependencies" **only** if the gate confirms every blocker holding those dependents is a real manifest dependency that is itself either evidence-complete or legitimately in-flight — not a class-3 wipe masquerading as a dependency wait.
+
+### Synth-Manifest-from-Board
+
+When the gate activates on a pre-existing board that has no manifest (a run planned before manifests, or a board built by hand), synthesize one **once** so later loops gain wipe detection:
+
+1. Read the live board: `TaskList`, then `TaskGet` per task.
+2. Write `~/.claude/tasks/.manifest/<list-id>/manifest.json` from that read using the same shape the planner writes (one entry per task: stable `task_id` from `metadata.task_id`, `blockedBy[]` resolved to `task_id`s, full `metadata` verbatim, no native ids). Use the atomic temp-rename write.
+3. Mark it advisory: this manifest reflects **current board state**, not the original plan — any task already lost before the synth is unrecoverable and invisible to it. Set `partial: false` (it is complete as a snapshot) but document in the report that the run has **reduced coverage**: the gate detects wipes from this point forward only.
+
+A synthesized manifest is a board-state snapshot, never a substitute for a planner manifest. Pre-manifest boards get reduced, not full, coverage — state this explicitly wherever the run is reported.
 
 ## Identify Parallel Groups
 
@@ -182,10 +251,10 @@ For each pair of tasks (A, B) in the group:
 Before outputting any completion or "no tasks" message, verify:
 
 1. **Re-check your reported counts**: Look at the TASK BOARD STATUS you printed earlier
-2. **Match your conclusion to the data**:
-   - "No tasks to dispatch" requires Pending Unblocked = 0
-   - "All complete" requires Pending = 0 AND In Progress = 0
-3. **If counts don't match your conclusion**: Re-read TaskList output and correct
+2. **Clear the Manifest-Authoritative Exit Gate**: route the candidate exit through the [gate](#manifest-authoritative-exit-gate). A completion or "no tasks" message is permitted **only** when the gate's evidence test passes:
+   - **Manifest present**: every manifest `task_id` is evidence-complete (sha-verified `result.json` or a complete git-reachable proof set). An empty/thin board with any manifest `task_id` still missing or present-incomplete is a **wipe or in-flight state — reconcile or keep looping, never exit.** Board counts of zero never substitute for per-`task_id` evidence.
+   - **Manifest absent (legacy)**: fall back to count-based matching — "no tasks to dispatch" requires Pending Unblocked = 0; "all complete" requires Pending = 0 AND In Progress = 0 — after the one-time [synth-manifest-from-board](#synth-manifest-from-board) step, and report the run as reduced-coverage.
+3. **If the gate or the counts don't match your conclusion**: re-read TaskList output, reconcile if the manifest signals a wipe, and correct.
 
 **WARNING**: If you find yourself writing a detailed "completion report" with stats like "151 proof artifacts" or "63 library files" that you did NOT just count from TaskList, you are hallucinating. STOP and re-run TaskList.
 
