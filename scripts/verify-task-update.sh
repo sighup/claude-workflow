@@ -2,13 +2,24 @@
 # verify-task-update.sh
 # SubagentStop hook for cw-execute workers
 #
-# Ensures workers that commit code also call TaskUpdate(status='completed').
+# Ensures workers that commit code also record completion evidence.
 # This prevents task board inconsistency when workers exhaust context after committing.
+#
+# Dual completion contract (migration window): a committed worker may signal
+# completion through EITHER handoff path —
+#   - durable journal: the CW-RESULT-BLOCK sentinel in the final message, OR an
+#     on-disk {task_id}.result.json under the run's results dir
+#   - legacy board write: TaskUpdate(status='completed')
+# Either satisfies the gate; the legacy branch is retained for backward/rollback
+# safety and is removed once the single-writer cut-over completes.
 #
 # Decision logic:
 # - No commit happened → Allow stop (incomplete work, cw-loop will retry)
-# - Commit + TaskUpdate(completed) → Allow stop (protocol complete)
-# - Commit without TaskUpdate(completed) → Block stop (must complete Phase 10)
+# - Commit + (journal evidence OR TaskUpdate(completed)) → Allow stop
+# - Commit with neither → Block stop (write the journal + emit the sentinel)
+#
+# Best-effort, in-session only: this hook does not fire for headless `claude -p`
+# workers or on SIGKILL. The dispatcher's git + proof harvest is the authority.
 
 set -e
 
@@ -49,7 +60,28 @@ if [ "$COMMIT_HAPPENED" = false ]; then
   exit 0
 fi
 
-# Commit happened - check if TaskUpdate was called with status='completed'
+# Commit happened - look for completion evidence under EITHER contract.
+
+# Durable-journal contract: the CW-RESULT-BLOCK sentinel emitted in the final
+# message, or an on-disk {task_id}.result.json written under a results dir.
+JOURNAL_PRESENT=false
+if grep -q 'CW-RESULT-BLOCK-START' "$TRANSCRIPT" 2>/dev/null; then
+  JOURNAL_PRESENT=true
+fi
+# An on-disk {task_id}.result.json is equally valid, but only THIS worker's own
+# journal counts — a stale journal from a prior task in the shared results dir
+# must not satisfy an unrelated worker's gate. Scope the check to the task_id the
+# worker names in its transcript.
+if [ "$JOURNAL_PRESENT" = false ]; then
+  TASK_ID=$(grep -o '"task_id":[ ]*"[^"]*"' "$TRANSCRIPT" 2>/dev/null \
+    | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  if [ -n "$TASK_ID" ] && \
+     ls docs/specs/*/results/"$TASK_ID".result.json >/dev/null 2>&1; then
+    JOURNAL_PRESENT=true
+  fi
+fi
+
+# Legacy board-write contract: TaskUpdate(status='completed').
 TASK_UPDATED=false
 if grep -q '"status":[ ]*"completed"' "$TRANSCRIPT" 2>/dev/null && \
    grep -q '"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null; then
@@ -62,17 +94,17 @@ if grep -q '"tool_name":[ ]*"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null && \
   TASK_UPDATED=true
 fi
 
-# If TaskUpdate was called, allow stop
-if [ "$TASK_UPDATED" = true ]; then
+# Either contract satisfies the gate during migration.
+if [ "$JOURNAL_PRESENT" = true ] || [ "$TASK_UPDATED" = true ]; then
   exit 0
 fi
 
-# FAILURE CASE: Commit happened but TaskUpdate wasn't called
-# Block the stop and instruct the worker to complete Phase 10
+# FAILURE CASE: Commit happened but no completion evidence under either contract.
+# Block the stop and instruct the worker to record the durable handoff.
 cat << 'EOF'
 {
   "decision": "block",
-  "reason": "You committed code but did not call TaskUpdate. Complete Phase 10 of the cw-execute protocol:\n\nTaskUpdate({\n  taskId: '<your-task-id>',\n  status: 'completed',\n  metadata: {\n    proof_dir: 'docs/specs/.../NN-proofs',\n    commit_sha: '<sha from git log --oneline -1>',\n    completed_at: '<ISO timestamp>'\n  }\n})\n\nThis ensures the task board reflects your completed work."
+  "reason": "You committed code but recorded no completion evidence. Write the result journal and emit the sentinel:\n\n1. Write {task_id}.result.json into docs/specs/<run>/results/ (commit_sha, status, proof paths — see result-journal-schema.md).\n2. Emit the fenced CW-RESULT-BLOCK-START ... CW-RESULT-BLOCK-END sentinel as the final message, holding the same fields.\n\nDuring migration a completing TaskUpdate(status='completed') is also accepted. This ensures the dispatcher can harvest your completed work."
 }
 EOF
 exit 0
