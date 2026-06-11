@@ -5,17 +5,21 @@
 # Ensures workers that commit code also record completion evidence.
 # This prevents task board inconsistency when workers exhaust context after committing.
 #
-# Single-writer contract: a committed worker signals completion through the
-# durable journal handoff path only —
-#   - CW-RESULT-BLOCK sentinel in the final message, OR
-#   - an on-disk {task_id}.result.json under the run's results dir
-# The legacy TaskUpdate(status='completed') branch has been removed; the
-# dispatcher is the sole board writer and harvests journals/proofs directly.
+# Dual completion contract (this release): a committed worker may signal
+# completion through EITHER handoff path —
+#   - durable journal: the CW-RESULT-BLOCK sentinel in the final message, OR an
+#     on-disk {task_id}.result.json under the run's results dir
+#   - legacy board write: TaskUpdate(status='completed')
+# The journal path is authoritative and the only one current worker protocols
+# emit; the legacy branch is retained through this release for rollback safety
+# so a session running an older worker protocol (e.g. the installed plugin
+# cache, which still completes via TaskUpdate) is not wrongly blocked. It is
+# removed only after the single-writer cut-over has proven out in production.
 #
 # Decision logic:
 # - No commit happened → Allow stop (incomplete work, cw-loop will retry)
-# - Commit + journal evidence → Allow stop
-# - Commit with no journal evidence → Block stop (write the journal + emit the sentinel)
+# - Commit + (journal evidence OR TaskUpdate(completed)) → Allow stop
+# - Commit with neither → Block stop (write the journal + emit the sentinel)
 #
 # Best-effort, in-session only: this hook does not fire for headless `claude -p`
 # workers or on SIGKILL. The dispatcher's git + proof harvest is the authority.
@@ -59,7 +63,7 @@ if [ "$COMMIT_HAPPENED" = false ]; then
   exit 0
 fi
 
-# Commit happened - look for durable journal evidence.
+# Commit happened - look for completion evidence under EITHER contract.
 
 # Durable-journal contract: the CW-RESULT-BLOCK sentinel emitted in the final
 # message, or an on-disk {task_id}.result.json written under a results dir.
@@ -80,17 +84,32 @@ if [ "$JOURNAL_PRESENT" = false ]; then
   fi
 fi
 
-# Journal evidence is the only accepted contract.
-if [ "$JOURNAL_PRESENT" = true ]; then
+# Legacy board-write contract: TaskUpdate(status='completed'). Retained through
+# this release for rollback safety (older worker protocols still complete this
+# way); the journal path above is authoritative for current protocols.
+TASK_UPDATED=false
+if grep -q '"status":[ ]*"completed"' "$TRANSCRIPT" 2>/dev/null && \
+   grep -q '"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null; then
+  TASK_UPDATED=true
+fi
+
+# Also check for the tool_name format
+if grep -q '"tool_name":[ ]*"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null && \
+   grep -q '"status":[ ]*"completed"' "$TRANSCRIPT" 2>/dev/null; then
+  TASK_UPDATED=true
+fi
+
+# Either contract satisfies the gate during this release.
+if [ "$JOURNAL_PRESENT" = true ] || [ "$TASK_UPDATED" = true ]; then
   exit 0
 fi
 
-# FAILURE CASE: Commit happened but no journal evidence.
+# FAILURE CASE: Commit happened but no completion evidence under either contract.
 # Block the stop and instruct the worker to record the durable handoff.
 cat << 'EOF'
 {
   "decision": "block",
-  "reason": "You committed code but recorded no completion evidence. Write the result journal and emit the sentinel:\n\n1. Write {task_id}.result.json into docs/specs/<run>/results/ (commit_sha, status, proof paths — see result-journal-schema.md).\n2. Emit the fenced CW-RESULT-BLOCK-START ... CW-RESULT-BLOCK-END sentinel as the final message, holding the same fields.\n\nThe dispatcher (sole board writer) harvests your journal directly — do not call TaskUpdate."
+  "reason": "You committed code but recorded no completion evidence. Write the result journal and emit the sentinel:\n\n1. Write {task_id}.result.json into docs/specs/<run>/results/ (commit_sha, status, proof paths — see result-journal-schema.md).\n2. Emit the fenced CW-RESULT-BLOCK-START ... CW-RESULT-BLOCK-END sentinel as the final message, holding the same fields.\n\nThe dispatcher (sole board writer) harvests your journal directly; a completing TaskUpdate(status='completed') from an older worker protocol is also accepted this release."
 }
 EOF
 exit 0
