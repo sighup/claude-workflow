@@ -26,7 +26,7 @@ Load the review task and understand what to examine.
    "Spec: [spec_path or 'none']"
 ```
 
-**Inline assignment (nested dispatch)**: if your spawn prompt carries the file list directly (no Task ID), skip `TaskGet` and take `assigned_files`, `base_branch`, and `spec_path` from the prompt.
+**Inline assignment (nested dispatch)**: if your spawn prompt carries the file list directly (no Task ID), skip `TaskGet` and take `assigned_files`, `base_branch`, `spec_path`, and `standards_summary` from the prompt.
 
 ### Step 2: Examine
 
@@ -44,7 +44,7 @@ For each file in assigned_files:
      Read({ file_path: "<spec_path>" })
      (Only read spec once, on first file)
 
-  4. Evaluate against all four categories (see below).
+  4. Evaluate against all five categories (see below).
      When LSP is available (check by probing `documentSymbol` on the first file — if it returns symbols, `lsp_available = true`):
      - `findReferences` to trace call sites of changed functions and detect ripple effects
      - `goToImplementation` to verify interface contracts are maintained after changes
@@ -84,6 +84,19 @@ For each file in assigned_files:
 - Performance concerns (N+1 queries, unnecessary loops)
 - Inconsistency with repository patterns
 
+#### Category E: Reuse (Advisory)
+
+- New utility functions that duplicate existing ones in the codebase
+- Re-implemented patterns that an existing module already provides
+- Copy-pasted logic that should be extracted to a shared module
+- New constants or configuration values that already exist elsewhere
+
+**Reuse check** for each new function in the diff:
+1. `Grep` for its name and common synonyms across the codebase
+2. `Glob` for `**/utils/**` and `**/helpers/**` to check for existing utilities
+3. Check `package.json` dependencies for libraries that already provide the pattern
+4. Flag duplicates as advisory — the implementer may have had a good reason to create a new version
+
 ### Step 3: Report
 
 Write all findings to task metadata and mark completed.
@@ -92,7 +105,7 @@ Write all findings to task metadata and mark completed.
 
 ```json
 {
-  "category": "A|B|C|D",
+  "category": "A|B|C|D|E",
   "severity": "blocking|advisory",
   "title": "Short description of the issue",
   "file": "path/to/file.ts",
@@ -104,7 +117,7 @@ Write all findings to task metadata and mark completed.
 
 Severity rules:
 - Categories A, B, C are always `"blocking"`
-- Category D is always `"advisory"`
+- Categories D and E are always `"advisory"`
 
 **Update the task with findings:**
 

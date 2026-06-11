@@ -170,7 +170,7 @@ Nested mode (no batch tasks — the assignment travels inline):
 Task({
   subagent_type: "claude-workflow:reviewer",
   description: "Review batch [N]",
-  prompt: "Review these files: [file list]. Base branch: [base]. Spec: [spec_path or none]. Read protocol at: skills/cw-review/references/reviewer-protocol.md. Report findings as JSON in your final message. Do not spawn sub-agents."
+  prompt: "Review these files: [file list]. Base branch: [base]. Spec: [spec_path or none]. Standards: [standards_summary]. Read protocol at: skills/cw-review/references/reviewer-protocol.md. Report findings as JSON in your final message. Do not spawn sub-agents."
 })
 ```
 
