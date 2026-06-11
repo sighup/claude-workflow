@@ -10,6 +10,97 @@ Workers may spawn children of their own (reviewer fan-out, implementer proof-ver
 
 Never combine a task write (`TaskUpdate`, `TaskCreate`) with a task read (`TaskList`, `TaskGet`) for the same task list in one parallel tool batch — issue them in separate messages, write first. A concurrent write+read can race the task store and wipe every task file on the board. If a TaskList result contradicts a TaskUpdate you just made (stale status), STOP issuing task calls and re-read with TaskGet before continuing — that staleness is the precursor to the wipe.
 
+## Single-Writer Discipline
+
+The native task store wipes or drops task state when two or more processes sharing one `CLAUDE_CODE_TASK_LIST_ID` issue task-tool calls at overlapping times. The execute phase removes that trigger: **only the dispatcher (this orchestrator) ever issues task-tool writes.** Workers carry their assignment inline, hold no Task tools, and hand off through a committed implementation plus a per-task journal — `{task_id}.result.json` in the run's gitignored `docs/specs/<run>/results/` — and a `CW-RESULT-BLOCK` sentinel in their final message. You harvest that evidence and apply every `TaskUpdate` yourself, serially, under a cross-process writer lease.
+
+Two rules make this safe:
+
+- **Lease before any board write.** Hold the writer lease across the whole run so no second dispatcher, resumed session, or backstop guard writes concurrently.
+- **Serial, never burst.** Apply one `TaskUpdate` per message, write a harvest-checkpoint line before each and read it back with `TaskGet` after each. A burst of reconcile writes is the proven wipe trigger.
+
+### Writer Lease Lifecycle
+
+The lease is `scripts/cw-lease.sh` — an atomic `mkdir`-based lease at `~/.claude/tasks/<list-id>.writer` holding `pid+host+heartbeat+phase`, reclaimable only once its heartbeat exceeds the TTL. `<list-id>` is `CLAUDE_CODE_TASK_LIST_ID`. Invoke it via `"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh"`.
+
+1. **Export a stable owner id once, before acquiring**:
+   ```bash
+   export CW_LEASE_PID=$$
+   ```
+   The lease records ownership as `CW_LEASE_PID` + host. Exporting a stable value (your shell pid) lets a later `refresh`/`release` — even from a separate CLI invocation the orchestrator drives — still match the holder. Without it, each invocation defaults to its own `$$` and cannot refresh or release a lease an earlier invocation took.
+
+2. **Acquire before the first board write** (Step 3 ownership writes), acquire-or-wait:
+   ```bash
+   "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
+   ```
+   `acquire` blocks until the lease is free or reclaimable, then takes it — it **never proceeds-with-warning**. Issue no `TaskUpdate`/`TaskCreate` until it returns success. A second dispatcher or resumed session waits here rather than racing you.
+
+3. **Refresh each loop** (Step 5), so the heartbeat advances and the lease is never mistaken for stale while you still hold it:
+   ```bash
+   "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"
+   ```
+   `refresh` fails if you are not the holder — if it does, stop writing and re-check `status`; another writer holds the lease and your single-writer assumption is broken.
+
+4. **Release at loop exit** — every termination path, including the early exits in [Survey Task Board](#survey-task-board):
+   ```bash
+   "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
+   ```
+   Release is idempotent and owner-checked. A leaked live lease blocks the next writer until its TTL expires, so always release.
+
+The slimmed backstop guard runs mirror/log-only while any writer lease is held, so guard and orchestrator are coordinated writers, never independent ones.
+
+### Harvest-and-Apply
+
+Workers never mark themselves done. After each batch joins, resolve each joined `task_id`'s outcome from durable evidence and apply the completion yourself. Run this for every task in the batch.
+
+**1. Resolve the outcome by evidence order** (first hit wins):
+
+1. **RESULT BLOCK** — scan the worker's final message from the first `CW-RESULT-BLOCK-START` line to the matching `CW-RESULT-BLOCK-END` and parse the enclosed JSON. Highest precedence. If it fails to parse, lacks required fields, or has `status != "completed"`, fall through.
+2. **`{task_id}.result.json`** — read the journal from `docs/specs/<run>/results/{task_id}.result.json`. The block and journal carry identical fields; the journal is the fallback when the worker died before emitting a final message.
+3. **Proof-dir scan by `task_id`** — when neither journal nor block exists, scan the proof dir for `{task_id}-*` artifacts and reconstruct `proof_results` (type + pass/fail + filename) from them plus the `{task_id}-proofs.md` summary. The `commit_sha` is then the worker's implementation commit found in `git log`.
+
+A `task_id` with no RESULT BLOCK, no journal, and no proofs has **no completion evidence** — do not mark it completed. It is re-dispatched on a later loop (re-dispatch and dead-worker handling are covered separately under [Error Handling](#error-handling)).
+
+**2. Verify the commit sha is reachable in git** (mandatory — the sha is the only commit-to-task link, since commits carry no metadata trailers):
+
+```bash
+git cat-file -e "${commit_sha}^{commit}" 2>/dev/null && \
+  git merge-base --is-ancestor "$commit_sha" HEAD
+```
+
+The sha must both exist as a commit **and** be reachable from `HEAD` (not reverted, not from a stale prior run). If verification fails, **do not mark the task completed** — log the sha verification failure for that `task_id` and leave it for re-dispatch. A `result.json` carried over from a previous run referencing a vanished or unreachable sha is rejected here.
+
+**3. Apply ONE `TaskUpdate` at a time** — never a batch. For each task whose evidence verified:
+
+a. **Write a harvest-checkpoint line first.** Append the `task_id` to the run's harvest-checkpoint file under the results dir, before the board write:
+   ```bash
+   echo "$task_id" >> "docs/specs/<run>/results/harvest-checkpoint.log"
+   ```
+   A session interrupted mid-harvest reads this file on resume and skips already-applied `task_id`s, so a completion is never applied twice and the harvest is restartable. (The checkpoint records intent before the write; a read-back that shows the task already completed confirms the prior write landed.)
+
+b. **Apply the single completion**, resolving the live native id for the `task_id` at write time (never cross-reference a cached native id — re-creation reassigns them):
+   ```
+   TaskUpdate({
+     taskId: "<live native id for this task_id>",
+     status: "completed",
+     metadata: {
+       proof_dir, proof_results, proof_summary,
+       commit_sha, completed_at,
+       verifier_verdict, verifier_tokens, verification_mode,
+       model_used
+     }
+   })
+   ```
+   Populate `metadata` from the resolved evidence record (the RESULT BLOCK / journal fields).
+
+c. **Read back with `TaskGet` after** — in a separate message, never batched with the write:
+   ```
+   TaskGet({ taskId: "<live native id>" })
+   ```
+   Confirm `status: "completed"`. If the read-back contradicts the write you just applied, the store dropped it (or you read a stale snapshot) — stop bursting, re-read, and re-apply that single write before moving to the next task. This per-task write→checkpoint→read-back cadence is what keeps the reconcile off the burst path that wipes the board.
+
+Apply tasks one at a time through (a)–(c) before starting the next. A batch of completions issued together is exactly the multi-write burst this discipline exists to prevent.
+
 ## Mandatory First Action
 
 **Call TaskList() immediately before any other action.**

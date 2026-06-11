@@ -33,6 +33,7 @@ You are a **Team Lead** who:
 - **NEVER** use TodoWrite — use the native TaskList/TaskUpdate tools only
 - **ALWAYS** set task ownership before spawning
 - **ALWAYS** respect dependency ordering
+- **YOU are the single writer.** Workers hold no Task tools — every board mutation in the run (ownership + completion) is yours. Hold the writer lease while writing and apply each write serially. See [dispatch-common.md](references/dispatch-common.md#single-writer-discipline).
 
 ### Why Workers Must Invoke cw-execute
 
@@ -52,9 +53,20 @@ See [dispatch-common.md](references/dispatch-common.md#survey-task-board) for ta
 
 See [dispatch-common.md](references/dispatch-common.md#identify-parallel-groups) for grouping logic and example.
 
-### Step 3: Assign Ownership
+### Step 3: Acquire the Writer Lease
 
-For each task being dispatched:
+You are the run's single writer. **Before your first board write** (the ownership writes in Step 3b), acquire the cross-process writer lease so no second dispatcher, resumed session, or guard write fights you. Acquire-or-wait — never proceed without it. Full lifecycle (stable `CW_LEASE_PID`, per-loop refresh, release at exit): [dispatch-common.md](references/dispatch-common.md#writer-lease-lifecycle).
+
+```bash
+export CW_LEASE_PID=$$   # stable owner id reused by refresh/release across invocations
+"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
+```
+
+`acquire` blocks until the lease is free or reclaimable. Do not issue any `TaskUpdate`/`TaskCreate` until it returns success.
+
+### Step 3b: Assign Ownership
+
+Lease held. For each task being dispatched, apply the ownership write **serially** (one `TaskUpdate` per message, never batched with a read):
 
 ```
 TaskUpdate({
@@ -107,13 +119,16 @@ Constraints:
 
 Repeat for each worker with incrementing worker-N identifiers, inlining that task's own metadata.
 
-### Step 5: Monitor and Report
+### Step 4.5: Harvest and Apply
 
-After workers complete:
+Workers hold no Task tools — they never mark themselves done. **After each batch joins, you harvest their durable evidence and apply every completion yourself.** For each joined worker's `task_id`, resolve its outcome by evidence order (RESULT BLOCK → `{task_id}.result.json` → proof-dir scan by `task_id`), verify the journal's `commit_sha` is reachable in git, then apply **one** `TaskUpdate(completed)` at a time — writing a harvest-checkpoint line **before** each and doing a `TaskGet` read-back **after** each. Never a burst. Full protocol: [dispatch-common.md](references/dispatch-common.md#harvest-and-apply).
 
-1. Run `TaskList` to check final state
-2. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
-3. Report results:
+### Step 5: Refresh, Monitor, and Report
+
+1. **Refresh the lease**: `"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"` so the heartbeat advances each loop (a stale lease becomes reclaimable by another writer)
+2. Run `TaskList` to check final state — the completions you applied in Step 4.5 are the board's source of truth, not any worker self-report
+3. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
+4. Report results:
 
 ```
 CW-DISPATCH COMPLETE
@@ -137,6 +152,14 @@ Progress: X/Y tasks complete
 ## Continuous Execution
 
 Loop Step 1 → Step 5 → Step 1 until termination conditions fire (`Ready=0+Pending=0` or `Ready=0+Blocked>0`). These are the only stop conditions. Findings, build failures, worker errors, and scope discoveries go in the report — the loop continues with whatever remains dispatchable. Never call AskUserQuestion mid-loop.
+
+**Lease across the loop**: acquire once (Step 3, before the first ownership write), refresh every loop (Step 5.1), and **release at loop exit** so the next phase or dispatcher can take it:
+
+```bash
+"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
+```
+
+Release is idempotent and owner-checked (it uses the same `CW_LEASE_PID` you exported in Step 3). Release whenever the loop terminates — including the early-exit conditions in [dispatch-common.md](references/dispatch-common.md#survey-task-board). Never leave a held lease behind; a leaked live lease blocks the next writer until its TTL expires.
 
 ## Conflict Prevention
 
