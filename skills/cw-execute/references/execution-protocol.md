@@ -117,6 +117,20 @@ Proof commands run inline here because the on-disk artifacts must be written (th
 
 **Exit criteria**: Implementation files committed.
 
+## Step 8.5: Write Result Journal
+
+**Goal**: Record durable handoff evidence the dispatcher harvests to apply your board update.
+
+The commit in Step 8 carries an ordinary implementation message — no metadata trailers, and the journal is never committed. After it lands, capture the now-known `commit_sha` and write the journal:
+
+1. `commit_sha=$(git rev-parse HEAD)`
+2. Resolve the results directory: `docs/specs/[spec-dir]/results/` (the run's gitignored results dir; create it if absent)
+3. Write `{task_id}.result.json` into that directory, conforming to [result-journal-schema.md](result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, and the proof paths/results from Step 6. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict — the journal is finalized at the end of Step 9, before the dual-write in Step 10.
+
+The journal is written once and never edited after finalization. `commit_sha` is the sole commit-to-task link; the dispatcher verifies it against git before accepting the record.
+
+**Exit criteria**: `{task_id}.result.json` exists under the gitignored results dir, carrying the implementation `commit_sha` and (after Step 9) the verifier verdict.
+
 ## Step 9: Verify Full
 
 **Goal**: Confirm nothing broke after commit, with the result independently confirmed by one proof-verifier child ([proof-verifier.md](../../../agents/proof-verifier.md)) covering both the Step 6 proof commands and `verification.post`. Policy: [nesting guardrails](../../cw-dispatch/references/nesting-guardrails.md).
@@ -142,7 +156,16 @@ Proof commands run inline here because the on-disk artifacts must be written (th
      { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
    ]
    ```
-2. Update task:
+This step **dual-writes** — emit the journal's sentinel block in your final message AND issue the legacy completing `TaskUpdate`. Both paths carry the same evidence; the dispatcher harvests the sentinel first (highest precedence) and the on-disk journal is its fallback, while the `TaskUpdate` keeps the board fully backward-compatible. Issue both — dropping either breaks a harvest path.
+
+1. Construct proof_results:
+   ```json
+   [
+     { "type": "test", "status": "pass", "output_file": "T01-01-test.txt" },
+     { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
+   ]
+   ```
+2. Update task (legacy board write, unchanged):
    ```
    TaskUpdate({
      taskId: "<native-id>",
@@ -159,10 +182,11 @@ Proof commands run inline here because the on-disk artifacts must be written (th
      }
    })
    ```
+3. Emit the `CW-RESULT-BLOCK` sentinel as the last substantive content of your final message, holding the same fields as the Step 8.5 journal. Format and contract: [result-journal-schema.md](result-journal-schema.md). Keep the block and the on-disk journal identical.
 
-Never set `status: "completed"` unless `verifier_verdict` is PASS.
+Never set `status: "completed"` (in the board write or the sentinel) unless `verifier_verdict` is PASS.
 
-**Exit criteria**: Task marked completed with proof_dir, proof_results, proof_summary, commit_sha, completed_at, verification_mode, and verifier_verdict in metadata.
+**Exit criteria**: Legacy `TaskUpdate` applied with proof_dir, proof_results, proof_summary, commit_sha, completed_at, verification_mode, and verifier_verdict in metadata; matching `CW-RESULT-BLOCK` sentinel emitted in the final message.
 
 ## Step 11: Clean Exit
 

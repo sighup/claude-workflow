@@ -281,6 +281,16 @@ grep -r "sk-\|pk_\|api_key\|Bearer \|password=" docs/specs/[spec-dir]/[NN]-proof
 3. Commit: `git commit -m "<metadata.commit.template>" -- $FILES`
 4. Verify: `git show --name-only HEAD -- $FILES`
 
+### Step 8.5: Write Result Journal
+
+The Step 8 commit carries an ordinary implementation message — no metadata trailers — and the journal is never committed. After it lands, write the durable handoff record the dispatcher harvests:
+
+1. Capture the now-known sha: `commit_sha=$(git rev-parse HEAD)`
+2. Resolve the run's gitignored results dir `docs/specs/[spec-dir]/results/` (create it if absent)
+3. Write `{task_id}.result.json` there, conforming to [result-journal-schema.md](references/result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, and the Step 6 proof paths/results. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict; finalize the journal at the end of Step 9, before the Step 10 dual-write.
+
+The journal is written once and never edited after finalization. `commit_sha` is the sole commit-to-task link; the dispatcher verifies it against git before accepting the record.
+
 ### Step 9: Verify Full
 
 Post-commit verification, independently confirmed by one [proof-verifier](../../agents/proof-verifier.md) child covering both the Step 6 proof commands and `metadata.verification.post`. Policy: [nesting guardrails](../cw-dispatch/references/nesting-guardrails.md).
@@ -312,6 +322,8 @@ Update task board with proof artifact locations.
 without calling TaskUpdate. If you attempt to exit after Step 8 but before completing
 this step, you will be prompted to call TaskUpdate before stopping.
 
+This step **dual-writes** — emit the journal's sentinel block in your final message AND issue the legacy completing `TaskUpdate`. Both carry the same evidence; the dispatcher harvests the sentinel first (highest precedence) with the on-disk journal as fallback, while the `TaskUpdate` keeps the board backward-compatible. Issue both — dropping either breaks a harvest path.
+
 **Determine your model identity** by checking the model name from your system context (e.g. `sonnet`, `opus`, `haiku`). Record this in `model_used`.
 
 ```
@@ -337,7 +349,10 @@ TaskUpdate({
 
 The `proof_dir` and `proof_summary` fields allow cw-validate to locate artifacts.
 The `model_used` field records which model actually executed the task for auditability.
-Completion is gated: never set `status: "completed"` unless `verifier_verdict` is PASS.
+
+After the `TaskUpdate`, emit the `CW-RESULT-BLOCK` sentinel as the last substantive content of your final message, holding the same fields as the Step 8.5 journal. Format and contract: [result-journal-schema.md](references/result-journal-schema.md). Keep the block and the on-disk journal identical.
+
+Completion is gated: never set `status: "completed"` (in the board write or the sentinel) unless `verifier_verdict` is PASS.
 
 ### Step 11: Clean Exit
 
