@@ -215,6 +215,17 @@ This step is the same for both inline and parallel review paths.
 
 For each **blocking** finding (Categories A, B, C), create a FIX task:
 
+After TaskCreate returns the new task id, **append one JSON line to the manifest fix segment** so the dispatch exit gate's completion predicate includes this task:
+
+```bash
+printf '%s\n' "$(jq -nc --arg id "$FIX_TASK_ID" --arg cat "$CATEGORY" \
+  --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{task_id: $id, type: "review-fix", category: $cat, created_at: $t}')" \
+  >> ~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"/manifest.fix.jsonl
+```
+
+Single writer per line — only the review orchestrator appends to `manifest.fix.jsonl`. Never rewrite or truncate the file; append only.
+
 ```
 TaskCreate({
   subject: "FIX-REVIEW: [concise description of the issue]",

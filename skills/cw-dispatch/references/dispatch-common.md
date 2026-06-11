@@ -182,7 +182,7 @@ Categorize tasks:
 
 The board is a convergent view that the native store can silently wipe mid-run; the planner's manifest is the loss oracle that cannot. **The dispatcher never exits on board counts alone.** Every candidate exit from [Survey Task Board](#survey-task-board) and the [Pre-Exit Verification](#pre-exit-verification) routes through this gate. The gate's job is to tell "the run is genuinely done" apart from "the board was wiped and looks done."
 
-### Step A — Load the manifest
+### Step A — Load the manifest and segments
 
 Read `~/.claude/tasks/.manifest/<list-id>/manifest.json` (`<list-id>` is `CLAUDE_CODE_TASK_LIST_ID`). Three outcomes determine which branch of the gate applies:
 
@@ -192,15 +192,28 @@ Read `~/.claude/tasks/.manifest/<list-id>/manifest.json` (`<list-id>` is `CLAUDE
 
 The absent-manifest case is **explicitly distinct** from a manifest that is present but projects to an empty/thin board. The former is legacy with no oracle (count-based exit allowed); the latter is **suspicious — a wipe — and must reconcile, never exit.** Never collapse the two.
 
-### Step B — Project the board against the manifest
+**Dynamic manifest segments** — after reading the core manifest, also read any dynamic segments appended mid-run:
 
-For each manifest `task_id`, classify it by evidence, not by board status:
+```bash
+MANIFEST_DIR=~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"
+# Read segment lines (each line is one JSON object)
+FIX_SEGMENT_IDS=$(jq -r '.task_id' "$MANIFEST_DIR/manifest.fix.jsonl" 2>/dev/null || true)
+TEST_SEGMENT_IDS=$(jq -r '.task_id' "$MANIFEST_DIR/manifest.test.jsonl" 2>/dev/null || true)
+```
+
+The **complete task set** for this gate is the union of the core manifest's `task_id`s and every `task_id` in both segment files. Segments grow append-only during the run; a segment file absent or empty contributes zero additional ids. Step B and Step D apply to this union set, not to the core manifest alone.
+
+### Step B — Project the board against the full task set
+
+For each `task_id` in the union of core manifest + segments, classify it by evidence, not by board status:
 
 1. **Evidence-complete** — a sha-verified `{task_id}.result.json` exists (`commit_sha` reachable in git via `git cat-file -e <sha>^{commit}` and `git merge-base --is-ancestor <sha> HEAD`), **or** the proof dir holds `{task_id}-proofs.md` plus at least one `{task_id}-*.txt` with a reconstructable, git-reachable implementation commit. This is the same evidence order as [Harvest-and-Apply](#harvest-and-apply).
 2. **Present-incomplete** — the `task_id` is on the live board (pending/in_progress) with no completion evidence. Normal in-flight work; the loop keeps dispatching it.
 3. **Missing** — the manifest expects the `task_id` but it is **absent from the live board** and has **no** completion evidence on disk. This is the wipe signature.
 
 **Wipe signal:** any `task_id` in class 3 — manifest-expected, board-absent, evidence-absent — means the store dropped task state. Do **not** exit. Trigger [Step C reconcile](#step-c--reconcile-never-burst). An empty or thin board while the manifest holds any class-2 or class-3 `task_id` is never "done."
+
+**Segment open-task guard:** even when every core `task_id` is evidence-complete, the gate does **not** exit if the live board still shows any open (pending/in_progress) task whose subject begins with `FIX-REVIEW:` or `Test:` — a segment task that is on the board but not yet evidence-complete must finish before the run can exit. This prevents a mid-run segment append from being overtaken by the exit check.
 
 ### Step C — Reconcile (never burst)
 
@@ -227,11 +240,12 @@ After reconcile, **re-read `TaskList` and re-run the gate from Step B.** Exit is
 
 ### Step D — Evidence-gated exit
 
-Exit is permitted **only** when every manifest `task_id` is evidence-complete (class 1 from Step B): a sha-verified `{task_id}.result.json` or a complete, git-reachable proof set for each. Board status alone never satisfies the gate.
+Exit is permitted **only** when every `task_id` in the full union set (core manifest + segments) is evidence-complete (class 1 from Step B) **and** the segment open-task guard passes: no open FIX-REVIEW or test task remains on the live board. Board status alone never satisfies the gate.
 
-- **All manifest `task_id`s evidence-complete** → genuine completion. Exit with "All tasks completed (manifest-verified: N/N)". Release the lease per the loop-exit path.
+- **All `task_id`s evidence-complete and segment guard passes** → genuine completion. Exit with "All tasks completed (manifest-verified: N/N)". Release the lease per the loop-exit path.
 - **Any `task_id` present-incomplete (class 2)** → work remains; continue the loop (this is a normal "still running" state, not an exit).
 - **Any `task_id` missing (class 3)** → wipe; reconcile (Step C), never exit.
+- **Segment open-task guard fails** (open FIX-REVIEW or test task on board) → work remains from a dynamic segment; continue the loop.
 
 A blocked-only board (`Ready=0 ∧ Blocked>0`) exits as "waiting on dependencies" **only** if the gate confirms every blocker holding those dependents is a real manifest dependency that is itself either evidence-complete or legitimately in-flight — not a class-3 wipe masquerading as a dependency wait.
 
@@ -282,6 +296,54 @@ Before outputting any completion or "no tasks" message, verify:
 3. **If the gate or the counts don't match your conclusion**: re-read TaskList output, reconcile if the manifest signals a wipe, and correct.
 
 **WARNING**: If you find yourself writing a detailed "completion report" with stats like "151 proof artifacts" or "63 library files" that you did NOT just count from TaskList, you are hallucinating. STOP and re-run TaskList.
+
+## Phase-End Cleanup
+
+After the exit gate passes (every `task_id` evidence-complete, segment guard passes), retire run artifacts that are no longer needed. Run this step once, at the end of the run, before releasing the lease.
+
+**What to retire:**
+
+| Artifact | Location | Action |
+|----------|----------|--------|
+| Per-task result journals | `docs/specs/<run>/results/{task_id}.result.json` | Remove each file once its `task_id` is evidence-complete and the harvest-checkpoint confirms the completion write landed |
+| Harvest-checkpoint log | `docs/specs/<run>/results/harvest-checkpoint.log` | Remove after all `task_id`s are confirmed complete |
+| Writer lease | `~/.claude/tasks/<list-id>.writer` | Release via `cw-lease.sh release` — the last step before exit |
+| Core manifest + segments | `~/.claude/tasks/.manifest/<list-id>/` | Remove the entire directory after exit gate passes and the lease is released |
+
+**Order:** retire journals first (most granular), then the checkpoint, then release the lease, then remove the manifest directory. Removing the manifest before the lease is released would cause a concurrent session to fall into the absent-manifest path rather than the wipe-detection path — release the lease first.
+
+**Do not remove proof directories** — proof artifacts under `docs/specs/<run>/[NN]-proofs/` are committed to git and belong to the implementation record. They are not run state.
+
+**Partial cleanup (interrupted run):** if the run exits without completing all `task_id`s (timeout, manual stop), do **not** remove journals or manifests for uncompleted tasks. Those files are the harvest authority for the next session. Only completed tasks (checkpoint-confirmed) have their journals removed at that point.
+
+```bash
+# Remove a completed task's journal (run after harvest-checkpoint confirms the task)
+rm -f "docs/specs/<run>/results/${TASK_ID}.result.json"
+
+# Remove the checkpoint and manifest dir at full run completion
+rm -f "docs/specs/<run>/results/harvest-checkpoint.log"
+"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
+rm -rf ~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"
+```
+
+## Guard Sunset Gate
+
+The slimmed backstop guard (`scripts/task-store-guard.sh`) and its SessionStart hook entry are retained until the single-writer discipline proves out in production. The sunset condition is:
+
+**Remove the guard daemon and its SessionStart hook entry** when **both** of the following are true:
+- 10 consecutive production runs have completed with an empty `incidents.log` (no guard-initiated restores, no wipe events), **and**
+- 30 active days have elapsed with an empty `incidents.log`.
+
+Both conditions must hold simultaneously — 10 clean runs reached before day 30 does not satisfy the gate; 30 days reached without 10 consecutive clean runs does not satisfy the gate. The condition that becomes true later is the binding one.
+
+**Do not remove anything now.** This section documents the future sunset instruction only. The guard stays in place until the threshold above is met.
+
+**How to evaluate:**
+- Check `~/.claude/tasks/.guard/incidents.log` — an empty file (zero bytes or absent) signals no incidents for the current window.
+- "Consecutive clean runs" resets to 0 on any run that produces a non-empty `incidents.log` entry.
+- "Active days" counts calendar days on which at least one production dispatch run started, not wall-clock elapsed time.
+
+**When the threshold is met:** remove `scripts/task-store-guard.sh`, remove the SessionStart hook entry in `.claude-plugin/plugin.json` that spawns the guard, and note the removal in the commit message.
 
 ## Post-Completion Synthesis
 

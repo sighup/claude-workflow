@@ -145,6 +145,8 @@ Output result and exit:
 "Findings: [count] ([blocking count] blocking, [advisory count] advisory)"
 ```
 
+**Segment append note**: you hold no Task tools and never create FIX tasks. The review orchestrator (SKILL.md Step 3) harvests your RESULT BLOCK, creates each FIX task, and appends one line to `~/.claude/tasks/.manifest/<list-id>/manifest.fix.jsonl` per FIX task so the dispatch exit gate's completion predicate includes those tasks. You have no action here — this note documents the handoff so the orchestrator's append responsibility is visible at both ends of the protocol.
+
 ## Constraints
 
 - Never modify implementation code

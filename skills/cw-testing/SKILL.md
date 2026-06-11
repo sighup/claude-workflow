@@ -306,7 +306,15 @@ If `fix_config.enabled` and `fix_attempt < max_fix_attempts` (step-level, fallin
 **REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT fix bugs inline.
 
 1. Create fix task with failure context (TaskCreate + TaskUpdate with metadata)
-2. Spawn bug fixer:
+2. **Append one JSON line to the manifest test segment** so the dispatch exit gate's completion predicate includes this task:
+   ```bash
+   printf '%s\n' "$(jq -nc --arg id "$FIX_TASK_ID" --arg test "$STEP_TASK_ID" \
+     --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+     '{task_id: $id, type: "fix", test_task_id: $test, created_at: $t}')" \
+     >> ~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"/manifest.test.jsonl
+   ```
+   Single writer per line — only the testing orchestrator appends to `manifest.test.jsonl`. Never rewrite or truncate the file; append only.
+3. Spawn bug fixer:
 ```
 Task({
   subagent_type: "claude-workflow:bug-fixer",
