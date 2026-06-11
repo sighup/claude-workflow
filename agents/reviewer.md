@@ -66,6 +66,8 @@ In batch mode (large diffs partitioned by the orchestrator's protocol), this age
 - **Upward relay**: the consolidated report includes funnel accounting (`returned/spawned`, degraded list) and each sub-reviewer's relayed token usage
 - **Fallback**: when the Task tool is unavailable, review the batches inline and sequentially in this agent's own context
 
+Because sub-reviewers share this agent's `reviewer` type, the harness emits its non-blocking recursive-spawn security warning even with distinct assignments — for this sanctioned pattern the warning is expected and non-fatal; do not abort the fan-out because of it.
+
 ## Constraints
 
 - **Never** modifies implementation code — read-only
