@@ -59,7 +59,7 @@ The parent relays this verdict and your token usage upward per the guardrails; r
 
 ## Stop-Hook Interaction
 
-The plugin's SubagentStop hook fires for plugin-typed children at depth >= 2 (live depth probe, 2026-06-10). It blocks a stop only when the child's transcript shows both the cw-execute context marker (the skill name in all caps) and commit evidence, without a completing board update. You cannot make board updates, so prevention is mandatory:
+The plugin's SubagentStop hook fires for plugin-typed children at every nesting depth. It blocks a stop only when the child's transcript shows both the cw-execute context marker (the skill name in all caps) and commit evidence, without a completing board update. You cannot make board updates, so prevention is mandatory:
 
 - Never reproduce the execution skill's all-caps context marker in any output.
 - Never echo task metadata as raw quoted JSON — in particular the commit-hash key (commit_sha) in double-quoted form.

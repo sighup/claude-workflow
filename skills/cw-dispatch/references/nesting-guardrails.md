@@ -1,10 +1,10 @@
 # Nesting Guardrails Reference
 
-Canonical policy for nested sub-agent spawning (sub-agents spawning their own sub-agents, available since Claude Code 2.1.172). Every skill or agent definition that grants or uses the Task tool below the top-level orchestrator cites this document instead of restating policy.
+Canonical policy for nested sub-agent spawning (sub-agents spawning their own sub-agents). Every skill or agent definition that grants or uses the Task tool below the top-level orchestrator cites this document instead of restating policy.
 
 ## Depth Policy
 
-- **Platform ceiling: 5 levels**, per the Claude Code 2.1.172 release notes. Enforcement is currently absent (a 2026-06-10 probe chain reached level 10 without error), so the ceiling is **self-enforced** — treat the gap as a future breaking change, not headroom.
+- **Platform ceiling: 5 levels**, per the platform release notes. Enforcement is not guaranteed, so the ceiling is **self-enforced** — never treat any enforcement gap as headroom.
 - **cw operating policy: depth ≤3** (orchestrator → worker → child). Levels 4–5 are reserved margin, never designed-in.
 - **Every leaf-child prompt explicitly forbids further spawning.** A parent spawning at the policy's deepest level must include an instruction such as "Do not spawn sub-agents" in each child's prompt. The platform will not stop a runaway chain; prompts must.
 
@@ -31,31 +31,27 @@ Every parent's final report MUST relay, for each fan-out it performed:
 1. **Funnel accounting**: `returned/spawned` counts plus a degraded list (children that failed, timed out, or returned unusable output).
 2. **Children's token usage**: each child's reported tokens, summed with the parent's own.
 
-Rationale (probe-verified 2026-06-10): a parent's `subagent_tokens` covers only its **immediate** child — grandchild cost is invisible to the orchestrator and to top-level accounting. The chain of upward relays is the only cost telemetry the orchestrator gets. A worker's reported cost therefore **excludes** its children's cost unless relayed.
+Rationale: a parent's `subagent_tokens` covers only its **immediate** child — grandchild cost is invisible to the orchestrator and to top-level accounting. The chain of upward relays is the only cost telemetry the orchestrator gets. A worker's reported cost therefore **excludes** its children's cost unless relayed.
 
 ## Distinct Child Roles
 
-**Never same-type recursion.** Spawn distinct roles with distinct prompts: implementer → proof-verifier, reviewer → sub-reviewer (distinct lens or file batch, never a clone of the parent's full assignment). Same-type recursive spawning is probe-verified (2026-06-10) to trip a harness security warning ("recursive sub-agent fork-bomb spawning") — non-blocking today, but pattern-matched even when bounded.
+**Never same-type recursion.** Spawn distinct roles with distinct prompts: implementer → proof-verifier, reviewer → sub-reviewer (distinct lens or file batch, never a clone of the parent's full assignment). Same-type recursive spawning pattern-matches the harness's recursive-spawn security warning even when bounded — expected and non-blocking, but distinct roles avoid it entirely.
 
 ## Model Pinning
 
-**Pin models explicitly for cost-tier children.** Children inherit the parent's model when unpinned (probe-verified, propagates through every level) — an unpinned verifier under a sonnet worker runs on sonnet. Spawn verifiers and explorers with `model: haiku` (or the intended tier) explicitly.
+**Pin models explicitly for cost-tier children.** Children inherit the parent's model when unpinned (inheritance propagates through every level) — an unpinned verifier under a sonnet worker runs on sonnet. Spawn verifiers and explorers with `model: haiku` (or the intended tier) explicitly.
 
-## SubagentStop Hook at Depth ≥2 (Verified Result)
+## SubagentStop Hook at Any Depth
 
-**Verdict (probe T01.1, 2026-06-10, CC 2.1.172): the plugin's `SubagentStop` hook (`verify-task-update.sh`) fires for plugin-typed sub-agents spawned at depth ≥2, and its block is honored.**
+The plugin's `SubagentStop` hook (`verify-task-update.sh`) fires for plugin-typed sub-agents at every nesting depth, and its block is honored. A parent is not blocked for its child's omission.
 
-Observed: a plugin-typed child at depth 2 that ended its turn without a TaskUpdate was blocked by the hook and re-prompted to update the board; a deterministic replay of `verify-task-update.sh` confirmed `{"decision":"block"}` on the trigger transcript and silent pass on completed and non-worker transcripts. The depth-1 parent was not blocked for its child's omission.
-
-Design consequence: the hook's trigger is conditional, not blanket (probe T01.1). It blocks a stop only when the child's transcript shows the execution skill's all-caps context marker **plus** commit evidence (a commit invocation or a quoted commit-hash metadata key) **without** a completing TaskUpdate. Two compliance paths follow:
+The hook's trigger is conditional, not blanket. It blocks a stop only when the child's transcript shows the execution skill's all-caps context marker **plus** commit evidence (a commit invocation or a quoted commit-hash metadata key) **without** a completing TaskUpdate. Two compliance paths follow:
 
 1. **Board-updating children** (Task tools granted) record their result via TaskUpdate(status: completed) before stopping — same obligation as depth-1 workers.
 2. **Read-only children** (no Task* tools, e.g. proof-verifier) cannot call TaskUpdate and instead must never emit the trigger signature — no all-caps worker marker, no raw task-metadata JSON, no commit invocations in their output (see the verifier's stop-hook contract). Their transcript never matches the trigger, so they stop silently and the parent records the result.
 
 This is the enforcement half of the board-mirroring rule.
 
-Raw observations: `docs/specs/01-spec-nested-subagent-adoption/proofs/T01.1-01-cli.txt` (transcript alongside at `proofs/subagentstop-probe.md`; spec-local, not committed).
-
 ## Fallback
 
-Every nested path keeps an inline fallback: when the spawning tool is unavailable, the parent performs the child's step inline. Nesting is probe-verified to work in interactive, headless `claude -p`, and agent-team contexts, so the fallback is defensive robustness against tool-allowlist misconfiguration, not an SDK-compat requirement.
+Every nested path keeps an inline fallback: when the spawning tool is unavailable, the parent performs the child's step inline. Nesting works in interactive, headless `claude -p`, and agent-team contexts alike, so the fallback is defensive robustness against tool-allowlist misconfiguration, not a platform-compat requirement.
