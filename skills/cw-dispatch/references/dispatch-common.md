@@ -4,7 +4,11 @@ Shared protocols for `cw-dispatch` and `cw-dispatch-team`.
 
 ## Serialize Task-Tool Calls
 
-Never combine a task write (`TaskUpdate`, `TaskCreate`) with a task read (`TaskList`, `TaskGet`) for the same task list in one parallel tool batch — issue them in separate messages, write first. A concurrent write+read can race the task store and wipe every task file on the board (observed 2026-06-10: all 13 tasks deleted, `.highwatermark` recreated). If a TaskList result contradicts a TaskUpdate you just made (stale status), STOP issuing task calls and re-read with TaskGet before continuing — that staleness is the precursor to the wipe.
+Never combine task-tool calls (`TaskUpdate`, `TaskCreate`, `TaskList`, `TaskGet`) for the same task list in one parallel tool batch — issue them in separate messages, writes first. Concurrent task-tool calls can race the task store and wipe every task file on the board; even fully serialized calls are not perfectly safe when multiple processes (orchestrator + workers) share a list. If a TaskList result contradicts a TaskUpdate you just made (stale status), STOP issuing task calls and re-read with TaskGet before continuing — that staleness is the precursor to the wipe.
+
+## Task Store Guard
+
+The plugin runs a filesystem-level guard (`scripts/task-store-guard.sh`, spawned by the SessionStart hook) that mirrors every task file to a shadow journal under `~/.claude/tasks/.guard/<list-id>/` and automatically restores the board when the wipe signature appears (all tasks vanish in one tick). Restores are recorded in `~/.claude/tasks/.guard/incidents.log` — check it when the board looks wrong, and report any incident in the dispatch summary. The guard mirrors legitimate single-task deletions without restoring them, and it cannot fix stale in-process reads — the serialization rule above still applies. Proof files and git commits remain the durable evidence base; the guard reduces recovery cost, it does not replace the doctrine.
 
 ## Mandatory First Action
 

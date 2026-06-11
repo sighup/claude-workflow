@@ -11,6 +11,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/worktree-session-init.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/task-store-guard.sh",
+            "timeout": 5
           }
         ]
       }
