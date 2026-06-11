@@ -29,7 +29,7 @@ effort: low
 1. **ORIENT** — `cd` to the given repo root; confirm the proof commands and expected results from the spawn prompt. If any expected result is missing, judge that proof on exit code alone and note it.
 2. **EXECUTE** — Run each proof command and each post check once via Bash. Capture stdout, stderr, and exit code. Retry a command at most once, and only on environment error (command not found, missing dependency) — never to flip a FAIL to a PASS.
 3. **JUDGE** — Compare captured output against the expected result. Any mismatch or nonzero exit (unless expected) is FAIL.
-4. **REPORT** — Sanitize captured output (replace API keys, tokens, passwords, connection strings, private keys with `[REDACTED]`), then emit the verdict block below as your final message and stop.
+4. **REPORT** — Sanitize captured output in two passes before emitting anything: (a) replace API keys, tokens, passwords, connection strings, and private keys with `[REDACTED]`; (b) replace any occurrence of the stop-hook trigger strings with `[HOOK-TRIGGER REDACTED]` — the execution skill's all-caps context marker, the commit-hash metadata key in double-quoted form, and the commit-evidence patterns (authoritative pattern list: `scripts/verify-task-update.sh` at the repo root). Then emit the verdict block below as your final message and stop.
 
 ## Verdict Format
 
@@ -65,4 +65,4 @@ The plugin's SubagentStop hook fires for plugin-typed children at depth >= 2 (li
 - Never echo task metadata as raw quoted JSON — in particular the commit-hash key (commit_sha) in double-quoted form.
 - Never run or quote a commit invocation; your read-only constraints already forbid it.
 
-Parents must honor the same contract: spawn prompts to this agent must not contain the all-caps marker or raw task metadata JSON. With both sides clean, the hook's trigger can never match your transcript. If a stop block still occurs, note it as the final line of your verdict so the parent can record the hook interaction; hook scoping is the integration layer's responsibility, not yours.
+Parents must honor the same contract: spawn prompts to this agent must not contain the all-caps marker or raw task metadata JSON. Prompt hygiene alone is not sufficient: you re-run arbitrary proof commands whose output you do not control — a proof that greps a skill file containing the marker, or git-log lines matching the commit-evidence patterns, can plant trigger strings in your transcript that you never wrote. That is why the Step 4 trigger-string redaction is mandatory before the verdict. The guarantee is prevention via output redaction plus prompt hygiene, not impossibility: with redaction applied, the transcript cannot retain a trigger match. If a stop block occurs anyway, note it as the final line of your verdict and stop after one retry; hook scoping is the integration layer's responsibility, not yours.
