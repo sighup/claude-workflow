@@ -234,11 +234,55 @@ If the build fails after workers complete, attempt to fix obvious integration is
 
 ## Error Handling
 
-If a worker fails (task remains in_progress or goes back to pending):
-1. Check task metadata for `failure_reason`
-2. If retryable: include in next dispatch round (or reassign to an idle worker)
-3. If permanent: report to user, skip task
-4. If `failure_count >= 3`: mark as blocked, require human intervention
+### Skip-if-Evidence (Idempotent Re-Dispatch)
+
+Before dispatching any task — at every loop top, before assigning ownership — check whether durable completion evidence already exists for it. A task with verified evidence is completed-by-evidence and must not be re-dispatched.
+
+**Check order** (first hit wins):
+1. `{task_id}.result.json` exists at `docs/specs/<run>/results/{task_id}.result.json` and its `commit_sha` passes the git reachability check (`git cat-file -e` + `git merge-base --is-ancestor … HEAD`).
+2. The proof dir contains `{task_id}-proofs.md` and at least one `{task_id}-*.txt` artifact — reconstruct the sha from `git log` (the worker's implementation commit) and verify it as above.
+
+If evidence is found:
+- Apply the completing `TaskUpdate` (same serial write→checkpoint→read-back cadence as Harvest-and-Apply) using the evidence record to populate metadata.
+- Log `task_id: completed-by-evidence` to the harvest-checkpoint file.
+- Do not spawn a worker. Do not re-assign ownership.
+
+This makes re-dispatch safe: a task that was completed in a prior run, or whose completion write was dropped by the board, is recovered from on-disk evidence rather than repeated.
+
+### Dead-Worker Reset
+
+A worker that has been in-progress past the liveness timeout with no commit or journal evidence is treated as dead and its task is reset for re-dispatch.
+
+**Liveness timeout**: 30 minutes from the recorded dispatch timestamp (stored in the task's metadata as `dispatched_at` when ownership is assigned in Step 3b).
+
+**Detection** — during each monitor poll (Step 5), for every in-progress task evaluate:
+1. Time elapsed since `dispatched_at` exceeds the liveness timeout.
+2. No `{task_id}.result.json` exists under the results dir.
+3. No proof artifacts (`{task_id}-proofs.md`) exist in the proof dir.
+4. No implementation commit for the task is reachable in git (checked via `git log --oneline -- <scope files>`).
+
+All four conditions together confirm a dead worker. A task missing only some evidence is in-flight, not dead — never reset until all four apply.
+
+**Reset** (sole writer, serial):
+```bash
+# Record intent before the board write
+echo "${task_id}:dead-worker-reset:$(date -u +%s)" >> "docs/specs/<run>/results/harvest-checkpoint.log"
+```
+```
+TaskUpdate({
+  taskId: "<live native id>",
+  status: "pending",
+  metadata: { dead_worker_reset: true, reset_at: "<ISO timestamp>", prior_owner: "<worker-N>" }
+})
+```
+Follow with a `TaskGet` read-back to confirm the reset landed. The task re-enters the pending pool and is dispatched on the next loop. The skip-if-evidence check at that loop's top makes the re-dispatch safe — if the worker actually did finish and only the evidence was not yet visible, the check will find it and apply completed-by-evidence instead of spawning a new worker.
+
+**Worker failure (non-timeout)**:
+If a worker fails with a `failure_reason` in its metadata (or a FAIL in its RESULT BLOCK) but is not yet past the timeout:
+1. Check task metadata for `failure_reason`.
+2. If retryable: include in next dispatch round.
+3. If permanent: report to user, skip task.
+4. If `failure_count >= 3`: mark as blocked, require human intervention.
 
 ## Why Workers Must Invoke cw-execute
 

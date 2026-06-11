@@ -72,11 +72,16 @@ Lease held. For each task being dispatched, apply the ownership write **serially
 TaskUpdate({
   taskId: "<native-id>",
   owner: "worker-N",
-  status: "in_progress"
+  status: "in_progress",
+  metadata: { dispatched_at: "<ISO timestamp>" }
 })
 ```
 
+The `dispatched_at` timestamp is the reference point for the dead-worker liveness timeout (Step 5, dead-worker check).
+
 ### Step 4: Spawn Workers
+
+**Before spawning, check for existing evidence.** For each ready task, run the skip-if-evidence check: if a sha-verified `{task_id}.result.json` or proof dir already exists, apply completed-by-evidence (serial write→checkpoint→read-back) and do not spawn a worker for it. Full protocol: [dispatch-common.md](references/dispatch-common.md#skip-if-evidence-idempotent-re-dispatch).
 
 Send a **single message** with multiple Task tool calls for parallel execution.
 
@@ -127,8 +132,9 @@ Workers hold no Task tools — they never mark themselves done. **After each bat
 
 1. **Refresh the lease**: `"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"` so the heartbeat advances each loop (a stale lease becomes reclaimable by another writer)
 2. Run `TaskList` to check final state — the completions you applied in Step 4.5 are the board's source of truth, not any worker self-report
-3. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
-4. Report results:
+3. **Dead-worker check**: for each in-progress task, evaluate the four liveness conditions. Reset and re-queue any confirmed dead worker. Full protocol: [dispatch-common.md](references/dispatch-common.md#dead-worker-reset).
+4. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
+5. Report results:
 
 ```
 CW-DISPATCH COMPLETE

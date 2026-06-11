@@ -22,7 +22,20 @@ Roles without a Task grant (validator, bug-fixer, test-executor, spec-writer, pl
 
 ## Board-Mirroring
 
-**No nested spawn without a corresponding task-board artifact.** Before spawning, the parent ensures the child's work is represented on the board — a task (via TaskCreate) or a metadata entry on the parent's task. Children holding Task tools record results there (TaskUpdate); read-only children (no Task* tools, e.g. proof-verifier) report in their final message and the parent records the result on the board. The board, not the transcript, is the observability plane: anything a grandchild produces is invisible to the orchestrator unless it lands on durable surfaces (board, proof files, git).
+**No nested spawn without a corresponding task-board artifact.** Before spawning, the parent ensures the child's work is represented on the board — a task (via TaskCreate) or a metadata entry on the parent's task.
+
+### Single-Writer Invariant
+
+During execute, test, and review phases, exactly one process — the phase orchestrator — ever issues task-tool writes (`TaskCreate`, `TaskUpdate`). Workers and all sub-agents hold no Task-write tools. They carry their assignment inline, do their work, and hand off through two durable surfaces:
+
+1. **A committed implementation** plus a per-task `{task_id}.result.json` journal written to the run's gitignored results directory (`docs/specs/<run>/results/`). The journal is the durable child artifact: it records `status`, `commit_sha`, and `proof_results`. The orchestrator verifies the `commit_sha` is reachable in git before crediting the completion.
+2. **A `CW-RESULT-BLOCK` sentinel** in the worker's final message, carrying the same fields as the journal. The orchestrator harvests whichever surface arrives first (RESULT BLOCK → journal → proof-dir scan) and applies the completing `TaskUpdate` itself, serially.
+
+**Consequence for Board-Mirroring**: the on-disk `result.json` is the durable child artifact, not a TaskUpdate. A read-only child (e.g., proof-verifier) that holds no Task tools reports in its final message; the parent records the result on the board. The board converges toward the on-disk state, never the other way around.
+
+Children holding Task tools (orchestrator-mode reviewer, planner) record results via `TaskUpdate` — same single-writer obligation, applied serially with the write→checkpoint→read-back cadence. Children without Task tools (implementer, test-executor, bug-fixer, sub-reviewer, proof-verifier) never touch the board directly; the orchestrator is their sole proxy.
+
+The invariant eliminates the dominant board-wipe trigger: concurrent multi-process writes from a shared `CLAUDE_CODE_TASK_LIST_ID`. See [dispatch-common.md](dispatch-common.md#single-writer-discipline) for the full dispatch-phase protocol.
 
 ## Upward Relay: Funnel + Token Accounting
 
