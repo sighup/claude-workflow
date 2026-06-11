@@ -16,6 +16,7 @@ Per-parent caps, by role:
 |---|---|
 | reviewer | ≤3 sub-reviewers per fan-out |
 | implementer | ≤1 proof-verifier child per task |
+| researcher | ≤5 Explore children per fan-out (cw-research wave), each leaf-pinned |
 
 Roles without a Task grant (validator, bug-fixer, test-executor, spec-writer, planner) stay leaf-only.
 

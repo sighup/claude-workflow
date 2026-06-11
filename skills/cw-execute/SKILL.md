@@ -290,7 +290,7 @@ Post-commit verification, independently confirmed by one [proof-verifier](../../
 1. One verifier per verification attempt — never concurrent verifiers, never implementer-type children
 2. Pin the model explicitly: `model: haiku` — unpinned children inherit yours
 3. Spawn prompt contains: the task id, the repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn sub-agents"
-4. Spawn prompt must NOT contain this skill's all-caps context marker or raw task metadata JSON — the SubagentStop hook pattern-matches both (see the verifier's stop-hook contract)
+4. Spawn prompt must NOT contain this skill's all-caps context marker or raw task metadata JSON — the SubagentStop hook pattern-matches both (see the [verifier's stop-hook contract](../../agents/proof-verifier.md))
 
 **Gate on the verdict (BLOCKING):**
 
@@ -330,7 +330,7 @@ TaskUpdate({
     model_used: "sonnet",  // The model you are running as (sonnet, opus, haiku)
     verification_mode: "spawned",  // "spawned" | "inline" | "inline-degraded"
     verifier_verdict: "PASS",      // verbatim Overall verdict; inline: result of inline checks
-    verifier_tokens: 12345         // child usage relayed upward per guardrails; "n/a" when inline
+    verifier_tokens: 12345         // child usage relayed upward per guardrails; literal "n/a" when inline or inline-degraded
   }
 })
 ```
