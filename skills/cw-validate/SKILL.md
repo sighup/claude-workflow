@@ -58,24 +58,58 @@ See [validation-gates.md](references/validation-gates.md) for detailed gate defi
    - Scan `./docs/specs/` for spec directories
    - Select the one with completed tasks on the task board
 3. Load the spec file for requirements
-4. Run `TaskList` to get all tasks and their metadata
+4. **Enumerate the canonical task set from the manifest.** Read `~/.claude/tasks/.manifest/<list-id>/manifest.json` (`<list-id>` is `CLAUDE_CODE_TASK_LIST_ID`). The manifest's `tasks[]` — each a stable `task_id` + `blockedBy[]` + full `metadata`, never native ids — is the authoritative task set to validate against. `TaskList` is **secondary**: it supplies live status, but the native store can silently wipe or drop tasks, so a task absent from the board is not absent from the run. Cross-reference, never substitute.
+
+   | Manifest state | Discovery source |
+   |----------------|------------------|
+   | Present, `partial: false` | Manifest `tasks[]` is canonical; `TaskList` is the live-status overlay |
+   | Present, `partial: true` | Advisory — an interrupted plan; union manifest `tasks[]` with `TaskList`, flag incompleteness in the report |
+   | **Absent** (legacy) | No oracle — fall back to `TaskList` as the task set; report the run as **reduced coverage** (a task wiped before validation is invisible) |
+
+   Treat absent-manifest (legacy, no cross-check possible) as **explicitly distinct** from manifest-present: the former permits the board-only fallback; the latter makes proofs + git the primary coverage source (Step 2). Never collapse the two.
+
+5. Run `TaskList` to get live status for each manifest `task_id`.
 
 ### Step 2: Collect Evidence
 
-1. **Task Board State**: Get all completed tasks via `TaskGet`
-2. **Git History**: `git log --stat` for implementation commits
-3. **Proof Artifacts**: Read `proof_results` from each task's metadata
-4. **Proof Files**: Locate and read proof artifact files in `docs/specs/[dir]/[NN]-proofs/`
-5. **Changed Files**: `git diff --name-only <base>..HEAD`
+**Proofs + git are the PRIMARY coverage source; the board is secondary.** Workers never write the board — the dispatcher harvests their on-disk evidence and applies completions, so the board can lag or have a dropped write while the work is genuinely done. Validate from durable artifacts first, the board second.
+
+For **each manifest `task_id`** (Step 1's canonical set), collect:
+
+1. **Result journal**: read `docs/specs/<run>/results/{task_id}.result.json` if present. It carries `commit_sha`, `proof_dir`, `proof_results`, `proof_summary`, `verifier_verdict`, and `model_used` — the same field set a completion `TaskUpdate` would hold.
+2. **Sha verification (mandatory)**: verify the journal's `commit_sha` is reachable in git — the sha is the only commit-to-task link, since commits carry no metadata trailers:
+   ```bash
+   git cat-file -e "${commit_sha}^{commit}" 2>/dev/null && \
+     git merge-base --is-ancestor "$commit_sha" HEAD
+   ```
+   A journal whose sha does not exist or is unreachable from `HEAD` (reverted, or carried over from a prior run) is **rejected** — do not treat the task as complete on that evidence.
+3. **Proof files**: locate `{task_id}-*` artifacts and the `{task_id}-proofs.md` summary in `docs/specs/<run>/[NN]-proofs/`. When no journal exists, reconstruct `proof_results` (type + pass/fail + filename) from these plus the implementation commit found in `git log`, and verify that sha as in step 2.
+4. **Board status**: `TaskGet` the live native id for the `task_id` (resolve via `TaskList`) to overlay status — secondary, never the gate.
+
+#### Completed-by-Evidence
+
+A manifest `task_id` that is **board-missing or still `in_progress`** but has a **sha-verified journal** (or a complete, git-reachable proof set) is **completed-by-evidence**: treat it as completed for coverage and read its proof metadata from the journal / proof dir. The board lagging behind durable evidence is the expected single-writer state — a half-harvested board still validates from `result.json` + proofs instead of failing Gate B on `Unknown`.
+
+5. **Git history**: `git log --stat` for implementation commits across the run.
+6. **Changed files**: `git diff --name-only <base>..HEAD`.
+
+#### Manifest-vs-Spec Skew
+
+The manifest records the task set as planned; the spec records the requirements. When a manifest `task_id` (or its `metadata.requirements` R-IDs) has **no on-disk evidence and no board record**, distinguish two causes before labelling it:
+
+- **Lost record** — the `task_id` has a manifest entry and the spec still expects its requirements, but no journal, no proofs, no commit. This is a coverage gap (or a wipe that predates validation); mark the requirement `Missing` and escalate.
+- **Manifest-vs-spec skew** — the manifest R-IDs no longer match the current spec (a checkpoint planned against an earlier spec revision). **Flag the skew explicitly** in the report as a manifest/spec mismatch; do not mislabel a deliberately-removed requirement as a lost implementation record.
+
+Cross-check the manifest's R-IDs against the loaded spec and report skew as its own finding rather than folding it into the coverage gaps.
 
 ### Step 3: Build Coverage Matrix
 
 For each functional requirement in the spec:
 
-1. Find which task(s) address it (via `metadata.requirements`)
-2. Check if task is completed
+1. Find which task(s) address it (via the manifest entry's `metadata.requirements`; reconstruct a missing task's requirements from the manifest, not the board)
+2. Check completion by **evidence**, not board status: a sha-verified journal or git-reachable proof set marks the task complete (completed-by-evidence), even if the board shows `in_progress` or omits it
 3. Check if proof artifacts exist and passed
-4. Mark as: `Verified`, `Failed`, or `Unknown`
+4. Mark as: `Verified`, `Failed`, `Missing` (no evidence — a coverage gap or pre-validation wipe), or `Unknown`
 
 ### Step 4: Re-Execute Proofs
 
@@ -186,6 +220,14 @@ Produce the validation report and save to:
 | T01 | Curl login endpoint | cli | auto | Verified | 200 + JWT |
 | T01 | Dashboard screenshot | screenshot | manual | Verified (manual) | User confirmed |
 | T01 | Error state visual | visual | skip | Verified (code) | Code evidence |
+
+## Manifest Coverage
+
+**Manifest**: present (partial: false) | present (partial: true) | absent (legacy — reduced coverage)
+**Canonical tasks (manifest)**: N
+**Completed-by-evidence (board lagged)**: [list of task_ids validated from journal/proofs despite board status]
+**Manifest-vs-spec skew**: [none | list of manifest R-IDs that no longer match the current spec]
+**Lost records**: [none | manifest task_ids with no evidence and no board record — coverage gap]
 
 ## Adversarial Analysis Results
 

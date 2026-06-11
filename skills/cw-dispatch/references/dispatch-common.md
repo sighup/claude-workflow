@@ -101,6 +101,31 @@ c. **Read back with `TaskGet` after** — in a separate message, never batched w
 
 Apply tasks one at a time through (a)–(c) before starting the next. A batch of completions issued together is exactly the multi-write burst this discipline exists to prevent.
 
+## Progress Heartbeat
+
+Completions land at batch-join, not the instant a worker finishes — without a heartbeat the board shows nothing between dispatch and harvest. To close that observability lag, **at each monitor poll the orchestrator applies a metadata-only progress heartbeat for any task whose worker produced a new journal or proof artifact since the last poll.** The heartbeat advances visibility; it never advances status.
+
+Three invariants make a heartbeat safe to interleave with harvest:
+
+- **Metadata-only, never a status change.** A heartbeat writes `metadata.progress: <stage>` (and a `progress_at` timestamp). It **never** sets `status`. Status transitions to `completed`/`pending` remain **exclusively harvest-time** ([Harvest-and-Apply](#harvest-and-apply)) — the board may lag the work, but it never shows a false `completed`/`pending` state a heartbeat invented.
+- **Sole-writer, serial.** The heartbeat is a board write, so it obeys the same [Single-Writer Discipline](#single-writer-discipline) as every other write: only the orchestrator issues it, under the held writer lease, one `TaskUpdate` per message, never batched with a read or with another write. A burst of heartbeats is the same wipe trigger as a burst of completions.
+- **Idempotent.** A heartbeat carries no state the next poll cannot recompute — re-applying the same `progress` stage for the same artifact set is a no-op in effect. A dropped heartbeat write costs nothing; the next poll re-derives the stage from the same on-disk artifacts and re-applies it. Because it touches only metadata, a heartbeat can never race a completion into an inconsistent status.
+
+**Detect fresh artifacts (per in-progress task, each poll):** compare the current mtime of the task's newest journal/proof artifact against the mtime recorded at the previous poll (track per `task_id` in your loop state).
+
+1. `{task_id}.result.json` newer than last poll → stage `journal-written`.
+2. Otherwise the newest `{task_id}-*.txt` / `{task_id}-proofs.md` in the proof dir newer than last poll → stage `proofs:<artifact-name>`.
+3. No artifact newer than last poll → no heartbeat for this task this poll.
+
+**Apply (sole-writer, serial — one per message):**
+```
+TaskUpdate({
+  taskId: "<live native id for this task_id>",
+  metadata: { progress: "<stage>", progress_at: "<ISO timestamp>" }
+})
+```
+No `status` field. Resolve the live native id at write time (never a cached id). Apply heartbeats one task at a time; do not batch them and do not combine a heartbeat with the harvest completion write — a `task_id` whose artifacts indicate it is *done* this poll is handled by [Harvest-and-Apply](#harvest-and-apply) (a status write), not by a heartbeat. Heartbeats are only for tasks still in-flight whose evidence has advanced but is not yet complete.
+
 ## Mandatory First Action
 
 **Call TaskList() immediately before any other action.**

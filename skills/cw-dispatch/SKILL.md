@@ -132,9 +132,10 @@ Workers hold no Task tools — they never mark themselves done. **After each bat
 
 1. **Refresh the lease**: `"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"` so the heartbeat advances each loop (a stale lease becomes reclaimable by another writer)
 2. Run `TaskList` to check final state — the completions you applied in Step 4.5 are the board's source of truth, not any worker self-report
-3. **Dead-worker check**: for each in-progress task, evaluate the four liveness conditions. Reset and re-queue any confirmed dead worker. Full protocol: [dispatch-common.md](references/dispatch-common.md#dead-worker-reset).
-4. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
-5. Report results:
+3. **Progress heartbeat**: for each in-progress task whose worker produced a new journal/proof artifact since the last poll, apply a metadata-only progress heartbeat (`progress: <stage>`, **no status change**) — sole-writer, serial, idempotent. Status transitions stay exclusively in Step 4.5 harvest. Full protocol: [dispatch-common.md](references/dispatch-common.md#progress-heartbeat).
+4. **Dead-worker check**: for each in-progress task, evaluate the four liveness conditions. Reset and re-queue any confirmed dead worker. Full protocol: [dispatch-common.md](references/dispatch-common.md#dead-worker-reset).
+5. Run post-completion synthesis — see [dispatch-common.md](references/dispatch-common.md#post-completion-synthesis) for integration checks
+6. Report results:
 
 ```
 CW-DISPATCH COMPLETE
