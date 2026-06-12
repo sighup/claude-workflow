@@ -59,7 +59,11 @@ set -u
 CW_LEASE_TTL="${CW_LEASE_TTL:-600}"
 CW_LEASE_POLL="${CW_LEASE_POLL:-2}"
 CW_LEASE_WAIT_MAX="${CW_LEASE_WAIT_MAX:-0}"
-TASKS_DIR="${CW_TASKS_DIR:-$HOME/.claude/tasks}"
+# Root precedence must match task-store-guard.sh exactly: CW_TASKS_DIR, then
+# CW_TASKS_ROOT, then the default. A divergence here points the guard's lease
+# query at a different root than where writers lease, so the guard sees the
+# lease as free mid-write and false-restores over a live writer.
+TASKS_DIR="${CW_TASKS_DIR:-${CW_TASKS_ROOT:-$HOME/.claude/tasks}}"
 
 # --- Helpers ----------------------------------------------------------------
 

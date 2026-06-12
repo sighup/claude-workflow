@@ -119,9 +119,13 @@ lease_holder() { # list_id -> echoes holder; rc 0 held / 1 free
   # Fallback: direct lock-dir inspection (no symlink following).
   dir="${TASKS_ROOT}/${list_id}.writer"
   if [ -L "$dir" ]; then
-    # Refuse to trust a symlinked lease path; treat as held to stay safe.
-    echo "symlinked lease path (refusing to follow)"
-    return 0
+    # A symlinked lease path is never one this system wrote (it creates a real
+    # lock dir). Don't follow it — but treat it as FREE so the restore backstop
+    # can fire, matching every other untrusted/stale branch here. Returning held
+    # would defer restore forever: nothing clears the symlink, so each tick
+    # re-defers and a genuine wipe is never restored.
+    log_incident "$list_id" "symlinked lease path (fallback path — refusing to follow) — treating as free; restore will proceed"
+    return 1
   fi
   if [ -d "$dir" ]; then
     local pid host hb now age
