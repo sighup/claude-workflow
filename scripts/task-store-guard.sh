@@ -201,12 +201,11 @@ shadow_newer_than_evidence() { # list_dir shadow_file -> rc 0 restore / 1 skip
 
 # guard_tick runs exactly one poll-tick decision for a list and echoes the next
 # "LAST_COUNT WIPE_PENDING" state on a single line. The daemon carries that
-# state forward across ticks. Extracting it from the poll loop lets the fixture
-# harness (scripts/guard-fixtures/) single-step the tick logic deterministically —
-# the tick-transition-sensitive branches (gradual-delete prune, the deferred
-# WIPE_PENDING latch) can be driven one tick at a time instead of racing real
-# sleeps. Side effects (mirror, restore, incident logging) happen as before; the
-# only stdout is the trailing state line.
+# state forward across ticks. Isolating one tick in its own function keeps the
+# poll loop thin and the tick-transition-sensitive branches (gradual-delete
+# prune, the deferred WIPE_PENDING latch) in one place. Side effects (mirror,
+# restore, incident logging) happen as before; the only stdout is the trailing
+# state line.
 guard_tick() { # list_id list_dir shadow last_count wipe_pending -> "lastcount wipepending"
   local LIST_ID="$1" LIST_DIR="$2" SHADOW="$3" LAST_COUNT="$4" WIPE_PENDING="$5"
   if [ -d "$LIST_DIR" ] && [ ! -L "$LIST_DIR" ]; then
@@ -347,9 +346,10 @@ guard_restore() { # list_id list_dir shadow last_count -> rc 0 done / 1 deferred
 
 # --- Entry point ------------------------------------------------------------
 
-# When this file is sourced (e.g. by the guard fixture harness in
-# scripts/guard-fixtures/) only the function definitions are wanted — skip the
-# CLI dispatch below. ${BASH_SOURCE[0]} equals $0 only on direct execution.
+# When this file is sourced — detect-board-wipe.sh sources it to reuse
+# count_tasks/guard_restore and the TASKS_ROOT/GUARD_ROOT/MIN_TASKS globals —
+# only the function definitions are wanted, so skip the CLI dispatch below.
+# ${BASH_SOURCE[0]} equals $0 only on direct execution.
 [ "${BASH_SOURCE[0]}" = "${0}" ] || return 0
 
 case "${1:-hook}" in
