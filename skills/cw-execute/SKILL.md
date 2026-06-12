@@ -328,7 +328,8 @@ CW-RESULT-BLOCK-START
   "model_used": "sonnet",
   "verification_mode": "spawned",
   "verifier_verdict": "PASS",
-  "verifier_tokens": 12345
+  "verifier_tokens": 12345,
+  "completed_at": "2026-01-24T15:30:00Z"
 }
 CW-RESULT-BLOCK-END
 ```

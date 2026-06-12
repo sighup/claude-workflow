@@ -37,6 +37,36 @@ Workers write one `{task_id}.result.json` per task into `docs/specs/<run>/result
 | `verification_mode` | `"spawned"` \| `"inline"` \| `"inline-degraded"` | yes | `"spawned"` when a proof-verifier child ran; `"inline"` when the Task tool was unavailable; `"inline-degraded"` when the child spawned but returned no usable verdict. |
 | `completed_at` | ISO 8601 string | yes | Timestamp of journal write. |
 
+## Failure Record
+
+When a worker exhausts its retries it emits `status: "failed"` and writes the journal with a failure record instead of completion fields. The failure path writes `{task_id}.result.json` by the same Step 8.5 mechanics so the evidence is durable on disk, not sentinel-only. A failed record carries the diagnostic fields below in place of `commit_sha`, the proof/verifier fields, and `completed_at`.
+
+```json
+{
+  "task_id": "T02.1",
+  "status": "failed",
+  "failed_step": "Proof",
+  "failure_reason": "proof artifact T02.1-02-cli.txt returned exit 1; expected 0",
+  "failure_count": 3,
+  "proof_status": "partial",
+  "last_failure": "2026-06-11T14:00:00Z"
+}
+```
+
+### Field Definitions
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `task_id` | string | yes | Stable planner-assigned id, same form as a completed record. |
+| `status` | `"failed"` | yes | Marks this a failure record. |
+| `failed_step` | string | yes | Protocol step that exhausted retries (`Proof`, `Sanitize`, `Commit`, `Verify Full`, etc.). |
+| `failure_reason` | string | yes | Human-readable cause, including the last observed error or verdict. |
+| `failure_count` | number | yes | Retry attempts spent before giving up. |
+| `proof_status` | `"none"` \| `"partial"` \| `"complete"` | yes | How far proof collection got before the failure. |
+| `last_failure` | ISO 8601 string | yes | Timestamp of the final failed attempt. |
+
+A failure record omits `commit_sha`, `proof_dir`, `proof_results`, `proof_summary`, the verifier fields, and `completed_at` — the worker reached no committed, verified state.
+
 ### Invariants
 
 - `task_id` always uses the stable planner-assigned form (`T01`, `T02.1`, etc.). Proof files must follow the same convention (`T02.1-01-file.txt`), never the native task-store integer — proof files keyed on a native id cannot be matched across a board wipe.
@@ -71,8 +101,9 @@ CW-RESULT-BLOCK-END
 
 ### Contract
 
-- The sentinel block contains exactly the same fields as `{task_id}.result.json`. Workers must keep the two in sync; the dispatcher treats them as identical representations.
+- The sentinel block contains exactly the same fields as `{task_id}.result.json` — a completion record on success, a failure record on failure. Workers must keep the two in sync; the dispatcher treats them as identical representations.
 - The block appears as the last substantive content of the worker's final message.
 - The dispatcher extracts the block by scanning from the first `CW-RESULT-BLOCK-START` line to the matching `CW-RESULT-BLOCK-END` line and parsing the enclosed JSON.
-- If the extracted JSON fails to parse, is missing required fields, or has `status != "completed"`, the dispatcher falls back to the on-disk journal.
-- A worker that commits but emits no usable block and writes no journal leaves the task without completion evidence. The dispatcher detects this on the next loop via the manifest and re-dispatches the task.
+- A parseable block with `status: "completed"` and all completion fields applies the board completion. A parseable block with `status: "failed"` and all failure fields is first-class evidence too: the dispatcher records the failure diagnostics and keeps the task dispatchable for re-attempt.
+- If the extracted JSON fails to parse or is missing the required fields for its `status`, the dispatcher falls back to the matching on-disk journal — which the failure path also writes.
+- A worker that emits no usable block and writes no journal leaves the task without evidence. The dispatcher detects this on the next loop via the manifest and re-dispatches the task.

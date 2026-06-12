@@ -7,13 +7,13 @@ Detailed step-by-step instructions for the implementer worker.
 **Goal**: Understand current state without making changes.
 
 1. `cd "$(git rev-parse --show-toplevel)"` — all metadata paths are repo-root-relative
-2. Run `TaskList` to see all tasks and their statuses
-3. Identify your assigned task (by owner or next unblocked pending task)
-4. Run `TaskGet(taskId)` to load full task metadata
-5. Check git status - ensure clean working tree
-6. Read recent git history (`git log --oneline -10`)
+2. Parse the complete assignment from your spawn prompt: `task_id`, requirements, scope (`files_to_create`, `files_to_modify`, `patterns_to_follow`), proof artifacts, `proof_capture`, and the `verification.pre`/`verification.post` commands — all delivered inline. This is your sole source of task metadata; you hold no Task tools and never read the board.
+3. Check git status — ensure clean working tree
+4. Read recent git history (`git log --oneline -10`)
 
-**Exit criteria**: You know which task to execute and the codebase is clean.
+The orchestrator set this task to `in_progress` on the board before dispatching you; you do not write status yourself.
+
+**Exit criteria**: You have parsed the inline assignment and the codebase is clean.
 
 ## Step 2: Baseline
 
@@ -125,7 +125,7 @@ The commit in Step 8 carries an ordinary implementation message — no metadata 
 
 1. `commit_sha=$(git rev-parse HEAD)`
 2. Resolve the results directory: `docs/specs/[spec-dir]/results/` (the run's gitignored results dir; create it if absent)
-3. Write `{task_id}.result.json` into that directory, conforming to [result-journal-schema.md](result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, and the proof paths/results from Step 6. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict — the journal is finalized at the end of Step 9, before the dual-write in Step 10.
+3. Write `{task_id}.result.json` into that directory, conforming to [result-journal-schema.md](result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, and the proof paths/results from Step 6. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict — the journal is finalized at the end of Step 9, before the Step 10 RESULT BLOCK.
 
 The journal is written once and never edited after finalization. `commit_sha` is the sole commit-to-task link; the dispatcher verifies it against git before accepting the record.
 
@@ -147,46 +147,16 @@ The journal is written once and never edited after finalization. `commit_sha` is
 
 ## Step 10: Report
 
-**Goal**: Update task board with results.
+**Goal**: Hand off your result to the orchestrator, the sole board writer.
 
-1. Construct proof_results:
-   ```json
-   [
-     { "type": "test", "status": "pass", "output_file": "T01-01-test.txt" },
-     { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
-   ]
-   ```
-This step **dual-writes** — emit the journal's sentinel block in your final message AND issue the legacy completing `TaskUpdate`. Both paths carry the same evidence; the dispatcher harvests the sentinel first (highest precedence) and the on-disk journal is its fallback, while the `TaskUpdate` keeps the board fully backward-compatible. Issue both — dropping either breaks a harvest path.
+You hold no Task tools. The orchestrator applies your completion `TaskUpdate` itself after harvesting your evidence: finalize the Step 8.5 journal, then emit the matching `CW-RESULT-BLOCK` sentinel as the last substantive content of your final message. The orchestrator harvests the sentinel first (highest precedence) and falls back to the on-disk journal.
 
-1. Construct proof_results:
-   ```json
-   [
-     { "type": "test", "status": "pass", "output_file": "T01-01-test.txt" },
-     { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
-   ]
-   ```
-2. Update task (legacy board write, unchanged):
-   ```
-   TaskUpdate({
-     taskId: "<native-id>",
-     status: "completed",
-     metadata: {
-       proof_dir: "docs/specs/[spec-dir]/[NN]-proofs",
-       proof_results: [...],
-       proof_summary: "X/Y proofs passed",
-       commit_sha: "<sha from git log --oneline -1>",
-       completed_at: "<ISO timestamp>",
-       verification_mode: "spawned | inline | inline-degraded",
-       verifier_verdict: "PASS",
-       verifier_tokens: "<number (relayed child usage) when spawned; literal n/a when inline or inline-degraded>"
-     }
-   })
-   ```
-3. Emit the `CW-RESULT-BLOCK` sentinel as the last substantive content of your final message, holding the same fields as the Step 8.5 journal. Format and contract: [result-journal-schema.md](result-journal-schema.md). Keep the block and the on-disk journal identical.
+1. Finalize `{task_id}.result.json` with the Step 9 verifier fields and `completed_at`, conforming to [result-journal-schema.md](result-journal-schema.md).
+2. Emit the `CW-RESULT-BLOCK` sentinel holding exactly the same fields as the journal — keep the block and the on-disk journal byte-identical. Format and contract: [result-journal-schema.md](result-journal-schema.md).
 
-Never set `status: "completed"` (in the board write or the sentinel) unless `verifier_verdict` is PASS.
+Never report `status: "completed"` (in the journal or the sentinel) unless `verifier_verdict` is PASS.
 
-**Exit criteria**: Legacy `TaskUpdate` applied with proof_dir, proof_results, proof_summary, commit_sha, completed_at, verification_mode, and verifier_verdict in metadata; matching `CW-RESULT-BLOCK` sentinel emitted in the final message.
+**Exit criteria**: `{task_id}.result.json` finalized with proof_dir, proof_results, proof_summary, commit_sha, completed_at, verification_mode, and verifier_verdict; matching `CW-RESULT-BLOCK` sentinel emitted as the final message.
 
 ## Step 11: Clean Exit
 
@@ -219,16 +189,18 @@ if attempt >= 3:
 
 1. `git stash push -m "cw-execute: {task_id} partial work"`
 2. `git checkout -- .` (clean working tree)
-3. Update task:
+3. Write `{task_id}.result.json` with the failure record (same Step 8.5 mechanics) so the failure evidence is durable on disk, then emit a matching `status: "failed"` `CW-RESULT-BLOCK` as your final message. The orchestrator harvests it, records the diagnostics, and keeps the task dispatchable. Failure-record fields and the failed-block contract: [result-journal-schema.md](result-journal-schema.md):
    ```
-   TaskUpdate({
-     taskId: "<native-id>",
-     status: "pending",
-     metadata: {
-       proof_results: [{ status: "failed", error: "..." }],
-       last_failure: "<ISO timestamp>",
-       failure_count: N
-     }
-   })
+   CW-RESULT-BLOCK-START
+   {
+     "task_id": "<task_id>",
+     "status": "failed",
+     "failed_step": "Proof|Sanitize|Commit|Verify Full|etc",
+     "failure_reason": "...",
+     "failure_count": N,
+     "proof_status": "none|partial|complete",
+     "last_failure": "<ISO timestamp>"
+   }
+   CW-RESULT-BLOCK-END
    ```
 4. Exit with error summary
