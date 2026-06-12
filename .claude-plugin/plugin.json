@@ -53,6 +53,17 @@
         ]
       }
     ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/probe-task-completed.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "CwdChanged": [
       {
         "hooks": [
