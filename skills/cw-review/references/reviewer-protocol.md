@@ -151,8 +151,8 @@ Output result and exit:
 
 - Never modify implementation code
 - Never create FIX tasks or any new tasks
-- Only examine files in your assignment (task metadata or inline prompt)
-- Always update task status before exiting (batch-task mode; inline assignment reports via final message)
+- Only examine files in your spawn-prompt assignment
+- Always emit the RESULT BLOCK before exiting
 - Never spawn sub-agents — sub-reviewers are leaf children ([nesting-guardrails.md](../../cw-dispatch/references/nesting-guardrails.md))
 - Always include file paths and line numbers in findings
 - Read each file in full — do not rely solely on the diff

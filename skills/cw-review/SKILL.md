@@ -215,17 +215,6 @@ This step is the same for both inline and parallel review paths.
 
 For each **blocking** finding (Categories A, B, C), create a FIX task:
 
-After TaskCreate returns the new task id, **append one JSON line to the manifest fix segment** so the dispatch exit gate's completion predicate includes this task:
-
-```bash
-printf '%s\n' "$(jq -nc --arg id "$FIX_TASK_ID" --arg cat "$CATEGORY" \
-  --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{task_id: $id, type: "review-fix", category: $cat, created_at: $t}')" \
-  >> ~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"/manifest.fix.jsonl
-```
-
-Single writer per line — only the review orchestrator appends to `manifest.fix.jsonl`. Never rewrite or truncate the file; append only.
-
 ```
 TaskCreate({
   subject: "FIX-REVIEW: [concise description of the issue]",
@@ -257,6 +246,20 @@ TaskUpdate({
   }
 })
 ```
+
+After TaskCreate/TaskUpdate return the new task id, **append one JSON line to the manifest fix segment** so the dispatch exit gate's completion predicate includes this task. Guard the append: bail if `CLAUDE_CODE_TASK_LIST_ID` is unset (an unguarded append to a `.../...//manifest.fix.jsonl` path silently excludes the fix task from the exit-gate union), and `mkdir -p` the segment directory so a first append on a fresh list does not fail on a missing path:
+
+```bash
+: "${CLAUDE_CODE_TASK_LIST_ID:?manifest append skipped: CLAUDE_CODE_TASK_LIST_ID unset}"
+MANIFEST_DIR=~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"
+mkdir -p "$MANIFEST_DIR"
+printf '%s\n' "$(jq -nc --arg id "$FIX_TASK_ID" --arg cat "$CATEGORY" \
+  --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{task_id: $id, type: "review-fix", category: $cat, created_at: $t}')" \
+  >> "$MANIFEST_DIR/manifest.fix.jsonl"
+```
+
+Single writer per line — only the review orchestrator appends to `manifest.fix.jsonl`. Never rewrite or truncate the file; append only.
 
 ### Step 4: Generate Review Report
 
