@@ -73,13 +73,22 @@ if grep -q 'CW-RESULT-BLOCK-START' "$TRANSCRIPT" 2>/dev/null; then
 fi
 # An on-disk {task_id}.result.json is equally valid, but only THIS worker's own
 # journal counts — a stale journal from a prior task in the shared results dir
-# must not satisfy an unrelated worker's gate. Scope the check to the task_id the
-# worker names in its transcript.
+# must not satisfy an unrelated worker's gate. Take the LAST task_id the worker
+# names (its own completing TaskUpdate / result block sits at the end of the
+# transcript); head -1 would pick an early-quoted sibling/dependency id and
+# match a prior worker's journal.
 if [ "$JOURNAL_PRESENT" = false ]; then
   TASK_ID=$(grep -o '"task_id":[ ]*"[^"]*"' "$TRANSCRIPT" 2>/dev/null \
-    | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    | tail -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  # The results dir is repo-relative, but SubagentStop's cwd is not guaranteed
+  # to be the repo root (workers run under .claude/worktrees/<name>/). Resolve
+  # the repo root from the payload cwd so a cwd-relative glob can't miss and
+  # wrongly block a worker that did write its journal.
+  HOOK_CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+  REPO_ROOT=$(git -C "${HOOK_CWD:-.}" rev-parse --show-toplevel 2>/dev/null) || true
+  REPO_ROOT="${REPO_ROOT:-${HOOK_CWD:-.}}"
   if [ -n "$TASK_ID" ] && \
-     ls docs/specs/*/results/"$TASK_ID".result.json >/dev/null 2>&1; then
+     ls "$REPO_ROOT"/docs/specs/*/results/"$TASK_ID".result.json >/dev/null 2>&1; then
     JOURNAL_PRESENT=true
   fi
 fi
