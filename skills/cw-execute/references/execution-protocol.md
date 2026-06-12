@@ -115,6 +115,8 @@ Proof commands run inline here because the on-disk artifacts must be written (th
 3. Commit: `git commit -m "<metadata.commit.template>" -- $FILES`
 4. Verify: `git show --name-only HEAD -- $FILES`
 
+**`index.lock` contention**: other workers and the orchestrator share this repository, so `git add`/`git commit` can fail with `Unable to create '.git/index.lock': File exists`. Retry the failed command after a 2-second wait, up to 3 attempts — the other process's git operation is sub-second and will have finished. Remove the lock file manually only after the retries fail AND `ps` shows no running `git` process (then it is a stale lock from a crashed process, not contention).
+
 **Exit criteria**: Implementation files committed.
 
 ## Step 8.5: Write Result Journal
