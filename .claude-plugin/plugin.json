@@ -53,23 +53,12 @@
         ]
       }
     ],
-    "TaskCompleted": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/probe-task-completed.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
     "PostToolBatch": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/probe-post-tool-batch.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/detect-board-wipe.sh",
             "timeout": 5
           }
         ]
