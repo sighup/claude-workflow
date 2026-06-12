@@ -213,6 +213,8 @@ TaskUpdate({ taskId: "t02-id", addBlockedBy: ["t01-id"] })
 
 After creating all parent tasks, **STOP** and output a `PLANNING SUMMARY`. Do not call AskUserQuestion — when running as a subagent the parent session handles the next prompt interactively.
 
+**Subagent contexts have no task tools — return the decomposition instead.** When this skill runs inside a spawned planner agent, `TaskCreate`/`TaskUpdate` are unavailable (a platform limitation of subagent contexts, observed consistently in live runs). Do not fail and do not write task files by hand. Output the complete decomposition — every task with its full `metadata` object, plus the `blockedBy` edges by stable `task_id` — as structured JSON in your final message. The invoking orchestrator is the single writer for the planning phase: it executes the `TaskCreate`/`addBlockedBy` calls from your returned decomposition verbatim, verifies the wiring with a `TaskList` read-back, and performs the Step 4 manifest write itself. This orchestrator-writes path is the **primary** path whenever the planner is a subagent, not a degraded fallback — it preserves single-writer discipline by construction.
+
 Evaluate two signals to form a recommendation:
 - **Complexity**: are any tasks marked `complex`?
 - **Parallelization**: are there 2+ tasks that can run concurrently (no dependency between them)?
@@ -258,7 +260,7 @@ After every `TaskCreate` and `addBlockedBy` call has landed — parent tasks fro
 
 1. **Read back the live board**: call `TaskList` (and `TaskGet` per task as needed) so the manifest reflects what the task store actually holds, not what you intended to create. A `TaskCreate` the store silently dropped is then absent from the manifest too, surfacing the loss at plan time instead of mid-run.
 
-2. **Resolve the manifest path**: `~/.claude/tasks/.manifest/<list-id>/manifest.json`, where `<list-id>` is `CLAUDE_CODE_TASK_LIST_ID` (from Step 0). Create the directory if absent. This location is co-located with the lease and guard state, keyed by list-id, and survives worktree removal and `git clean`.
+2. **Resolve the manifest path**: `~/.claude/tasks/.manifest/<list-id>/manifest.json`, where `<list-id>` is `CLAUDE_CODE_TASK_LIST_ID` (from Step 0). When that variable is unset (session-based lists), discover the real list id by matching a task subject from your `TaskList` read-back against `~/.claude/tasks/*/[0-9]*.json` — never derive an id from the project or package name; a manifest keyed to an invented id is invisible to the dispatcher's exit gate and the guard. Create the directory if absent. This location is co-located with the lease and guard state, keyed by list-id, and survives worktree removal and `git clean`.
 
 3. **Build the manifest object** from the read-back. One entry per task, keyed on the stable `task_id`:
 
