@@ -55,14 +55,19 @@ See [dispatch-common.md](references/dispatch-common.md#identify-parallel-groups)
 
 ### Step 3: Acquire the Writer Lease
 
-You are the run's single writer. **Before your first board write** (the ownership writes in Step 3b), acquire the cross-process writer lease so no second dispatcher, resumed session, or guard write fights you. Acquire-or-wait — never proceed without it. Full lifecycle (stable `CW_LEASE_PID`, per-loop refresh, release at exit): [dispatch-common.md](references/dispatch-common.md#writer-lease-lifecycle).
+You are the run's single writer. **Before your first board write** (the ownership writes in Step 3b), acquire the cross-process writer lease so no second dispatcher, resumed session, or guard write fights you. Acquire-or-wait — never proceed without it. Full lifecycle (stable owner token, per-loop refresh, release at exit): [dispatch-common.md](references/dispatch-common.md#writer-lease-lifecycle).
+
+Record one stable owner token to disk at acquire, then re-read it inline on **every** lease invocation. An `export` does not survive into the separate Bash invocations that run `refresh` (Step 5.1) and `release` (loop exit) — there `$$` differs and the owner check fails, so the lease goes stale and becomes reclaimable mid-run. A token file the run owns is read identically by every later invocation.
 
 ```bash
-export CW_LEASE_PID=$$   # stable owner id reused by refresh/release across invocations
-"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
+mkdir -p "docs/specs/<run>/results"
+OWNER_TOKEN="$$@$(hostname)"                         # stable for the whole run
+printf '%s' "$OWNER_TOKEN" > "docs/specs/<run>/results/dispatch-owner.token"
+CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+  "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
 ```
 
-`acquire` blocks until the lease is free or reclaimable. Do not issue any `TaskUpdate`/`TaskCreate` until it returns success.
+`acquire` blocks until the lease is free or reclaimable. Do not issue any `TaskUpdate`/`TaskCreate` until it returns success. Every later `refresh`/`release` re-reads the same token file inline — never assume the value is exported.
 
 ### Step 3b: Assign Ownership
 
@@ -130,7 +135,11 @@ Workers hold no Task tools — they never mark themselves done. **After each bat
 
 ### Step 5: Refresh, Monitor, and Report
 
-1. **Refresh the lease**: `"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"` so the heartbeat advances each loop (a stale lease becomes reclaimable by another writer)
+1. **Refresh the lease** so the heartbeat advances each loop (a stale lease becomes reclaimable by another writer). Re-read the owner token inline — this Bash invocation does not inherit the acquire-time export:
+   ```bash
+   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+     "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"
+   ```
 2. Run `TaskList` to check final state — the completions you applied in Step 4.5 are the board's source of truth, not any worker self-report
 3. **Progress heartbeat**: for each in-progress task whose worker produced a new journal/proof artifact since the last poll, apply a metadata-only progress heartbeat (`progress: <stage>`, **no status change**) — sole-writer, serial, idempotent. Status transitions stay exclusively in Step 4.5 harvest. Full protocol: [dispatch-common.md](references/dispatch-common.md#progress-heartbeat).
 4. **Dead-worker check**: for each in-progress task, evaluate the four liveness conditions. Reset and re-queue any confirmed dead worker. Full protocol: [dispatch-common.md](references/dispatch-common.md#dead-worker-reset).
@@ -160,13 +169,14 @@ Progress: X/Y tasks complete
 
 Loop Step 1 → Step 5 → Step 1 until termination conditions fire (`Ready=0+Pending=0` or `Ready=0+Blocked>0`). These conditions are **candidate** stops only — each must clear the [Manifest-Authoritative Exit Gate](references/dispatch-common.md#manifest-authoritative-exit-gate) before the loop actually terminates. With a manifest present, exit requires journal/proof evidence for **every** manifest `task_id`; an empty/thin board with uncompleted manifest `task_id`s is a wipe → reconcile and keep looping, never exit. Absent-manifest (legacy) runs fall back to the count-based conditions after the one-time synth-manifest-from-board step, reported as reduced coverage. Findings, build failures, worker errors, and scope discoveries go in the report — the loop continues with whatever remains dispatchable. Never call AskUserQuestion mid-loop.
 
-**Lease across the loop**: acquire once (Step 3, before the first ownership write), refresh every loop (Step 5.1), and **release at loop exit** so the next phase or dispatcher can take it:
+**Lease across the loop**: acquire once (Step 3, before the first ownership write), refresh every loop (Step 5.1), and **release at loop exit** so the next phase or dispatcher can take it. Re-read the owner token inline here too — this exit invocation is a fresh shell with no inherited export:
 
 ```bash
-"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
+CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+  "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
 ```
 
-Release is idempotent and owner-checked (it uses the same `CW_LEASE_PID` you exported in Step 3). Release whenever the loop terminates — including the early-exit conditions in [dispatch-common.md](references/dispatch-common.md#survey-task-board). Never leave a held lease behind; a leaked live lease blocks the next writer until its TTL expires.
+Release is idempotent and owner-checked: the re-read token matches the value `acquire` recorded, so the owner check passes. Release whenever the loop terminates — including the early-exit conditions in [dispatch-common.md](references/dispatch-common.md#survey-task-board). Never leave a held lease behind; a leaked live lease blocks the next writer until its TTL expires.
 
 ## Conflict Prevention
 

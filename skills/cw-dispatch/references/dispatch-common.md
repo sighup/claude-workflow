@@ -23,29 +23,35 @@ Two rules make this safe:
 
 The lease is `scripts/cw-lease.sh` — an atomic `mkdir`-based lease at `~/.claude/tasks/<list-id>.writer` holding `pid+host+heartbeat+phase`, reclaimable only once its heartbeat exceeds the TTL. `<list-id>` is `CLAUDE_CODE_TASK_LIST_ID`. Invoke it via `"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh"`.
 
-1. **Export a stable owner id once, before acquiring**:
-   ```bash
-   export CW_LEASE_PID=$$
-   ```
-   The lease records ownership as `CW_LEASE_PID` + host. Exporting a stable value (your shell pid) lets a later `refresh`/`release` — even from a separate CLI invocation the orchestrator drives — still match the holder. Without it, each invocation defaults to its own `$$` and cannot refresh or release a lease an earlier invocation took.
+The lease records ownership as `CW_LEASE_PID` + host. The owner check on every `refresh`/`release` compares the `CW_LEASE_PID` of that invocation against the value `acquire` stored. `refresh` and `release` run in separate Bash invocations from `acquire`, so an `export` set at acquire is gone and a bare `$$` resolves to a different pid — the owner check fails, the heartbeat stops advancing, and the lease becomes reclaimable while you still hold it. Record one stable token to a run-owned file at acquire and re-read it inline on every invocation.
 
-2. **Acquire before the first board write** (Step 3 ownership writes), acquire-or-wait:
+1. **Write a stable owner token once, before acquiring**:
    ```bash
-   "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
+   mkdir -p "docs/specs/<run>/results"
+   printf '%s' "$$@$(hostname)" > "docs/specs/<run>/results/dispatch-owner.token"
+   ```
+   The token is the run's identity for the whole lifecycle. A file the run owns is read identically by every later invocation, where an export is not. Derive it once; never recompute `$$` at refresh or release time.
+
+2. **Acquire before the first board write** (Step 3 ownership writes), acquire-or-wait, with the token re-read inline:
+   ```bash
+   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+     "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
    ```
    `acquire` blocks until the lease is free or reclaimable, then takes it — it **never proceeds-with-warning**. Issue no `TaskUpdate`/`TaskCreate` until it returns success. A second dispatcher or resumed session waits here rather than racing you.
 
-3. **Refresh each loop** (Step 5), so the heartbeat advances and the lease is never mistaken for stale while you still hold it:
+3. **Refresh each loop** (Step 5), so the heartbeat advances and the lease is never mistaken for stale while you still hold it. Re-read the token inline — this invocation does not inherit the acquire-time value:
    ```bash
-   "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"
+   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+     "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"
    ```
    `refresh` fails if you are not the holder — if it does, stop writing and re-check `status`; another writer holds the lease and your single-writer assumption is broken.
 
-4. **Release at loop exit** — every termination path, including the early exits in [Survey Task Board](#survey-task-board):
+4. **Release at loop exit** — every termination path, including the early exits in [Survey Task Board](#survey-task-board) — again with the token re-read inline:
    ```bash
-   "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
+   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+     "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
    ```
-   Release is idempotent and owner-checked. A leaked live lease blocks the next writer until its TTL expires, so always release.
+   Release is idempotent and owner-checked: the re-read token matches what `acquire` stored. A leaked live lease blocks the next writer until its TTL expires, so always release.
 
 The slimmed backstop guard runs mirror/log-only while any writer lease is held, so guard and orchestrator are coordinated writers, never independent ones.
 
@@ -299,7 +305,7 @@ Before outputting any completion or "no tasks" message, verify:
 
 ## Phase-End Cleanup
 
-After the exit gate passes (every `task_id` evidence-complete, segment guard passes), retire run artifacts that are no longer needed. Run this step once, at the end of the run, before releasing the lease.
+After the exit gate passes (every `task_id` evidence-complete, segment guard passes), retire run artifacts that are no longer needed. Run this step once, at the end of the run, **while still holding the lease** — every removal below, including the manifest directory, happens under the lease. Releasing the lease is the final action, after the manifest is gone.
 
 **What to retire:**
 
@@ -307,10 +313,10 @@ After the exit gate passes (every `task_id` evidence-complete, segment guard pas
 |----------|----------|--------|
 | Per-task result journals | `docs/specs/<run>/results/{task_id}.result.json` | Remove each file once its `task_id` is evidence-complete and the harvest-checkpoint confirms the completion write landed |
 | Harvest-checkpoint log | `docs/specs/<run>/results/harvest-checkpoint.log` | Remove after all `task_id`s are confirmed complete |
-| Writer lease | `~/.claude/tasks/<list-id>.writer` | Release via `cw-lease.sh release` — the last step before exit |
-| Core manifest + segments | `~/.claude/tasks/.manifest/<list-id>/` | Remove the entire directory after exit gate passes and the lease is released |
+| Core manifest + segments | `~/.claude/tasks/.manifest/<list-id>/` | Remove the entire directory **while still holding the lease**, after journals and checkpoint are retired |
+| Writer lease | `~/.claude/tasks/<list-id>.writer` | Release via `cw-lease.sh release` — the **last** step, after the manifest directory is gone |
 
-**Order:** retire journals first (most granular), then the checkpoint, then release the lease, then remove the manifest directory. Removing the manifest before the lease is released would cause a concurrent session to fall into the absent-manifest path rather than the wipe-detection path — release the lease first.
+**Order:** retire journals first (most granular), then the checkpoint, then remove the manifest directory **under the lease**, then release the lease last. Removing the manifest after releasing would open a race: a new writer could acquire the freed lease, read the still-present manifest in the exit gate's Step A, and have it deleted underneath mid-gate. Holding the lease until the manifest is gone means any waiting writer only acquires once the directory is already absent, so it enters the absent-manifest path cleanly rather than reading a manifest about to vanish.
 
 **Do not remove proof directories** — proof artifacts under `docs/specs/<run>/[NN]-proofs/` are committed to git and belong to the implementation record. They are not run state.
 
@@ -320,10 +326,13 @@ After the exit gate passes (every `task_id` evidence-complete, segment guard pas
 # Remove a completed task's journal (run after harvest-checkpoint confirms the task)
 rm -f "docs/specs/<run>/results/${TASK_ID}.result.json"
 
-# Remove the checkpoint and manifest dir at full run completion
+# At full run completion, still holding the lease: checkpoint, then manifest dir
 rm -f "docs/specs/<run>/results/harvest-checkpoint.log"
-"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
 rm -rf ~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"
+
+# Release the lease last, after the manifest directory is gone
+CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+  "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
 ```
 
 ## Guard Sunset Gate
@@ -415,7 +424,11 @@ A worker that has been in-progress past the liveness timeout with no commit or j
 1. Time elapsed since `dispatched_at` exceeds the liveness timeout.
 2. No `{task_id}.result.json` exists under the results dir.
 3. No proof artifacts (`{task_id}-proofs.md`) exist in the proof dir.
-4. No implementation commit for the task is reachable in git (checked via `git log --oneline -- <scope files>`).
+4. No implementation commit for the task is reachable in git **since the worker was dispatched**, bounding the search by the `dispatched_at` recorded in Step 3b:
+   ```bash
+   git log --oneline --since="$dispatched_at" -- <scope files>
+   ```
+   An unbounded `git log -- <scope files>` always matches pre-existing commits on those paths, so the condition would never be true and a dead worker would never reset. `--since="$dispatched_at"` counts only commits this worker could have made; empty output means no implementation commit landed.
 
 All four conditions together confirm a dead worker. A task missing only some evidence is in-flight, not dead — never reset until all four apply.
 
