@@ -1,0 +1,45 @@
+name: Shell Tests
+
+on:
+  push:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/shell-tests.yml'
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/shell-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  guard-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Ensure shellcheck + jq
+        run: |
+          missing=""
+          command -v shellcheck >/dev/null || missing="$missing shellcheck"
+          command -v jq >/dev/null || missing="$missing jq"
+          if [ -n "$missing" ]; then
+            sudo apt-get update
+            # shellcheck disable=SC2086
+            sudo apt-get install -y $missing
+          fi
+
+      - name: ShellCheck guard scripts
+        run: |
+          shellcheck \
+            scripts/task-store-guard.sh \
+            scripts/detect-board-wipe.sh \
+            scripts/cw-lease.sh \
+            scripts/guard-fixtures/*.sh
+
+      - name: Guard decision fixtures
+        run: scripts/guard-fixtures/run.sh
+
+      - name: Detect-board-wipe tests
+        run: scripts/guard-fixtures/detect-wipe-test.sh
