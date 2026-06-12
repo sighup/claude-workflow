@@ -40,13 +40,17 @@
 #                         (default 0 = wait indefinitely)
 #   CW_TASKS_DIR          override the tasks root (default ~/.claude/tasks)
 #   CW_LEASE_HOST         override the recorded host name (default hostname)
+#   CW_LEASE_TOKEN_FILE   path to a file holding the owner identity. Preferred:
+#                         call sites pass a literal path (no command
+#                         substitution), which keeps the invocation statically
+#                         analyzable for permission allowlists. Read fresh on
+#                         every invocation, so refresh/release from later CLI
+#                         invocations still match the holder.
 #   CW_LEASE_PID          owner identity recorded/checked for ownership
-#                         (default $$). A controlling process that drives the
-#                         lease across separate CLI invocations should export
-#                         its own stable pid here so that refresh/release from a
-#                         later invocation still match the holder. Two distinct
-#                         owners (different CW_LEASE_PID + host) remain mutually
-#                         exclusive, which is the cross-process guarantee.
+#                         (default $$); used when CW_LEASE_TOKEN_FILE is unset.
+#                         Two distinct owners (different identity + host) remain
+#                         mutually exclusive, which is the cross-process
+#                         guarantee.
 #
 set -u
 
@@ -71,10 +75,23 @@ this_host() {
     echo "${CW_LEASE_HOST:-$(hostname 2>/dev/null || echo unknown)}"
 }
 
-# The owner identity recorded in the lease. Defaults to this process's pid, but
-# a controlling process can export CW_LEASE_PID to keep ownership stable across
-# separate CLI invocations it drives.
+# The owner identity recorded in the lease. Preferred source is
+# CW_LEASE_TOKEN_FILE (a literal path read fresh per invocation — call sites
+# stay free of command substitution and thus statically analyzable for
+# permission allowlists). Falls back to CW_LEASE_PID, then this process's pid.
 this_owner() {
+    if [ -n "${CW_LEASE_TOKEN_FILE:-}" ]; then
+        if [ ! -r "$CW_LEASE_TOKEN_FILE" ]; then
+            # Runs inside $(...) — an exit here would only kill the subshell and
+            # an empty owner could collide with another misconfigured caller.
+            # Emit a unique non-owner identity so the owner check fails loudly.
+            err "CW_LEASE_TOKEN_FILE is set but not readable: $CW_LEASE_TOKEN_FILE"
+            echo "missing-token-file-$$"
+            return
+        fi
+        cat "$CW_LEASE_TOKEN_FILE"
+        return
+    fi
     echo "${CW_LEASE_PID:-$$}"
 }
 

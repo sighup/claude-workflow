@@ -21,9 +21,19 @@ Two rules make this safe:
 
 ### Writer Lease Lifecycle
 
-The lease is `scripts/cw-lease.sh` — an atomic `mkdir`-based lease at `~/.claude/tasks/<list-id>.writer` holding `pid+host+heartbeat+phase`, reclaimable only once its heartbeat exceeds the TTL. `<list-id>` is `CLAUDE_CODE_TASK_LIST_ID`. Invoke it via `"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh"`.
+The lease is `scripts/cw-lease.sh` — an atomic `mkdir`-based lease at `~/.claude/tasks/<list-id>.writer` holding `pid+host+heartbeat+phase`, reclaimable only once its heartbeat exceeds the TTL. Invoke it via `"$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh"`.
 
-The lease records ownership as `CW_LEASE_PID` + host. The owner check on every `refresh`/`release` compares the `CW_LEASE_PID` of that invocation against the value `acquire` stored. `refresh` and `release` run in separate Bash invocations from `acquire`, so an `export` set at acquire is gone and a bare `$$` resolves to a different pid — the owner check fails, the heartbeat stops advancing, and the lease becomes reclaimable while you still hold it. Record one stable token to a run-owned file at acquire and re-read it inline on every invocation.
+**`<list-id>` must be the id of the list that actually holds your tasks — never invented.** Resolve it deterministically, in this order:
+
+1. `CLAUDE_CODE_TASK_LIST_ID`, when set (worktree sessions set it via `.claude/settings.local.json`).
+2. When unset, discover the session's list directory under `~/.claude/tasks/`: take a subject string from your `TaskList` read and find the directory whose task JSONs contain it —
+   ```bash
+   grep -l "<task #1 subject substring>" ~/.claude/tasks/*/[0-9]*.json 2>/dev/null
+   ```
+   The matching directory's basename is the list id. Verify the match: its `*.json` count equals your `TaskList` count.
+3. If neither resolves to exactly one directory, **stop and report** — do not derive a name from the project, package, or branch. A lease keyed to a wrong id is worse than useless: the guard's defer check looks up the lease *by the real list id*, sees none, and will restore mid-dispatch — re-creating the dual-writer hazard the lease exists to prevent.
+
+The lease records ownership as an owner token + host. The owner check on every `refresh`/`release` compares the identity of that invocation against the value `acquire` stored. `refresh` and `release` run in separate Bash invocations from `acquire`, so an `export` set at acquire is gone and a bare `$$` resolves to a different pid — the owner check fails, the heartbeat stops advancing, and the lease becomes reclaimable while you still hold it. Record one stable token to a run-owned file at acquire and pass its **literal path** via `CW_LEASE_TOKEN_FILE` on every invocation — the script reads it fresh each time, and the call site stays free of command substitution (statically analyzable, so it can be allowlisted instead of re-prompting in interactive sessions).
 
 1. **Write a stable owner token once, before acquiring**:
    ```bash
@@ -32,26 +42,26 @@ The lease records ownership as `CW_LEASE_PID` + host. The owner check on every `
    ```
    The token is the run's identity for the whole lifecycle. A file the run owns is read identically by every later invocation, where an export is not. Derive it once; never recompute `$$` at refresh or release time.
 
-2. **Acquire before the first board write** (Step 3 ownership writes), acquire-or-wait, with the token re-read inline:
+2. **Acquire before the first board write** (Step 3 ownership writes), acquire-or-wait, passing the token-file path:
    ```bash
-   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+   CW_LEASE_TOKEN_FILE="docs/specs/<run>/results/dispatch-owner.token" \
      "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
    ```
    `acquire` blocks until the lease is free or reclaimable, then takes it — it **never proceeds-with-warning**. Issue no `TaskUpdate`/`TaskCreate` until it returns success. A second dispatcher or resumed session waits here rather than racing you.
 
-3. **Refresh each loop** (Step 5), so the heartbeat advances and the lease is never mistaken for stale while you still hold it. Re-read the token inline — this invocation does not inherit the acquire-time value:
+3. **Refresh each loop** (Step 5), so the heartbeat advances and the lease is never mistaken for stale while you still hold it. Pass the token-file path again — this invocation does not inherit the acquire-time value:
    ```bash
-   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+   CW_LEASE_TOKEN_FILE="docs/specs/<run>/results/dispatch-owner.token" \
      "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" refresh "$CLAUDE_CODE_TASK_LIST_ID"
    ```
    `refresh` fails if you are not the holder — if it does, stop writing and re-check `status`; another writer holds the lease and your single-writer assumption is broken.
 
-4. **Release at loop exit** — every termination path, including the early exits in [Survey Task Board](#survey-task-board) — again with the token re-read inline:
+4. **Release at loop exit** — every termination path, including the early exits in [Survey Task Board](#survey-task-board) — again with the token-file path:
    ```bash
-   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+   CW_LEASE_TOKEN_FILE="docs/specs/<run>/results/dispatch-owner.token" \
      "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
    ```
-   Release is idempotent and owner-checked: the re-read token matches what `acquire` stored. A leaked live lease blocks the next writer until its TTL expires, so always release.
+   Release is idempotent and owner-checked: the token file's contents match what `acquire` stored. A leaked live lease blocks the next writer until its TTL expires, so always release.
 
 The slimmed backstop guard runs mirror/log-only while any writer lease is held, so guard and orchestrator are coordinated writers, never independent ones.
 
@@ -59,9 +69,9 @@ The slimmed backstop guard runs mirror/log-only while any writer lease is held, 
 
 A nested phase orchestrator is a Task-tool child that runs its own phase and writes the board — a cw-review child that `TaskCreate`s FIX tasks and appends `manifest.fix.jsonl`, a planner child that builds the task graph. It cannot share your held lease: you hold it for the whole run, so a leaseless child write makes two concurrent writers under one `CLAUDE_CODE_TASK_LIST_ID` (the wipe trigger), and a child `acquire` while you still hold the lease blocks forever (`acquire` waits, never proceeds-with-warning). Hand the lease off; never share it. Each writer holds the lease under **its own** owner token for the span of its writes, so exactly one writer holds it at any moment. Children that need no board writes (proof-verifier, sub-reviewer) acquire no lease and take no part in the handoff.
 
-1. **Release before spawning.** Issue no `TaskUpdate`/`TaskCreate` between this release and the re-acquire in step 4. Re-read your token inline as everywhere else:
+1. **Release before spawning.** Issue no `TaskUpdate`/`TaskCreate` between this release and the re-acquire in step 4. Pass your token-file path as everywhere else:
    ```bash
-   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+   CW_LEASE_TOKEN_FILE="docs/specs/<run>/results/dispatch-owner.token" \
      "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
    ```
    Then spawn the nested orchestrator.
@@ -69,20 +79,20 @@ A nested phase orchestrator is a Task-tool child that runs its own phase and wri
 2. **Child acquires with its own token and phase label.** The child writes a child-owned token and acquires with a distinct `--phase`. It **never inherits your token** — the owner-checked `release`/`refresh` compare against the token stored at `acquire`, so a borrowed token fails the owner check and strands the lease. The child's spawn prompt instructs it to:
    ```bash
    printf '%s' "$$@$(hostname)" > "docs/specs/<run>/results/review-owner.token"
-   CW_LEASE_PID="$(cat docs/specs/<run>/results/review-owner.token)" \
+   CW_LEASE_TOKEN_FILE="docs/specs/<run>/results/review-owner.token" \
      "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase review-fix
    ```
    The child does all its board writes serially under this lease, with the same write→checkpoint→read-back cadence as [Harvest-and-Apply](#harvest-and-apply).
 
 3. **Child releases at its phase end** — the last action of its phase, on every termination path, before it returns:
    ```bash
-   CW_LEASE_PID="$(cat docs/specs/<run>/results/review-owner.token)" \
+   CW_LEASE_TOKEN_FILE="docs/specs/<run>/results/review-owner.token" \
      "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
    ```
 
 4. **Re-acquire after join.** Once the child has joined and released, re-acquire with your own token before any further board write:
    ```bash
-   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+   CW_LEASE_TOKEN_FILE="docs/specs/<run>/results/dispatch-owner.token" \
      "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
    ```
 
@@ -364,7 +374,7 @@ rm -f "docs/specs/<run>/results/harvest-checkpoint.log"
 rm -rf ~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"
 
 # Release the lease last, after the manifest directory is gone
-CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+CW_LEASE_TOKEN_FILE="docs/specs/<run>/results/dispatch-owner.token" \
   "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
 ```
 
