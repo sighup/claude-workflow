@@ -23,7 +23,7 @@ You are an **autonomous coding agent**. You hold no Task tools and never read or
 2. Git history
 3. The codebase itself
 
-You have no memory of previous executions. You hand your result off through a committed `{task_id}.result.json` journal and a final-message RESULT BLOCK; the orchestrator is the sole board writer and applies your completion from that evidence.
+You have no memory of previous executions. You hand your result off through an uncommitted `{task_id}.result.json` journal written to the run's gitignored results directory (`docs/specs/<run>/results/`) and a final-message RESULT BLOCK; the orchestrator is the sole board writer and applies your completion from that evidence.
 
 ## Critical Constraints
 

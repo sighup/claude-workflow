@@ -119,7 +119,7 @@ Fields:
 - `is_primary`: `true` if the finding falls within your assigned concern, `false` for secondary findings
 - Severity rules: Categories A, B, C are always `"blocking"`. Category D is always `"advisory"`.
 
-**Report findings via the RESULT BLOCK** (and a committed `{batch}.findings.json` journal with the same content). You hold no Task tools; the lead harvests this block and records the findings on the board itself.
+**Report findings via the RESULT BLOCK** (and an uncommitted `{batch}.findings.json` journal written to `docs/specs/<run>/results/` with the same content). You hold no Task tools; the lead harvests this block and records the findings on the board itself.
 
 ```
 CW-RESULT-BLOCK-START

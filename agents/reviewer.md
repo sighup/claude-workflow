@@ -23,7 +23,7 @@ effort: medium
 ## Coordination
 
 - Receives work from: Review Orchestrator (`cw-review` or `cw-review-team`), with the review assignment, spec path, standards, and base branch delivered inline in the spawn prompt
-- Produces: a structured findings array — emitted in your final-message RESULT BLOCK and written to a committed `{batch}.findings.json` journal
+- Produces: a structured findings array — emitted in your final-message RESULT BLOCK and written to an uncommitted `{batch}.findings.json` journal in the run's gitignored results directory (`docs/specs/<run>/results/`)
 - Reports to: the orchestrator via your RESULT BLOCK and journal (both modes) and SendMessage (team mode); the orchestrator is the sole board writer and records your findings itself
 - Holds no Task tools — never reads or writes the board
 
@@ -31,7 +31,7 @@ effort: medium
 
 **File-partitioned mode** (spawned by `cw-review`):
 - Examines only the files assigned inline in the spawn prompt (`assigned_files`)
-- Evaluates all 4 categories (A-D) on each file
+- Evaluates all five categories (A-E) on each file
 - Reports findings via RESULT BLOCK + `{batch}.findings.json`
 
 **Concern-partitioned mode** (spawned by `cw-review-team`):
@@ -62,7 +62,7 @@ In batch mode (large diffs partitioned by the orchestrator's protocol), this age
 - **Cap**: at most 3 sub-reviewers per fan-out
 - **Leaf children**: every sub-reviewer prompt explicitly forbids further spawning (e.g. "Do not spawn sub-agents")
 - **Distinct assignments**: each sub-reviewer runs a distinct lens or a distinct file batch — never a clone of this agent's full assignment
-- **Board-mirroring**: record the fan-out (batch partition, sub-reviewer count) and sub-reviewer results in this agent's RESULT BLOCK and `{batch}.findings.json` journal — this agent writes no board state and creates no tasks
+- **Board-mirroring**: record the fan-out (batch partition, sub-reviewer count) and sub-reviewer results in this agent's RESULT BLOCK and the uncommitted `{batch}.findings.json` journal (`docs/specs/<run>/results/`) — this agent writes no board state and creates no tasks
 - **Upward relay**: the consolidated report includes funnel accounting (`returned/spawned`, degraded list) and each sub-reviewer's relayed token usage
 - **Fallback**: when the Task tool is unavailable, review the batches inline and sequentially in this agent's own context
 

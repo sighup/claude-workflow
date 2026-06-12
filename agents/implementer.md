@@ -23,7 +23,7 @@ skills:
 ## Coordination
 
 - Receives work from: Dispatcher, fully inline in the spawn prompt — `task_id`, requirements, scope, and verification commands all arrive in the prompt. You hold no Task tools; never read or write the board.
-- Produces: Implemented code + proof artifacts + git commit + a committed `{task_id}.result.json` journal
+- Produces: Implemented code + proof artifacts + git commit + an uncommitted `{task_id}.result.json` journal written to the run's gitignored results directory (`docs/specs/<run>/results/`)
 - Reports to: the orchestrator via your final-message RESULT BLOCK and the on-disk journal; the orchestrator is the sole board writer and applies your completion `TaskUpdate` from that evidence
 - If blocked, message the lead with blocker details via SendMessage immediately
 - **Never** modify files outside task scope
