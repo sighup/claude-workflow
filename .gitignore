@@ -3,3 +3,6 @@
 docs/specs/
 
 tests/
+
+.autoresearch/
+__pycache__/

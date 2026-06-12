@@ -197,6 +197,48 @@ shadow_newer_than_evidence() { # list_dir shadow_file -> rc 0 restore / 1 skip
   return 1
 }
 
+# --- Per-tick decision -----------------------------------------------------
+
+# guard_tick runs exactly one poll-tick decision for a list and echoes the next
+# "LAST_COUNT WIPE_PENDING" state on a single line. The daemon carries that
+# state forward across ticks. Extracting it from the poll loop lets the fixture
+# harness (scripts/guard-fixtures/) single-step the tick logic deterministically —
+# the tick-transition-sensitive branches (gradual-delete prune, the deferred
+# WIPE_PENDING latch) can be driven one tick at a time instead of racing real
+# sleeps. Side effects (mirror, restore, incident logging) happen as before; the
+# only stdout is the trailing state line.
+guard_tick() { # list_id list_dir shadow last_count wipe_pending -> "lastcount wipepending"
+  local LIST_ID="$1" LIST_DIR="$2" SHADOW="$3" LAST_COUNT="$4" WIPE_PENDING="$5"
+  if [ -d "$LIST_DIR" ] && [ ! -L "$LIST_DIR" ]; then
+    local COUNT
+    COUNT=$(count_tasks "$LIST_DIR")
+
+    if [ "$COUNT" -gt 0 ]; then
+      guard_mirror "$LIST_ID" "$LIST_DIR" "$SHADOW" "$COUNT" "$LAST_COUNT"
+      LAST_COUNT="$COUNT"
+      WIPE_PENDING=0
+    elif { [ "$COUNT" -eq 0 ] && [ "$LAST_COUNT" -ge "$MIN_TASKS" ]; } || [ "$WIPE_PENDING" -eq 1 ]; then
+      # Wipe signature (or a previously deferred wipe still un-restored).
+      if guard_restore "$LIST_ID" "$LIST_DIR" "$SHADOW" "$LAST_COUNT"; then
+        LAST_COUNT="$(count_tasks "$LIST_DIR")"
+        WIPE_PENDING=0
+      else
+        WIPE_PENDING=1
+      fi
+    elif [ "$COUNT" -eq 0 ] && [ "$LAST_COUNT" -gt 0 ]; then
+      # Below the wipe signature (e.g. a 1-task list went 1 -> 0). Treated as
+      # a legitimate deletion — mirrored, never restored — but logged when a
+      # manifest still expects tasks for this list, so single-task boards
+      # losing their record at end-of-run leave an audit trail.
+      if [ -f "${TASKS_ROOT}/.manifest/${LIST_ID}/manifest.json" ]; then
+        log_incident "$LIST_ID" "below-signature deletion (${LAST_COUNT} -> 0, MIN_TASKS=${MIN_TASKS}) with manifest present; mirrored only, shadow retained"
+      fi
+      LAST_COUNT=0
+    fi
+  fi
+  echo "$LAST_COUNT $WIPE_PENDING"
+}
+
 # --- Daemon -----------------------------------------------------------------
 
 daemon() { # list_id
@@ -223,32 +265,15 @@ daemon() { # list_id
   local WIPE_PENDING=0   # a wipe was seen but restore is deferred by the lease
 
   while [ "$ELAPSED" -lt "$TTL_SECONDS" ]; do
-    if [ -d "$LIST_DIR" ] && [ ! -L "$LIST_DIR" ]; then
-      local COUNT
-      COUNT=$(count_tasks "$LIST_DIR")
-
-      if [ "$COUNT" -gt 0 ]; then
-        guard_mirror "$LIST_ID" "$LIST_DIR" "$SHADOW" "$COUNT" "$LAST_COUNT"
-        LAST_COUNT="$COUNT"
-        WIPE_PENDING=0
-      elif { [ "$COUNT" -eq 0 ] && [ "$LAST_COUNT" -ge "$MIN_TASKS" ]; } || [ "$WIPE_PENDING" -eq 1 ]; then
-        # Wipe signature (or a previously deferred wipe still un-restored).
-        if guard_restore "$LIST_ID" "$LIST_DIR" "$SHADOW" "$LAST_COUNT"; then
-          LAST_COUNT="$(count_tasks "$LIST_DIR")"
-          WIPE_PENDING=0
-        else
-          WIPE_PENDING=1
-        fi
-      elif [ "$COUNT" -eq 0 ] && [ "$LAST_COUNT" -gt 0 ]; then
-        # Below the wipe signature (e.g. a 1-task list went 1 -> 0). Treated as
-        # a legitimate deletion — mirrored, never restored — but logged when a
-        # manifest still expects tasks for this list, so single-task boards
-        # losing their record at end-of-run leave an audit trail.
-        if [ -f "${TASKS_ROOT}/.manifest/${LIST_ID}/manifest.json" ]; then
-          log_incident "$LIST_ID" "below-signature deletion (${LAST_COUNT} -> 0, MIN_TASKS=${MIN_TASKS}) with manifest present; mirrored only, shadow retained"
-        fi
-        LAST_COUNT=0
-      fi
+    # Delegate one tick to guard_tick, which echoes the next state line. Read it
+    # back via a here-doc so a transient command-substitution failure can never
+    # blank LAST_COUNT/WIPE_PENDING (an empty read leaves the old values intact).
+    local _tick
+    _tick="$(guard_tick "$LIST_ID" "$LIST_DIR" "$SHADOW" "$LAST_COUNT" "$WIPE_PENDING")"
+    if [ -n "$_tick" ]; then
+      read -r LAST_COUNT WIPE_PENDING <<EOF_TICK
+$_tick
+EOF_TICK
     fi
     sleep "$POLL_SECONDS"
     ELAPSED=$((ELAPSED + POLL_SECONDS))
@@ -321,6 +346,11 @@ guard_restore() { # list_id list_dir shadow last_count -> rc 0 done / 1 deferred
 }
 
 # --- Entry point ------------------------------------------------------------
+
+# When this file is sourced (e.g. by the guard fixture harness in
+# scripts/guard-fixtures/) only the function definitions are wanted — skip the
+# CLI dispatch below. ${BASH_SOURCE[0]} equals $0 only on direct execution.
+[ "${BASH_SOURCE[0]}" = "${0}" ] || return 0
 
 case "${1:-hook}" in
   --watch)
