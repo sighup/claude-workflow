@@ -64,6 +64,17 @@
         ]
       }
     ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/probe-post-tool-batch.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "CwdChanged": [
       {
         "hooks": [
