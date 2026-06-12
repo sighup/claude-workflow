@@ -50,6 +50,10 @@
 #                                  script). Used to read lease status; if absent
 #                                  the guard falls back to a direct lock-dir
 #                                  check at <tasks-root>/<list-id>.writer.
+#   CW_LEASE_TTL                   seconds before a held lease is considered
+#                                  stale (default 600, matching cw-lease.sh).
+#                                  Used in the fallback lock-dir path to skip
+#                                  stale leases and allow restore to proceed.
 #
 # Network-FS caveat: like the lease, this guard assumes the local APFS tasks
 # tree. mkdir/rename atomicity is not guaranteed over NFS/SMB.
@@ -65,6 +69,7 @@ GUARD_ROOT="${TASKS_ROOT}/.guard"
 POLL_SECONDS="${CW_GUARD_POLL_SECONDS:-1}"
 MIN_TASKS="${CW_GUARD_MIN_TASKS:-2}"
 TTL_SECONDS="${CW_GUARD_TTL_SECONDS:-43200}"
+LEASE_TTL="${CW_LEASE_TTL:-600}"
 
 # Resolve cw-lease.sh: explicit override, else the sibling of this script.
 _self_dir() {
@@ -93,12 +98,21 @@ lease_holder() { # list_id -> echoes holder; rc 0 held / 1 free
   if [ -x "$LEASE_SH" ]; then
     local out
     out="$("$LEASE_SH" status "$list_id" 2>/dev/null)"
-    if printf '%s' "$out" | grep -q '^lease: held'; then
+    # Only a live lease blocks restore. A stale lease means the writer crashed;
+    # treat it as free so the restore backstop can fire.
+    if printf '%s' "$out" | grep -q '^lease: held (live)'; then
       local pid host
       pid="$(printf '%s\n' "$out" | awk '/^  pid:/ {print $2; exit}')"
       host="$(printf '%s\n' "$out" | awk '/^  host:/ {print $2; exit}')"
       echo "pid ${pid:-unknown} on ${host:-unknown}"
       return 0
+    fi
+    if printf '%s' "$out" | grep -q '^lease: held (stale)'; then
+      local pid host
+      pid="$(printf '%s\n' "$out" | awk '/^  pid:/ {print $2; exit}')"
+      host="$(printf '%s\n' "$out" | awk '/^  host:/ {print $2; exit}')"
+      log_incident "$list_id" "STALE lease overridden — treating as free (crashed writer pid ${pid:-unknown} on ${host:-unknown}); restore will proceed"
+      return 1
     fi
     return 1
   fi
@@ -110,9 +124,23 @@ lease_holder() { # list_id -> echoes holder; rc 0 held / 1 free
     return 0
   fi
   if [ -d "$dir" ]; then
-    local pid host
+    local pid host hb now age
     pid="$(cat "$dir/pid" 2>/dev/null)"
     host="$(cat "$dir/host" 2>/dev/null)"
+    hb="$(cat "$dir/heartbeat" 2>/dev/null)"
+    # Apply TTL check: a missing or non-numeric heartbeat is treated as stale.
+    case "$hb" in
+      ''|*[!0-9]*)
+        log_incident "$list_id" "STALE lease overridden (fallback path — missing/corrupt heartbeat) — treating as free (pid ${pid:-unknown} on ${host:-unknown}); restore will proceed"
+        return 1
+        ;;
+    esac
+    now="$(date +%s)"
+    age=$(( now - hb ))
+    if [ "$age" -ge "$LEASE_TTL" ]; then
+      log_incident "$list_id" "STALE lease overridden (fallback path — heartbeat age ${age}s >= TTL ${LEASE_TTL}s) — treating as free (pid ${pid:-unknown} on ${host:-unknown}); restore will proceed"
+      return 1
+    fi
     echo "pid ${pid:-unknown} on ${host:-unknown}"
     return 0
   fi
