@@ -33,9 +33,20 @@ During execute, test, and review phases, exactly one process — the phase orche
 
 **Consequence for Board-Mirroring**: the on-disk `result.json` is the durable child artifact, not a TaskUpdate. A read-only child (e.g., proof-verifier) that holds no Task tools reports in its final message; the parent records the result on the board. The board converges toward the on-disk state, never the other way around.
 
-Children holding Task tools (orchestrator-mode reviewer, planner) record results via `TaskUpdate` — same single-writer obligation, applied serially with the write→checkpoint→read-back cadence. Children without Task tools (implementer, test-executor, bug-fixer, sub-reviewer, proof-verifier) never touch the board directly; the orchestrator is their sole proxy.
+Children holding Task tools (orchestrator-mode reviewer, planner) record results via `TaskUpdate` — same single-writer obligation, applied serially with the write→checkpoint→read-back cadence, and **only while holding the writer lease themselves** per [Nested Phase Orchestrator Handoff](#nested-phase-orchestrator-handoff) below. Children without Task tools (implementer, test-executor, bug-fixer, sub-reviewer, proof-verifier) never touch the board directly; the orchestrator is their sole proxy and need not hold the lease.
 
 The invariant eliminates the dominant board-wipe trigger: concurrent multi-process writes from a shared `CLAUDE_CODE_TASK_LIST_ID`. See [dispatch-common.md](dispatch-common.md#single-writer-discipline) for the full dispatch-phase protocol.
+
+### Nested Phase Orchestrator Handoff
+
+A nested phase orchestrator — a Task-tool child that runs its own phase and writes to the board (a cw-review child that `TaskCreate`s FIX tasks and appends `manifest.fix.jsonl`, a planner child that creates the task graph) — cannot share the parent's held lease. The parent holds the lease for the whole run; if the child wrote leaseless there would be two concurrent writers under one `CLAUDE_CODE_TASK_LIST_ID` (the wipe trigger), and if the child tried to acquire while the parent still held it the child would block forever, since `acquire` waits rather than proceeds. The lease is handed off, never shared:
+
+1. **Parent releases before spawning.** Before spawning a nested phase orchestrator that needs board writes, the parent releases the writer lease so the child can acquire it. The parent issues no `TaskUpdate`/`TaskCreate` between releasing and re-acquiring.
+2. **Child acquires with its own token and phase label.** The child writes its own owner token to a child-owned file and acquires the lease with that token and a distinct `--phase` label (e.g. `--phase review-fix`). It **never inherits the parent's token** — the owner-checked `release`/`refresh` compare against the token stored at `acquire`, so a borrowed token fails the owner check and strands the lease. The child does all its board writes serially under this lease.
+3. **Child releases at its phase end.** The child releases the lease as the last action of its phase, on every termination path, before returning to the parent.
+4. **Parent re-acquires after join.** Once the child has joined and released, the parent re-acquires the lease (with its own token, `--phase dispatch`) before resuming any board write.
+
+A nested orchestrator **never writes leaseless** and **never inherits the parent's owner token**: each writer holds the lease under its own token for the span of its writes, and exactly one writer holds it at any moment. A child that needs no board writes (proof-verifier, sub-reviewer) acquires no lease — only board-writing orchestrators participate in the handoff. See [dispatch-common.md](dispatch-common.md#nested-phase-orchestrator-handoff) for the dispatch-phase commands.
 
 ## Upward Relay: Funnel + Token Accounting
 

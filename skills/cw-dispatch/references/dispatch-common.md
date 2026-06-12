@@ -55,6 +55,39 @@ The lease records ownership as `CW_LEASE_PID` + host. The owner check on every `
 
 The slimmed backstop guard runs mirror/log-only while any writer lease is held, so guard and orchestrator are coordinated writers, never independent ones.
 
+### Nested Phase Orchestrator Handoff
+
+A nested phase orchestrator is a Task-tool child that runs its own phase and writes the board — a cw-review child that `TaskCreate`s FIX tasks and appends `manifest.fix.jsonl`, a planner child that builds the task graph. It cannot share your held lease: you hold it for the whole run, so a leaseless child write makes two concurrent writers under one `CLAUDE_CODE_TASK_LIST_ID` (the wipe trigger), and a child `acquire` while you still hold the lease blocks forever (`acquire` waits, never proceeds-with-warning). Hand the lease off; never share it. Each writer holds the lease under **its own** owner token for the span of its writes, so exactly one writer holds it at any moment. Children that need no board writes (proof-verifier, sub-reviewer) acquire no lease and take no part in the handoff.
+
+1. **Release before spawning.** Issue no `TaskUpdate`/`TaskCreate` between this release and the re-acquire in step 4. Re-read your token inline as everywhere else:
+   ```bash
+   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+     "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
+   ```
+   Then spawn the nested orchestrator.
+
+2. **Child acquires with its own token and phase label.** The child writes a child-owned token and acquires with a distinct `--phase`. It **never inherits your token** — the owner-checked `release`/`refresh` compare against the token stored at `acquire`, so a borrowed token fails the owner check and strands the lease. The child's spawn prompt instructs it to:
+   ```bash
+   printf '%s' "$$@$(hostname)" > "docs/specs/<run>/results/review-owner.token"
+   CW_LEASE_PID="$(cat docs/specs/<run>/results/review-owner.token)" \
+     "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase review-fix
+   ```
+   The child does all its board writes serially under this lease, with the same write→checkpoint→read-back cadence as [Harvest-and-Apply](#harvest-and-apply).
+
+3. **Child releases at its phase end** — the last action of its phase, on every termination path, before it returns:
+   ```bash
+   CW_LEASE_PID="$(cat docs/specs/<run>/results/review-owner.token)" \
+     "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" release "$CLAUDE_CODE_TASK_LIST_ID"
+   ```
+
+4. **Re-acquire after join.** Once the child has joined and released, re-acquire with your own token before any further board write:
+   ```bash
+   CW_LEASE_PID="$(cat docs/specs/<run>/results/dispatch-owner.token)" \
+     "$CLAUDE_PLUGIN_ROOT/scripts/cw-lease.sh" acquire "$CLAUDE_CODE_TASK_LIST_ID" --phase dispatch
+   ```
+
+A nested orchestrator **never writes leaseless** and **never inherits the parent's owner token**. If the child cannot acquire (the parent failed to release, or a stale lease lingers), it must not proceed-with-warning into a leaseless write — `acquire` blocks until the lease is free, which is the correct behavior. This is the [Nested Phase Orchestrator Handoff](nesting-guardrails.md#nested-phase-orchestrator-handoff) cited in the nesting policy.
+
 ### Harvest-and-Apply
 
 Workers never mark themselves done. After each batch joins, resolve each joined `task_id`'s outcome from durable evidence and apply the completion yourself. Run this for every task in the batch.
