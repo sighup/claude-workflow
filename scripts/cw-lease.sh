@@ -155,15 +155,46 @@ owned_by_me() {
     [ "$pid" = "$(this_owner)" ] && [ "$host" = "$(this_host)" ]
 }
 
-# Is the lease stale (heartbeat older than TTL)? Treats a missing/garbage
-# heartbeat as stale so a corrupt lease can always be reclaimed.
+# Epoch-seconds mtime of a path, or non-zero if it cannot be read. stat is not
+# portable: BSD/Darwin stat uses `-f %m`, GNU coreutils stat uses `-c %Y`, and
+# crucially each REJECTS the other's flags by repurposing them (GNU treats `-f`
+# as --file-system and emits non-numeric output without failing). So we cannot
+# rely on exit status alone — try each form and accept only an all-digits
+# result, which uniquely identifies the matching stat implementation.
+mtime_epoch() {
+    local path="$1" m
+    m="$(stat -f %m "$path" 2>/dev/null)"
+    case "$m" in
+        ''|*[!0-9]*) ;;
+        *) echo "$m"; return 0 ;;
+    esac
+    m="$(stat -c %Y "$path" 2>/dev/null)"
+    case "$m" in
+        ''|*[!0-9]*) ;;
+        *) echo "$m"; return 0 ;;
+    esac
+    return 1
+}
+
+# Is the lease stale (reclaimable)? A live heartbeat older than the TTL is
+# stale. A missing/garbage heartbeat is NOT instantly stale: acquire writes the
+# lease dir then its fields non-atomically, so a brand-new lease can be observed
+# mid-write with no heartbeat yet. Fall back to the lease dir's own mtime and
+# only treat a heartbeat-less lease as stale once the dir itself is older than
+# the poll interval — long enough that any in-flight field write has completed.
+# If the dir mtime cannot be read, fail safe and treat the lease as live (not
+# reclaimable) rather than destroy a possibly-fresh lease.
 is_stale() {
     local dir="$1"
-    local hb age now
+    local hb age now dirm
     hb="$(read_field "$dir" heartbeat)"
     case "$hb" in
         ''|*[!0-9]*)
-            return 0
+            dirm="$(mtime_epoch "$dir")" || return 1
+            now="$(now_epoch)"
+            age=$(( now - dirm ))
+            [ "$age" -ge "$CW_LEASE_POLL" ]
+            return
             ;;
     esac
     now="$(now_epoch)"
@@ -195,10 +226,22 @@ cmd_acquire() {
             return 0
         fi
 
-        # If the existing lease is stale, reclaim it and retry the mkdir. Only
-        # the winner of the next mkdir proceeds, so the reclaim race is safe.
+        # If the existing lease is stale, reclaim it. A plain `rm -rf "$dir"`
+        # here is unsafe: between the is_stale check and the rm, another waiter
+        # could reclaim and a fresh holder could mkdir a brand-new LIVE lease at
+        # the same path — this rm would then delete that live lease, leaving two
+        # holders. Reclaim single-winner via atomic rename instead: mv the stale
+        # dir to a unique tombstone. rename(2) is atomic, so exactly one racing
+        # reclaimer moves *this* directory; everyone else's mv fails (the source
+        # no longer exists or is now a fresh dir) and they loop to re-evaluate.
+        # Only the winner removes the tombstone (the snapshot it captured), never
+        # the live path, then retries the mkdir.
         if is_stale "$dir"; then
-            rm -rf "$dir" 2>/dev/null
+            local tomb
+            tomb="$dir.dead.$(this_owner).$(now_epoch).$$"
+            if mv "$dir" "$tomb" 2>/dev/null; then
+                rm -rf "$tomb" 2>/dev/null
+            fi
             continue
         fi
 
