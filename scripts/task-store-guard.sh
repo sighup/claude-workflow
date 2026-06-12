@@ -239,6 +239,15 @@ daemon() { # list_id
         else
           WIPE_PENDING=1
         fi
+      elif [ "$COUNT" -eq 0 ] && [ "$LAST_COUNT" -gt 0 ]; then
+        # Below the wipe signature (e.g. a 1-task list went 1 -> 0). Treated as
+        # a legitimate deletion — mirrored, never restored — but logged when a
+        # manifest still expects tasks for this list, so single-task boards
+        # losing their record at end-of-run leave an audit trail.
+        if [ -f "${TASKS_ROOT}/.manifest/${LIST_ID}/manifest.json" ]; then
+          log_incident "$LIST_ID" "below-signature deletion (${LAST_COUNT} -> 0, MIN_TASKS=${MIN_TASKS}) with manifest present; mirrored only, shadow retained"
+        fi
+        LAST_COUNT=0
       fi
     fi
     sleep "$POLL_SECONDS"
