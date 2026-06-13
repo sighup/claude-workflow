@@ -16,13 +16,13 @@ CREATE  →  SPAWN  →  MONITOR  →  SHUTDOWN  →  CLEANUP
 
 ## Task List Access
 
-When Claude Code creates an agent team, it auto-sets `CLAUDE_CODE_TEAM_NAME` on teammates. By default, this routes their `TaskList`/`TaskUpdate` calls to `~/.claude/tasks/{CLAUDE_CODE_TEAM_NAME}/` — the team's built-in task list.
+The **lead is the sole board writer.** Teammates run cw-execute with all Task tools stripped — they never read or write the task list. The lead holds the writer lease, dispatches each assignment fully inline in the spawn prompt, and harvests every teammate's `{task_id}.result.json` journal + RESULT BLOCK to apply completions itself, serially.
 
-However, when `CLAUDE_CODE_TASK_LIST_ID` is also set (in `.claude/settings.json` or `.claude/settings.local.json`), it **overrides** `CLAUDE_CODE_TEAM_NAME` for task routing. All agents (lead + teammates) then use the same project task list.
+When Claude Code creates an agent team, it auto-sets `CLAUDE_CODE_TEAM_NAME` on teammates. When `CLAUDE_CODE_TASK_LIST_ID` is also set (in `.claude/settings.json` or `.claude/settings.local.json`), it **overrides** `CLAUDE_CODE_TEAM_NAME` for task routing, so the lead's board writes target the project's task list.
 
-**Both must coexist:**
+**Both coexist:**
 - **`CLAUDE_CODE_TEAM_NAME`** (`{task-list-id}-team`): Used for messaging and coordination between agents
-- **`CLAUDE_CODE_TASK_LIST_ID`**: Overrides task routing so all agents share the project's task list
+- **`CLAUDE_CODE_TASK_LIST_ID`**: Routes the lead's board writes to the project's task list
 
 The team name is always `{CLAUDE_CODE_TASK_LIST_ID}-team` to ensure it never collides with the task list ID. This way, `TeamDelete` only cleans the unused team task directory (`~/.claude/tasks/{task-list-id}-team/`), not the project's tasks.
 
@@ -30,14 +30,11 @@ The team name is always `{CLAUDE_CODE_TASK_LIST_ID}-team` to ensure it never col
 
 ### Worker → Lead Messages
 
-**Task completed, requesting next assignment:**
-```
-"Completed T{id} ({subject}). Found T{next_id} unblocked. Requesting assignment."
-```
+Workers hold no Task tools and never scan the board; they report completion by evidence and stand by for the next inline assignment.
 
-**Task completed, no more work:**
+**Task completed, standing by:**
 ```
-"Completed T{id} ({subject}). No unblocked tasks remaining."
+"Completed T{id} ({subject}). RESULT BLOCK emitted + journal written. Standing by for next assignment."
 ```
 
 **Blocker encountered:**
@@ -47,9 +44,12 @@ The team name is always `{CLAUDE_CODE_TASK_LIST_ID}-team` to ensure it never col
 
 ### Lead → Worker Messages
 
-**Assignment:**
+**Assignment** (carries the full inline metadata block — the worker cannot read the board):
 ```
-"Assigned T{id} - {subject}. Proceed with cw-execute."
+"Assigned T{id} - {subject}. Proceed with cw-execute.
+
+ASSIGNMENT (your sole source of task metadata — you hold no Task tools):
+{full inline metadata — see the cw-dispatch Step 4 ASSIGNMENT block}"
 ```
 
 **Stand by (no work available):**
@@ -71,12 +71,13 @@ Before spawning teammates, the lead:
 
 ### Subsequent Assignment (Monitor Loop)
 
-When a worker requests a new task:
-1. Lead runs `TaskList()` to get current state
-2. Finds pending tasks with no owner and no active blockers
-3. Checks file conflicts against all in-progress tasks
-4. If conflict-free task found: assigns via `TaskUpdate` and messages worker
-5. If no task found: messages worker to stand by, tracks as idle
+When a worker reports "standing by":
+1. Lead harvests the just-finished task's journal + RESULT BLOCK and applies its completion `TaskUpdate` (sole writer)
+2. Lead runs `TaskList()` to get current state
+3. Finds pending tasks with no owner and no active blockers
+4. Checks file conflicts against all in-progress tasks
+5. If conflict-free task found: `TaskUpdate({ taskId, owner: "worker-N", status: "in_progress" })`, then SendMessage the worker its **full inline assignment** (the metadata block, since the worker cannot read the board)
+6. If no task found: messages worker to stand by, tracks as idle
 
 ### Conflict Check
 
@@ -90,26 +91,27 @@ For candidate task C and each in-progress task P:
 
 ## Teammate Spawn Prompt Template
 
+The lead inlines the **complete** assignment (same metadata fields as the cw-dispatch spawn template: `task_id`, `requirements`, `scope`, `spec_path`, `proof_artifacts`, `proof_capture`, `verification.pre`/`post`, `commit_template`). The teammate holds no Task tools and has no board fallback, so the lead verifies the serialized assignment is complete before spawning.
+
 ```
 You are worker-{N} on the {task-list-id}-team team.
 
 YOUR ASSIGNED TASK: T{id} - {subject}
 
+ASSIGNMENT (your sole source of task metadata — you hold no Task tools):
+{full inline metadata — see the cw-dispatch Step 4 ASSIGNMENT block}
+
 EXECUTION LOOP:
 1. Use the Skill tool to invoke 'cw-execute'
-2. After cw-execute completes, run TaskList() to check for more work
-3. Look for tasks: status=pending, no blockedBy, no owner
-4. If unblocked task found:
-   - Message the lead: "Completed T{id}. Found T{next} unblocked. Requesting assignment."
-   - Wait for lead's response before starting
-5. If no tasks available:
-   - Message the lead: "Completed T{id}. No unblocked tasks remaining."
+2. After cw-execute completes, you have emitted your RESULT BLOCK + journal
+3. Message the lead: "Completed T{id}. Standing by for next assignment."
+4. Wait for the lead's next inline assignment or a shutdown_request — never scan the board
 
 CONSTRAINTS:
 - Always invoke cw-execute (never implement directly)
 - Do not modify files outside task scope
-- Do not touch tasks owned by other workers
-- Wait for lead assignment before starting new tasks
+- You hold no Task tools — orient from the inline assignment, hand off via journal + RESULT BLOCK
+- Wait for the lead to assign each task inline before starting
 
 SHUTDOWN:
 - Approve shutdown_request unless mid-commit
@@ -119,18 +121,15 @@ SHUTDOWN:
 
 ```
 while true:
-  1. Invoke cw-execute (handles the assigned task end-to-end)
-  2. TaskList() to scan for unblocked pending tasks
-  3. If unblocked task exists:
-       SendMessage to lead: "Completed T{done}. Found T{next} unblocked. Requesting assignment."
-       WAIT for lead response
-       If lead assigns T{next}:
-         continue loop (cw-execute will pick up the new owned task)
+  1. Invoke cw-execute (handles the assigned task end-to-end, emits journal + RESULT BLOCK)
+  2. SendMessage to lead: "Completed T{done}. Standing by for next assignment."
+  3. WAIT for the lead's response (never scan the board — you hold no Task tools):
+       If lead sends a new inline assignment:
+         continue loop (cw-execute orients from the inline assignment)
        If lead says "stand by":
          WAIT for further instructions or shutdown
-  4. If no unblocked task:
-       SendMessage to lead: "Completed T{done}. No unblocked tasks remaining."
-       WAIT for shutdown
+       If shutdown_request:
+         approve (unless mid-commit)
 ```
 
 ## Dispatcher Monitor Loop (Lead Perspective)
@@ -138,20 +137,17 @@ while true:
 ```
 Messages from teammates are auto-delivered.
 
-On "requesting assignment" from worker-N:
-  1. TaskList() to check current state
-  2. Find unblocked pending tasks without owners
-  3. Check file conflicts against in-progress tasks
-  4. If conflict-free task found:
+On "standing by" from worker-N:
+  1. Harvest the finished task's journal + RESULT BLOCK; apply its completion TaskUpdate (sole writer)
+  2. TaskList() to check current state
+  3. Find unblocked pending tasks without owners
+  4. Check file conflicts against in-progress tasks
+  5. If conflict-free task found:
      - TaskUpdate({ taskId, owner: "worker-N", status: "in_progress" })
-     - SendMessage to worker-N: "Assigned T{id}. Proceed."
-  5. If none available:
+     - SendMessage to worker-N: "Assigned T{id}. Proceed." + the full inline ASSIGNMENT block
+  6. If none available:
      - SendMessage to worker-N: "No tasks available. Standing by."
-     - Track worker as idle
-
-On "no more tasks" from worker-N:
-  1. Track worker as idle
-  2. If all workers idle AND no unblocked tasks: proceed to Shutdown
+     - Track worker as idle; if all workers idle AND no unblocked tasks: proceed to Shutdown
 
 On blocker report from worker-N:
   1. Log the blocker

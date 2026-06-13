@@ -262,15 +262,32 @@ Check task metadata to determine next action. Use the step task's `max_fix_attem
 
 **REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT execute tests inline.
 
+The executor holds no Task tools — it cannot read the board. `TaskGet` the step task and its parent suite task here and inline the **complete** assignment into the spawn prompt: the step's `action`/`verify` fields, its `task_id`, and the suite context the protocol's Step 1 requires (`base_url`, `automation.backend`, `artifacts_dir`). An incomplete prompt cannot be recovered — verify the serialized assignment is complete before spawning.
+
 ```
 Task({
   subagent_type: "claude-workflow:test-executor",
   description: "Execute test [step_id]",
-  prompt: "Execute test step [step_id]. Task ID: [native-task-id]. Read protocol at: skills/cw-testing/references/test-executor-protocol.md"
+  prompt: "Execute test step [step_id] per skills/cw-testing/references/test-executor-protocol.md.
+
+ASSIGNMENT (your sole source of step + suite context — you hold no Task tools):
+task_id: [step task_id]
+action:
+  type: <navigate|interact|wait>
+  prompt: <natural-language instruction>
+verify:
+  prompt: <natural-language check>
+  expected: <expected outcome label>
+suite_context:
+  base_url: <suite base_url>
+  backend: <automation.backend>
+  artifacts_dir: <suite artifacts_dir, default \"artifacts\">
+
+You hold no Task tools — orient from this assignment, capture artifacts under artifacts_dir, and emit your CW-RESULT-BLOCK in your final message. Do not write the board."
 })
 ```
 
-Wait for the sub-agent to complete, then read the task status via TaskGet. Proceed to Step 4.
+Wait for the sub-agent to complete, then harvest its result (Step 6.5). Proceed to Step 4.
 
 #### Step 3b: Playwright Runner (playwright-bdd only)
 
@@ -295,7 +312,7 @@ Fixes target application code, **not** step definitions.
 
 #### Step 4: Verify Result
 
-Check task metadata for pass/fail. If passed, proceed to Step 7. If failed, continue to Step 5.
+Read the `test_result` Step 6.5 just applied for this step. If passed, proceed to Step 7. If failed, continue to Step 5.
 
 #### Step 5: Fix Decision Gate
 
@@ -306,20 +323,53 @@ If `fix_config.enabled` and `fix_attempt < max_fix_attempts` (step-level, fallin
 **REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT fix bugs inline.
 
 1. Create fix task with failure context (TaskCreate + TaskUpdate with metadata)
-2. Spawn bug fixer:
+2. **Append one JSON line to the manifest test segment** so the dispatch exit gate's completion predicate includes this task. Guard the append: bail if `CLAUDE_CODE_TASK_LIST_ID` is unset (an unguarded append to a `.../...//manifest.test.jsonl` path silently excludes the fix task from the exit-gate union), and `mkdir -p` the segment directory so a first append on a fresh list does not fail on a missing path:
+   ```bash
+   : "${CLAUDE_CODE_TASK_LIST_ID:?manifest append skipped: CLAUDE_CODE_TASK_LIST_ID unset}"
+   MANIFEST_DIR=~/.claude/tasks/.manifest/"$CLAUDE_CODE_TASK_LIST_ID"
+   mkdir -p "$MANIFEST_DIR"
+   printf '%s\n' "$(jq -nc --arg id "$FIX_TASK_ID" --arg test "$STEP_TASK_ID" \
+     --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+     '{task_id: $id, type: "fix", test_task_id: $test, created_at: $t}')" \
+     >> "$MANIFEST_DIR/manifest.test.jsonl"
+   ```
+   Single writer per line — only the testing orchestrator appends to `manifest.test.jsonl`. Never rewrite or truncate the file; append only.
+3. Spawn bug fixer. The fixer holds no Task tools — `TaskGet` the fix task and the linked test task here and inline the **complete** fix assignment the protocol's Step 1 requires: `fix_task_id`, the linked test `task_id`, `attempt_number`, and the full `failure_context` (`failure_reason`, `spec_requirement`, `action`, `verify`, `artifacts`). An incomplete prompt cannot be recovered — verify it is complete before spawning.
 ```
 Task({
   subagent_type: "claude-workflow:bug-fixer",
   description: "Fix bug causing [step_id] to fail",
-  prompt: "Fix bug causing test [step_id] to fail. Fix Task ID: [fix-task-id]. Test Task ID: [test-task-id]. Read protocol at: skills/cw-testing/references/bug-fixer-protocol.md"
+  prompt: "Fix the application bug causing test [step_id] to fail, per skills/cw-testing/references/bug-fixer-protocol.md.
+
+ASSIGNMENT (your sole source of fix context — you hold no Task tools):
+fix_task_id: [fix task_id]
+linked_test_task_id: [test task_id]
+attempt_number: [N]
+failure_context:
+  failure_reason: <what the application actually did>
+  spec_requirement: <what the spec says should happen>
+  action: <the action that was attempted>
+  verify: <the verification that failed>
+  artifacts: [<screenshot/log paths from the failure>]
+
+Fix application code only, never test code. You hold no Task tools — orient from this assignment, commit your fix, and emit your CW-RESULT-BLOCK (with commit_sha and linked_test_task_id) in your final message. Do not write the board."
 })
 ```
 
-Wait for the sub-agent to complete, then read fix_result via TaskGet.
+Wait for the sub-agent to complete, then harvest its fix result (Step 6.5).
 
-After the bug fixer completes (regardless of outcome), reset the test task via `TaskUpdate` with `test_result: "pending"` and increment `fix_attempt`.
+The reset of the linked test task (`test_result: "pending"`, increment `fix_attempt`) is applied by the harvest step from the fixer's `linked_test_task_id` + `attempt`, not here — the orchestrator is the sole board writer.
 
 Then run a **regression check** against all tasks with `test_result == "passed"` (same procedure as the pre-run regression check). If a regression is detected, stop immediately and report before proceeding to Step 7.
+
+#### Step 6.5: Harvest and Apply
+
+Workers hold no Task tools — they never write the board. After a test-executor (Step 3) or bug-fixer (Step 6) joins, **you harvest its CW-RESULT-BLOCK and apply every board update yourself**, as the sole writer. Resolve outcome by evidence order (RESULT BLOCK → `{task_id}.result.json` → proof/artifact scan), verify any `commit_sha` is reachable in git, then apply each `TaskUpdate` **serially** — one per message, checkpoint before, `TaskGet` read-back after, never a burst. Full protocol: [dispatch-common.md](../cw-dispatch/references/dispatch-common.md#harvest-and-apply).
+
+- **Test-executor block** (from Step 3): apply the step task's `test_result` (`passed`/`failed`) plus the block's `passed_at`/`failed_at`, `failure_reason`, and `artifacts`.
+- **Bug-fixer block** (from Step 6): apply two updates serially — the fix task's `fix_result`/`status`/`commit_sha`, then the linked test task reset (`test_result: "pending"`, increment `fix_attempt`) resolved from the block's `linked_test_task_id` + `attempt`.
+
+A worker that emits no parseable block with `status` set and no journal has **no result** — do not invent one; re-select the step on the next loop. Apply each update one at a time before harvesting the next worker.
 
 #### Step 7: Progress Check
 

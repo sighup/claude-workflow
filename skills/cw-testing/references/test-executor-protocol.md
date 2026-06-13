@@ -10,19 +10,18 @@ Execute exactly ONE test step per invocation. The test defines expected behavior
 
 ### Step 1: Orient
 
-Load the test task and understand what to execute.
+Read the test step from the spawn prompt and understand what to execute. You hold no Task tools — the orchestrator delivers the step and its parent-suite context inline.
 
 ```
-1. TaskGet({ taskId: "<task-id>" })
-2. Extract from metadata:
+1. Read the step assignment from the spawn prompt:
    - action.type: "navigate", "interact", or "wait"
    - action.prompt: Natural language instruction for what to do
    - verify.prompt: Natural language instruction for what to check
    - verify.expected: Description of expected outcome
-   - parent_suite: ID of parent task
-3. TaskGet({ taskId: "<parent_suite>" })
-   - Extract: base_url, automation.backend, artifacts_dir (default to "artifacts" if absent)
-4. Output orientation:
+   - task_id: stable id of this step
+2. Read the parent-suite context (also inline in the prompt):
+   - base_url, automation.backend, artifacts_dir (default to "artifacts" if absent)
+3. Output orientation:
    "EXECUTING: [step_id] - [subject]"
    "Backend: [automation.backend]"
    "Action: [action.prompt]"
@@ -74,37 +73,33 @@ Check the result and capture proof artifacts.
 
 ### Step 4: Report
 
-Update task status and exit.
+Emit the result as a RESULT BLOCK and exit. You hold no Task tools; the testing orchestrator harvests this block and applies the `test_result` `TaskUpdate` itself (sole writer).
 
 **If PASSED:**
 ```
-TaskUpdate({
-  taskId: "<task-id>",
-  status: "completed",
-  metadata: {
-    test_result: "passed",
-    passed_at: "<ISO timestamp>",
-    artifacts: {
-      screenshots: ["[artifacts_dir]/[step_id]-result.png"]
-    }
-  }
-})
+CW-RESULT-BLOCK-START
+{
+  "task_id": "<task_id>",
+  "status": "completed",
+  "test_result": "passed",
+  "passed_at": "<ISO timestamp>",
+  "artifacts": { "screenshots": ["[artifacts_dir]/[step_id]-result.png"] }
+}
+CW-RESULT-BLOCK-END
 ```
 
 **If FAILED:**
 ```
-TaskUpdate({
-  taskId: "<task-id>",
-  status: "completed",
-  metadata: {
-    test_result: "failed",
-    failed_at: "<ISO timestamp>",
-    failure_reason: "[specific description of what went wrong]",
-    artifacts: {
-      screenshots: ["[artifacts_dir]/[step_id]-failure.png"]
-    }
-  }
-})
+CW-RESULT-BLOCK-START
+{
+  "task_id": "<task_id>",
+  "status": "completed",
+  "test_result": "failed",
+  "failed_at": "<ISO timestamp>",
+  "failure_reason": "[specific description of what went wrong]",
+  "artifacts": { "screenshots": ["[artifacts_dir]/[step_id]-failure.png"] }
+}
+CW-RESULT-BLOCK-END
 ```
 
 Output result and exit:
@@ -115,8 +110,8 @@ Output result and exit:
 ## Constraints
 
 - Execute exactly ONE step per invocation
-- Always update task status before exiting
+- Always emit the RESULT BLOCK before exiting
 - Never proceed to next step (orchestrator handles that)
-- Never modify other tasks
+- Never write the board — the orchestrator applies every update
 - Use test credentials only (never real credentials)
 - Capture artifacts appropriate to the backend type

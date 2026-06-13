@@ -213,6 +213,8 @@ TaskUpdate({ taskId: "t02-id", addBlockedBy: ["t01-id"] })
 
 After creating all parent tasks, **STOP** and output a `PLANNING SUMMARY`. Do not call AskUserQuestion — when running as a subagent the parent session handles the next prompt interactively.
 
+**Subagent contexts have no task tools — return the decomposition instead.** When this skill runs inside a spawned planner agent, `TaskCreate`/`TaskUpdate` are unavailable (a platform limitation of subagent contexts, observed consistently in live runs). Do not fail and do not write task files by hand. Output the complete decomposition — every task with its full `metadata` object, plus the `blockedBy` edges by stable `task_id` — as structured JSON in your final message. The invoking orchestrator is the single writer for the planning phase: it executes the `TaskCreate`/`addBlockedBy` calls from your returned decomposition verbatim, verifies the wiring with a `TaskList` read-back, and performs the Step 4 manifest write itself. This orchestrator-writes path is the **primary** path whenever the planner is a subagent, not a degraded fallback — it preserves single-writer discipline by construction.
+
 Evaluate two signals to form a recommendation:
 - **Complexity**: are any tasks marked `complex`?
 - **Parallelization**: are there 2+ tasks that can run concurrently (no dependency between them)?
@@ -240,6 +242,8 @@ Reason: [one sentence — e.g. "T01 and T03 are complex and can run in parallel 
 
 ### Step 3: Sub-Task Creation (After User Approval)
 
+If the user executes parent tasks as-is (no sub-tasks), skip to Step 4 to write the manifest over the parent tasks alone.
+
 For each parent task, create sub-tasks that:
 - Break implementation into logical steps
 - Use `parent_task` metadata pointing to the parent's task_id
@@ -249,6 +253,52 @@ For each parent task, create sub-tasks that:
 - Are sized for a single implementation session
 
 Sub-task IDs use dot notation: T01.1, T01.2, T01.3
+
+### Step 4: Write Manifest
+
+After every `TaskCreate` and `addBlockedBy` call has landed — parent tasks from Step 2 and any sub-tasks from Step 3 — write the manifest. The manifest is the loss-detection oracle the dispatcher and validator consult to reconstruct the canonical task set after a board wipe, so it is built from a fresh read-back rather than the construction buffer.
+
+1. **Read back the live board**: call `TaskList` (and `TaskGet` per task as needed) so the manifest reflects what the task store actually holds, not what you intended to create. A `TaskCreate` the store silently dropped is then absent from the manifest too, surfacing the loss at plan time instead of mid-run.
+
+2. **Resolve the manifest path**: `~/.claude/tasks/.manifest/<list-id>/manifest.json`, where `<list-id>` is `CLAUDE_CODE_TASK_LIST_ID` (from Step 0). When that variable is unset (session-based lists), discover the real list id by matching a task subject from your `TaskList` read-back against `~/.claude/tasks/*/[0-9]*.json` — never derive an id from the project or package name; a manifest keyed to an invented id is invisible to the dispatcher's exit gate and the guard. Create the directory if absent. This location is co-located with the lease and guard state, keyed by list-id, and survives worktree removal and `git clean`.
+
+3. **Build the manifest object** from the read-back. One entry per task, keyed on the stable `task_id`:
+
+```json
+{
+  "list_id": "<CLAUDE_CODE_TASK_LIST_ID>",
+  "partial": false,
+  "tasks": [
+    {
+      "task_id": "T01",
+      "blockedBy": [],
+      "metadata": { "...": "full task metadata verbatim" }
+    },
+    {
+      "task_id": "T01.1",
+      "blockedBy": ["T01"],
+      "metadata": { "...": "..." }
+    }
+  ]
+}
+```
+
+   - `task_id` and every entry in `blockedBy` are stable planner-assigned ids (`T01`, `T01.1`). **Never** record the native task-store integer — it is reassigned on re-creation and cannot be matched across a wipe. Resolve each native blocker id back to its `task_id` from the read-back before writing.
+   - `metadata` is the task's full metadata object verbatim, so a lost task can be re-created from the manifest alone.
+
+4. **Write atomically via temp-rename**: serialize to a sibling temp file in the same directory, then `mv` it over `manifest.json`. A rename within one directory is atomic, so a consumer never observes a half-written manifest.
+
+```bash
+manifest_dir="$HOME/.claude/tasks/.manifest/$CLAUDE_CODE_TASK_LIST_ID"
+mkdir -p "$manifest_dir"
+tmp=$(mktemp "$manifest_dir/.manifest.json.XXXXXX")
+# write the JSON to "$tmp"
+mv -f "$tmp" "$manifest_dir/manifest.json"
+```
+
+5. **Partial-write flag**: if you build the manifest incrementally (writing entries as tasks are created rather than all at once), set `partial: true` on each intermediate write and clear it to `false` only on the final complete write. An interrupted plan then leaves `partial: true`, signalling consumers to treat the manifest as advisory rather than authoritative. A single atomic write of the complete set writes `partial: false` directly.
+
+**Exit criteria**: `manifest.json` exists at the resolved path with `partial: false`, one entry per live task keyed on `task_id`, `blockedBy` edges by `task_id`, and full metadata — no native ids anywhere.
 
 ## Metadata Schema
 

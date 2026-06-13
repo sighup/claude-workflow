@@ -25,12 +25,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CW_COMMON="$SCRIPT_DIR/lib/cw-common.sh"
 
 if [ -f "$CW_COMMON" ]; then
+    # shellcheck source=/dev/null
     source "$CW_COMMON"
 fi
 
 # Override log functions so all output goes to stderr.
+# shellcheck disable=SC2329
 log_error()   { echo "[ERROR] $*" >&2; }
 log_info()    { echo "[INFO] $*" >&2; }
+# shellcheck disable=SC2329
 log_success() { echo "[OK] $*" >&2; }
 log_warning() { echo "[WARN] $*" >&2; }
 

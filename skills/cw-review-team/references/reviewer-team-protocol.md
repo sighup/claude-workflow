@@ -20,11 +20,10 @@ Each reviewer may note **secondary findings** outside their primary concern when
 
 ### Step 1: Orient
 
-Load the review task and understand your concern assignment.
+Read the review assignment from the spawn prompt and understand your concern assignment. You hold no Task tools — the orchestrator delivers the assignment inline.
 
 ```
-1. TaskGet({ taskId: "<task-id>" })
-2. Extract from metadata:
+1. Read the assignment from the spawn prompt:
    - concern: "security" | "correctness" | "spec-compliance"
    - primary_category: "B" | "A" | "C+D"
    - changed_files: Array of ALL changed non-test file paths
@@ -99,7 +98,7 @@ For each file in changed_files:
 
 ### Step 3: Report
 
-Write all findings to task metadata, message the lead, and mark completed.
+Emit all findings in your RESULT BLOCK + `{batch}.findings.json` journal and message the lead; the lead records them and marks the task completed.
 
 **Findings structure** — each finding is an object:
 
@@ -120,19 +119,20 @@ Fields:
 - `is_primary`: `true` if the finding falls within your assigned concern, `false` for secondary findings
 - Severity rules: Categories A, B, C are always `"blocking"`. Category D is always `"advisory"`.
 
-**Update the task with findings:**
+**Report findings via the RESULT BLOCK** (and an uncommitted `{batch}.findings.json` journal written to `docs/specs/<run>/results/` with the same content). You hold no Task tools; the lead harvests this block and records the findings on the board itself.
 
 ```
-TaskUpdate({
-  taskId: "<task-id>",
-  status: "completed",
-  metadata: {
-    review_status: "completed",
-    findings: [ ... ],
-    files_reviewed: ["path/to/file1.ts", "path/to/file2.ts"],
-    completed_at: "<ISO timestamp>"
-  }
-})
+CW-RESULT-BLOCK-START
+{
+  "task_id": "<batch>",
+  "status": "completed",
+  "review_status": "completed",
+  "concern": "[concern]",
+  "findings": [ ... ],
+  "files_reviewed": ["path/to/file1.ts", "path/to/file2.ts"],
+  "completed_at": "<ISO timestamp>"
+}
+CW-RESULT-BLOCK-END
 ```
 
 **Message the lead:**
@@ -141,7 +141,7 @@ TaskUpdate({
 SendMessage({
   type: "message",
   recipient: "lead",
-  content: "Review complete for [concern] concern. Found [N] findings ([M] blocking, [K] advisory). Results in task metadata.",
+  content: "Review complete for [concern] concern. Found [N] findings ([M] blocking, [K] advisory). Results in my RESULT BLOCK + findings journal.",
   summary: "[concern] review done, [N] findings"
 })
 ```

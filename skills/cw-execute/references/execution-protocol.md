@@ -7,13 +7,13 @@ Detailed step-by-step instructions for the implementer worker.
 **Goal**: Understand current state without making changes.
 
 1. `cd "$(git rev-parse --show-toplevel)"` — all metadata paths are repo-root-relative
-2. Run `TaskList` to see all tasks and their statuses
-3. Identify your assigned task (by owner or next unblocked pending task)
-4. Run `TaskGet(taskId)` to load full task metadata
-5. Check git status - ensure clean working tree
-6. Read recent git history (`git log --oneline -10`)
+2. Parse the complete assignment from your spawn prompt: `task_id`, requirements, scope (`files_to_create`, `files_to_modify`, `patterns_to_follow`), proof artifacts, `proof_capture`, and the `verification.pre`/`verification.post` commands — all delivered inline. This is your sole source of task metadata; you hold no Task tools and never read the board.
+3. Check git status — ensure clean working tree
+4. Read recent git history (`git log --oneline -10`)
 
-**Exit criteria**: You know which task to execute and the codebase is clean.
+The orchestrator set this task to `in_progress` on the board before dispatching you; you do not write status yourself.
+
+**Exit criteria**: You have parsed the inline assignment and the codebase is clean.
 
 ## Step 2: Baseline
 
@@ -87,6 +87,8 @@ Rules:
 
 See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidance.
 
+Proof commands run inline here because the on-disk artifacts must be written (the verifier child is read-only). Step 9's proof-verifier child independently re-runs these same commands — keep each command and its expected result for that spawn prompt.
+
 **Exit criteria**: All proof artifacts collected, all PASS.
 
 ## Step 7: Sanitize
@@ -113,47 +115,50 @@ See [proof-artifact-types.md](proof-artifact-types.md) for type-specific guidanc
 3. Commit: `git commit -m "<metadata.commit.template>" -- $FILES`
 4. Verify: `git show --name-only HEAD -- $FILES`
 
+**`index.lock` contention**: other workers and the orchestrator share this repository, so `git add`/`git commit` can fail with `Unable to create '.git/index.lock': File exists`. Retry the failed command after a 2-second wait, up to 3 attempts — the other process's git operation is sub-second and will have finished. Remove the lock file manually only after the retries fail AND `ps` shows no running `git` process (then it is a stale lock from a crashed process, not contention).
+
 **Exit criteria**: Implementation files committed.
+
+## Step 8.5: Write Result Journal
+
+**Goal**: Record durable handoff evidence the dispatcher harvests to apply your board update.
+
+The commit in Step 8 carries an ordinary implementation message — no metadata trailers, and the journal is never committed. After it lands, capture the now-known `commit_sha` and write the journal:
+
+1. `commit_sha=$(git rev-parse HEAD)`
+2. Resolve the results directory: `docs/specs/[spec-dir]/results/` (the run's gitignored results dir; create it if absent)
+3. Write `{task_id}.result.json` into that directory, conforming to [result-journal-schema.md](result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, and the proof paths/results from Step 6. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict — the journal is finalized at the end of Step 9, before the Step 10 RESULT BLOCK.
+
+The journal is written once and never edited after finalization. `commit_sha` is the sole commit-to-task link; the dispatcher verifies it against git before accepting the record.
+
+**Exit criteria**: `{task_id}.result.json` exists under the gitignored results dir, carrying the implementation `commit_sha` and (after Step 9) the verifier verdict.
 
 ## Step 9: Verify Full
 
-**Goal**: Confirm nothing broke after commit.
+**Goal**: Confirm nothing broke after commit, with the result independently confirmed by one proof-verifier child ([proof-verifier.md](../../../agents/proof-verifier.md)) covering both the Step 6 proof commands and `verification.post`. Policy: [nesting guardrails](../../cw-dispatch/references/nesting-guardrails.md).
 
-1. Run each command in `metadata.verification.post` (full test suite)
-2. If failures:
-   - If your changes caused it: fix, amend commit, re-verify
-   - If pre-existing: document in proof_results
-   - Max 3 fix attempts
+1. Spawn one proof-verifier child per verification attempt (never concurrent, never an implementer-type child), with `model: haiku` pinned explicitly
+2. Spawn prompt: task id, repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn sub-agents" — never the skill's all-caps context marker or raw task metadata JSON (SubagentStop hook pattern-matches both)
+3. Gate on the verdict:
+   - `Overall: PASS`: record verdict + verifier tokens, proceed to Step 10
+   - `Overall: FAIL`: do NOT mark completed; if your changes caused it: fix, amend commit, re-verify with a fresh verifier (max 3 attempts); if pre-existing: document in proof_results
+   - No usable verdict (spawn error, timeout, malformed): re-run checks inline for this attempt, record `verification_mode: "inline-degraded"`
+4. **Inline fallback**: if the Task tool is not in your toolset, run each `verification.post` command yourself exactly as before (fix, amend, re-verify on failure, max 3 attempts) and record `verification_mode: "inline"` — spawn unavailability is never a task failure
 
-**Exit criteria**: All verification.post commands pass.
+**Exit criteria**: PASS verdict (spawned) or all checks green (inline). The completion gate applies in both modes.
 
 ## Step 10: Report
 
-**Goal**: Update task board with results.
+**Goal**: Hand off your result to the orchestrator, the sole board writer.
 
-1. Construct proof_results:
-   ```json
-   [
-     { "type": "test", "status": "pass", "output_file": "T01-01-test.txt" },
-     { "type": "cli", "status": "pass", "output_file": "T01-02-cli.txt" }
-   ]
-   ```
-2. Update task:
-   ```
-   TaskUpdate({
-     taskId: "<native-id>",
-     status: "completed",
-     metadata: {
-       proof_dir: "docs/specs/[spec-dir]/[NN]-proofs",
-       proof_results: [...],
-       proof_summary: "X/Y proofs passed",
-       commit_sha: "<sha from git log --oneline -1>",
-       completed_at: "<ISO timestamp>"
-     }
-   })
-   ```
+You hold no Task tools. The orchestrator applies your completion `TaskUpdate` itself after harvesting your evidence: finalize the Step 8.5 journal, then emit the matching `CW-RESULT-BLOCK` sentinel as the last substantive content of your final message. The orchestrator harvests the sentinel first (highest precedence) and falls back to the on-disk journal.
 
-**Exit criteria**: Task marked completed with proof_dir, proof_results, proof_summary, commit_sha, and completed_at in metadata.
+1. Finalize `{task_id}.result.json` with the Step 9 verifier fields and `completed_at`, conforming to [result-journal-schema.md](result-journal-schema.md).
+2. Emit the `CW-RESULT-BLOCK` sentinel holding exactly the same fields as the journal — keep the block and the on-disk journal byte-identical. Format and contract: [result-journal-schema.md](result-journal-schema.md).
+
+Never report `status: "completed"` (in the journal or the sentinel) unless `verifier_verdict` is PASS.
+
+**Exit criteria**: `{task_id}.result.json` finalized with proof_dir, proof_results, proof_summary, commit_sha, completed_at, verification_mode, and verifier_verdict; matching `CW-RESULT-BLOCK` sentinel emitted as the final message.
 
 ## Step 11: Clean Exit
 
@@ -186,16 +191,18 @@ if attempt >= 3:
 
 1. `git stash push -m "cw-execute: {task_id} partial work"`
 2. `git checkout -- .` (clean working tree)
-3. Update task:
+3. Write `{task_id}.result.json` with the failure record (same Step 8.5 mechanics) so the failure evidence is durable on disk, then emit a matching `status: "failed"` `CW-RESULT-BLOCK` as your final message. The orchestrator harvests it, records the diagnostics, and keeps the task dispatchable. Failure-record fields and the failed-block contract: [result-journal-schema.md](result-journal-schema.md):
    ```
-   TaskUpdate({
-     taskId: "<native-id>",
-     status: "pending",
-     metadata: {
-       proof_results: [{ status: "failed", error: "..." }],
-       last_failure: "<ISO timestamp>",
-       failure_count: N
-     }
-   })
+   CW-RESULT-BLOCK-START
+   {
+     "task_id": "<task_id>",
+     "status": "failed",
+     "failed_step": "Proof|Sanitize|Commit|Verify Full|etc",
+     "failure_reason": "...",
+     "failure_count": N,
+     "proof_status": "none|partial|complete",
+     "last_failure": "<ISO timestamp>"
+   }
+   CW-RESULT-BLOCK-END
    ```
 4. Exit with error summary

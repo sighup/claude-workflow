@@ -10,17 +10,17 @@ Examine only your assigned files. Report findings — never fix code or create t
 
 ### Step 1: Orient
 
-Load the review task and understand what to examine.
+Read the review assignment from the spawn prompt and understand what to examine. You hold no Task tools — the orchestrator delivers the assignment inline.
 
 ```
-1. TaskGet({ taskId: "<task-id>" })
-2. Extract from metadata:
+1. Read the assignment from the spawn prompt:
+   - task_id / batch: stable id of this review batch
    - assigned_files: Array of file paths to review
    - spec_path: Path to the feature spec (may be null)
    - standards_summary: Repository conventions and patterns
    - base_branch: Branch to diff against (e.g. "main")
-3. Output orientation:
-   "REVIEWING BATCH: [task subject]"
+2. Output orientation:
+   "REVIEWING BATCH: [batch subject]"
    "Files: [count] files assigned"
    "Base: [base_branch]"
    "Spec: [spec_path or 'none']"
@@ -42,7 +42,7 @@ For each file in assigned_files:
      Read({ file_path: "<spec_path>" })
      (Only read spec once, on first file)
 
-  4. Evaluate against all four categories (see below).
+  4. Evaluate against all five categories (see below).
      When LSP is available (check by probing `documentSymbol` on the first file — if it returns symbols, `lsp_available = true`):
      - `findReferences` to trace call sites of changed functions and detect ripple effects
      - `goToImplementation` to verify interface contracts are maintained after changes
@@ -82,6 +82,19 @@ For each file in assigned_files:
 - Performance concerns (N+1 queries, unnecessary loops)
 - Inconsistency with repository patterns
 
+#### Category E: Reuse (Advisory)
+
+- New utility functions that duplicate existing ones in the codebase
+- Re-implemented patterns that an existing module already provides
+- Copy-pasted logic that should be extracted to a shared module
+- New constants or configuration values that already exist elsewhere
+
+**Reuse check** for each new function in the diff:
+1. `Grep` for its name and common synonyms across the codebase
+2. `Glob` for `**/utils/**` and `**/helpers/**` to check for existing utilities
+3. Check `package.json` dependencies for libraries that already provide the pattern
+4. Flag duplicates as advisory — the implementer may have had a good reason to create a new version
+
 ### Step 3: Report
 
 Write all findings to task metadata and mark completed.
@@ -90,7 +103,7 @@ Write all findings to task metadata and mark completed.
 
 ```json
 {
-  "category": "A|B|C|D",
+  "category": "A|B|C|D|E",
   "severity": "blocking|advisory",
   "title": "Short description of the issue",
   "file": "path/to/file.ts",
@@ -102,40 +115,27 @@ Write all findings to task metadata and mark completed.
 
 Severity rules:
 - Categories A, B, C are always `"blocking"`
-- Category D is always `"advisory"`
+- Categories D and E are always `"advisory"`
 
-**Update the task with findings:**
-
-```
-TaskUpdate({
-  taskId: "<task-id>",
-  status: "completed",
-  metadata: {
-    review_status: "completed",
-    findings: [
-      { "category": "A", "severity": "blocking", "title": "...", "file": "...", "lines": "...", "description": "...", "suggested_fix": "..." },
-      { "category": "D", "severity": "advisory", "title": "...", "file": "...", "lines": "...", "description": "...", "suggested_fix": "..." }
-    ],
-    files_reviewed: ["path/to/file1.ts", "path/to/file2.ts"],
-    completed_at: "<ISO timestamp>"
-  }
-})
-```
-
-If no issues are found, report an empty findings array:
+**Report findings via the RESULT BLOCK** (and an uncommitted `{batch}.findings.json` journal written to `docs/specs/<run>/results/` with the same content). You hold no Task tools; the orchestrator harvests this block and records the findings on the board itself.
 
 ```
-TaskUpdate({
-  taskId: "<task-id>",
-  status: "completed",
-  metadata: {
-    review_status: "completed",
-    findings: [],
-    files_reviewed: ["path/to/file1.ts", "path/to/file2.ts"],
-    completed_at: "<ISO timestamp>"
-  }
-})
+CW-RESULT-BLOCK-START
+{
+  "task_id": "<batch>",
+  "status": "completed",
+  "review_status": "completed",
+  "findings": [
+    { "category": "A", "severity": "blocking", "title": "...", "file": "...", "lines": "...", "description": "...", "suggested_fix": "..." },
+    { "category": "D", "severity": "advisory", "title": "...", "file": "...", "lines": "...", "description": "...", "suggested_fix": "..." }
+  ],
+  "files_reviewed": ["path/to/file1.ts", "path/to/file2.ts"],
+  "completed_at": "<ISO timestamp>"
+}
+CW-RESULT-BLOCK-END
 ```
+
+If no issues are found, report an empty `findings` array in the same block.
 
 Output result and exit:
 
@@ -145,11 +145,14 @@ Output result and exit:
 "Findings: [count] ([blocking count] blocking, [advisory count] advisory)"
 ```
 
+**Segment append note**: you hold no Task tools and never create FIX tasks. The review orchestrator (SKILL.md Step 3) harvests your RESULT BLOCK, creates each FIX task, and appends one line to `~/.claude/tasks/.manifest/<list-id>/manifest.fix.jsonl` per FIX task so the dispatch exit gate's completion predicate includes those tasks. You have no action here — this note documents the handoff so the orchestrator's append responsibility is visible at both ends of the protocol.
+
 ## Constraints
 
 - Never modify implementation code
 - Never create FIX tasks or any new tasks
-- Only examine files listed in assigned_files metadata
-- Always update task status before exiting
+- Only examine files in your spawn-prompt assignment
+- Always emit the RESULT BLOCK before exiting
+- Never spawn sub-agents — sub-reviewers are leaf children ([nesting-guardrails.md](../../cw-dispatch/references/nesting-guardrails.md))
 - Always include file paths and line numbers in findings
 - Read each file in full — do not rely solely on the diff

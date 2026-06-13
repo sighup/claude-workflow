@@ -10,19 +10,19 @@ This protocol is used by the test-fixer agent when investigating and fixing appl
 
 ### Step 1: Orient
 
-Load fix task and understand the failure context.
+Read the fix assignment from the spawn prompt and understand the failure context. You hold no Task tools — the orchestrator delivers the fix context and linked test-task id inline.
 
 ```
-1. TaskGet({ taskId: "<fix-task-id>" })
-2. Extract from metadata:
-   - failed_test_id: The test that failed
+1. Read the fix assignment from the spawn prompt:
+   - fix_task_id: stable id of this fix task
+   - failed_test_id / linked_test_task_id: the test that failed
    - attempt_number: Which fix attempt this is (1-based)
    - failure_context.failure_reason: What the application actually did (the bug)
    - failure_context.spec_requirement: What the spec says should happen
    - failure_context.action: The action that was attempted
    - failure_context.verify: The verification that failed
    - failure_context.artifacts: Screenshots and logs from failure
-3. Output orientation:
+2. Output orientation:
    "BUG FIX ATTEMPT [N]: [test_id] failed"
    "Expected: [spec_requirement]"
    "Actual: [failure_reason]"
@@ -125,68 +125,42 @@ Create a descriptive fix commit.
 
 ### Step 5: Report
 
-Update tasks with fix results.
+Emit the fix result as a RESULT BLOCK and exit. You hold no Task tools; the testing orchestrator harvests this block and applies **both** the fix-task update and the linked test-task reset/increment itself (sole writer).
 
 **If fix succeeded:**
 ```
-TaskUpdate({
-  taskId: "<fix-task-id>",
-  status: "completed",
-  metadata: {
-    fix_result: "success",
-    fix_description: "[what bug was fixed]",
-    commit_sha: "[sha]",
-    files_changed: ["path/to/app/file.ts"],
-    completed_at: "<ISO timestamp>"
-  }
-})
-
-TaskUpdate({
-  taskId: "<linked-test-task-id>",
-  status: "pending",
-  metadata: {
-    test_result: "pending",
-    linked_fix_task: "<fix-task-id>",
-    fix_history: [...existing, {
-      fix_task_id: "<fix-task-id>",
-      attempt: N,
-      result: "success",
-      commit_sha: "[sha]",
-      description: "[what was fixed]",
-      timestamp: "<ISO timestamp>"
-    }]
-  }
-})
+CW-RESULT-BLOCK-START
+{
+  "task_id": "<fix_task_id>",
+  "status": "completed",
+  "commit_sha": "[sha]",
+  "fix_result": "success",
+  "fix_description": "[what bug was fixed]",
+  "files_changed": ["path/to/app/file.ts"],
+  "linked_test_task_id": "<linked-test-task-id>",
+  "attempt": N,
+  "completed_at": "<ISO timestamp>"
+}
+CW-RESULT-BLOCK-END
 ```
 
 **If fix failed (cannot determine solution):**
 ```
-TaskUpdate({
-  taskId: "<fix-task-id>",
-  status: "completed",
-  metadata: {
-    fix_result: "failed",
-    fix_description: "Unable to determine fix: [reason]",
-    investigation_notes: "[what was tried, what was found]",
-    completed_at: "<ISO timestamp>"
-  }
-})
-
-TaskUpdate({
-  taskId: "<linked-test-task-id>",
-  metadata: {
-    fix_history: [...existing, {
-      fix_task_id: "<fix-task-id>",
-      attempt: N,
-      result: "failed",
-      reason: "[why fix couldn't be determined]",
-      timestamp: "<ISO timestamp>"
-    }]
-  }
-})
+CW-RESULT-BLOCK-START
+{
+  "task_id": "<fix_task_id>",
+  "status": "failed",
+  "fix_result": "failed",
+  "fix_description": "Unable to determine fix: [reason]",
+  "investigation_notes": "[what was tried, what was found]",
+  "linked_test_task_id": "<linked-test-task-id>",
+  "attempt": N,
+  "completed_at": "<ISO timestamp>"
+}
+CW-RESULT-BLOCK-END
 ```
 
-Output result and exit.
+The orchestrator uses `linked_test_task_id` + `attempt` + `fix_result` to reset/increment the linked test task's `fix_history`. Output result and exit.
 
 ## Common Bug Patterns
 
@@ -205,4 +179,4 @@ Output result and exit.
 - Do NOT refactor unrelated code
 - Do NOT add features beyond spec requirements
 - If cannot determine fix, report failure with investigation notes
-- Always update both fix task and test task before exiting
+- Always emit the RESULT BLOCK before exiting; the orchestrator applies both the fix-task and linked test-task updates from it

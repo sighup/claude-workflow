@@ -2,13 +2,27 @@
 # verify-task-update.sh
 # SubagentStop hook for cw-execute workers
 #
-# Ensures workers that commit code also call TaskUpdate(status='completed').
+# Ensures workers that commit code also record completion evidence.
 # This prevents task board inconsistency when workers exhaust context after committing.
+#
+# Dual completion contract (this release): a committed worker may signal
+# completion through EITHER handoff path —
+#   - durable journal: the CW-RESULT-BLOCK sentinel in the final message, OR an
+#     on-disk {task_id}.result.json under the run's results dir
+#   - legacy board write: TaskUpdate(status='completed')
+# The journal path is authoritative and the only one current worker protocols
+# emit; the legacy branch is retained through this release for rollback safety
+# so a session running an older worker protocol (e.g. the installed plugin
+# cache, which still completes via TaskUpdate) is not wrongly blocked. It is
+# removed only after the single-writer cut-over has proven out in production.
 #
 # Decision logic:
 # - No commit happened → Allow stop (incomplete work, cw-loop will retry)
-# - Commit + TaskUpdate(completed) → Allow stop (protocol complete)
-# - Commit without TaskUpdate(completed) → Block stop (must complete Phase 10)
+# - Commit + (journal evidence OR TaskUpdate(completed)) → Allow stop
+# - Commit with neither → Block stop (write the journal + emit the sentinel)
+#
+# Best-effort, in-session only: this hook does not fire for headless `claude -p`
+# workers or on SIGKILL. The dispatcher's git + proof harvest is the authority.
 
 set -e
 
@@ -49,7 +63,39 @@ if [ "$COMMIT_HAPPENED" = false ]; then
   exit 0
 fi
 
-# Commit happened - check if TaskUpdate was called with status='completed'
+# Commit happened - look for completion evidence under EITHER contract.
+
+# Durable-journal contract: the CW-RESULT-BLOCK sentinel emitted in the final
+# message, or an on-disk {task_id}.result.json written under a results dir.
+JOURNAL_PRESENT=false
+if grep -q 'CW-RESULT-BLOCK-START' "$TRANSCRIPT" 2>/dev/null; then
+  JOURNAL_PRESENT=true
+fi
+# An on-disk {task_id}.result.json is equally valid, but only THIS worker's own
+# journal counts — a stale journal from a prior task in the shared results dir
+# must not satisfy an unrelated worker's gate. Take the LAST task_id the worker
+# names (its own completing TaskUpdate / result block sits at the end of the
+# transcript); head -1 would pick an early-quoted sibling/dependency id and
+# match a prior worker's journal.
+if [ "$JOURNAL_PRESENT" = false ]; then
+  TASK_ID=$(grep -o '"task_id":[ ]*"[^"]*"' "$TRANSCRIPT" 2>/dev/null \
+    | tail -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  # The results dir is repo-relative, but SubagentStop's cwd is not guaranteed
+  # to be the repo root (workers run under .claude/worktrees/<name>/). Resolve
+  # the repo root from the payload cwd so a cwd-relative glob can't miss and
+  # wrongly block a worker that did write its journal.
+  HOOK_CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+  REPO_ROOT=$(git -C "${HOOK_CWD:-.}" rev-parse --show-toplevel 2>/dev/null) || true
+  REPO_ROOT="${REPO_ROOT:-${HOOK_CWD:-.}}"
+  if [ -n "$TASK_ID" ] && \
+     ls "$REPO_ROOT"/docs/specs/*/results/"$TASK_ID".result.json >/dev/null 2>&1; then
+    JOURNAL_PRESENT=true
+  fi
+fi
+
+# Legacy board-write contract: TaskUpdate(status='completed'). Retained through
+# this release for rollback safety (older worker protocols still complete this
+# way); the journal path above is authoritative for current protocols.
 TASK_UPDATED=false
 if grep -q '"status":[ ]*"completed"' "$TRANSCRIPT" 2>/dev/null && \
    grep -q '"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null; then
@@ -62,17 +108,17 @@ if grep -q '"tool_name":[ ]*"TaskUpdate"' "$TRANSCRIPT" 2>/dev/null && \
   TASK_UPDATED=true
 fi
 
-# If TaskUpdate was called, allow stop
-if [ "$TASK_UPDATED" = true ]; then
+# Either contract satisfies the gate during this release.
+if [ "$JOURNAL_PRESENT" = true ] || [ "$TASK_UPDATED" = true ]; then
   exit 0
 fi
 
-# FAILURE CASE: Commit happened but TaskUpdate wasn't called
-# Block the stop and instruct the worker to complete Phase 10
+# FAILURE CASE: Commit happened but no completion evidence under either contract.
+# Block the stop and instruct the worker to record the durable handoff.
 cat << 'EOF'
 {
   "decision": "block",
-  "reason": "You committed code but did not call TaskUpdate. Complete Phase 10 of the cw-execute protocol:\n\nTaskUpdate({\n  taskId: '<your-task-id>',\n  status: 'completed',\n  metadata: {\n    proof_dir: 'docs/specs/.../NN-proofs',\n    commit_sha: '<sha from git log --oneline -1>',\n    completed_at: '<ISO timestamp>'\n  }\n})\n\nThis ensures the task board reflects your completed work."
+  "reason": "You committed code but recorded no completion evidence. Write the result journal and emit the sentinel:\n\n1. Write {task_id}.result.json into docs/specs/<run>/results/ (commit_sha, status, proof paths — see result-journal-schema.md).\n2. Emit the fenced CW-RESULT-BLOCK-START ... CW-RESULT-BLOCK-END sentinel as the final message, holding the same fields.\n\nThe dispatcher (sole board writer) harvests your journal directly; a completing TaskUpdate(status='completed') from an older worker protocol is also accepted this release."
 }
 EOF
 exit 0

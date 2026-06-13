@@ -11,6 +11,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/worktree-session-init.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/task-store-guard.sh",
+            "timeout": 5
           }
         ]
       }
@@ -43,6 +48,17 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/validate-task-metadata.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/detect-board-wipe.sh",
             "timeout": 5
           }
         ]

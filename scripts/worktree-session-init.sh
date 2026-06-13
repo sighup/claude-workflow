@@ -14,11 +14,13 @@ if [[ "$CURRENT_DIR" == */.claude/worktrees/* ]]; then
   # New location: .claude/worktrees/{name}/...
   # Example: /project/.claude/worktrees/fix-myrepo-auth/src/lib -> fix-myrepo-auth
   WORKTREE_NAME=$(echo "$CURRENT_DIR" | sed 's|^.*/\.claude/worktrees/||' | cut -d'/' -f1)
+  # shellcheck disable=SC2001
   WORKTREE_ROOT=$(echo "$CURRENT_DIR" | sed "s|\(.*/.claude/worktrees/${WORKTREE_NAME}\).*|\1|")
 elif [[ "$CURRENT_DIR" == */.worktrees/* ]]; then
   # Legacy location: .worktrees/{name}/...
   # Example: /project/.worktrees/feature-myrepo-auth/src/lib -> feature-myrepo-auth
   WORKTREE_NAME=$(echo "$CURRENT_DIR" | sed 's|^.*/\.worktrees/||' | cut -d'/' -f1)
+  # shellcheck disable=SC2001
   WORKTREE_ROOT=$(echo "$CURRENT_DIR" | sed "s|\(.*/.worktrees/${WORKTREE_NAME}\).*|\1|")
 fi
 
