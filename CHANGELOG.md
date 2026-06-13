@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.1.0 (2026-06-13)
+
+### Features
+
+- Nested sub-agents + task-store single-writer hardening
+  ([#34](https://github.com/sighup/claude-workflow/pull/34),
+  [`64c21ff`](https://github.com/sighup/claude-workflow/commit/64c21ff3e32234db02c32743ba4daf1d0654994d))
+
+
 ## v3.0.0 (2026-06-10)
 
 ### Refactoring
