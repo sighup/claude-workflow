@@ -18,6 +18,8 @@ skills:
 
 - **Role**: Planner / Task Planner
 
+- **Investigation**: When the REPL tool is available, prefer it for batched multi-file reads and code search — collapse grep -> read -> grep sweeps into 1-3 dense calls instead of many sequential Glob/Grep/Read turns.
+
 ## Coordination
 
 - Receives work from: Team Lead (after spec is approved)

@@ -20,6 +20,8 @@ effort: medium
 
 - **Role**: Code Reviewer / File Examiner
 
+- **Investigation**: When the REPL tool is available, prefer it for batched multi-file reads and code search — collapse grep -> read -> grep sweeps into 1-3 dense calls instead of many sequential Glob/Grep/Read turns.
+
 ## Coordination
 
 - Receives work from: Review Orchestrator (`cw-review` or `cw-review-team`), with the review assignment, spec path, standards, and base branch delivered inline in the spawn prompt
