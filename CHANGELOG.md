@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.2.0 (2026-06-17)
+
+### Features
+
+- **agents**: Steer read-heavy agents to prefer REPL when available
+  ([#36](https://github.com/sighup/claude-workflow/pull/36),
+  [`624ee4d`](https://github.com/sighup/claude-workflow/commit/624ee4d7014372320b31994fd0b7e31203aef630))
+
+
 ## v3.1.0 (2026-06-13)
 
 ### Features
