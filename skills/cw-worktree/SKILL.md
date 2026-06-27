@@ -305,7 +305,7 @@ See [worktree-commands.md](references/worktree-commands.md#sync) for full implem
 
 ### /cw-worktree open <feature-name>
 
-Retrospectively attaches a herdr tab to an existing worktree. The helper uses one workspace per repo and one tab per worktree; if a claude session is already running in the matching tab (cwd match), it focuses that workspace+tab rather than spawning a duplicate. If herdr is unavailable, prints the legacy manual `cd ... && claude` instructions and exits 0 — open is not a hard failure when herdr is missing. If the named worktree does not exist, exits non-zero and references `/cw-worktree list`.
+Retrospectively attaches a herdr pane to an existing worktree. On current herdr it opens a dedicated workspace per worktree via the native `worktree open` command; on older herdr it falls back to one workspace per repo with a tab per worktree. Either way, if a claude session is already running for that worktree (cwd match), it focuses it rather than spawning a duplicate. If herdr is unavailable, prints the legacy manual `cd ... && claude` instructions and exits 0 — open is not a hard failure when herdr is missing. If the named worktree does not exist, exits non-zero and references `/cw-worktree list`.
 
 See [worktree-commands.md](references/worktree-commands.md#open) for full implementation.
 
@@ -331,13 +331,13 @@ MAIN SESSION (project root) - Control Center
   /cw-worktree list
   /cw-worktree cleanup
      |
-     +---> herdr workspace: {repo-name}   (one per repo, reused across calls)
-             |
-             +-- tab: fix-myrepo-login      (auto-opened when herdr is running)
-             |   /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
-             |
-             +-- tab: feature-myrepo-auth   (auto-opened when herdr is running)
-                 /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
+     +---> herdr workspace: fix-myrepo-login     (one per worktree, native worktree-open)
+     |       /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
+     |
+     +---> herdr workspace: feature-myrepo-auth  (auto-opened when herdr is running)
+             /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
+     (older herdr without the worktree subcommand: one {repo-name} workspace
+      with a tab per worktree instead)
 
   Without herdr (or when CW_DISABLE_HERDR=1):
      +---> Terminal 1: cd .claude/worktrees/fix-myrepo-login && claude
@@ -351,7 +351,7 @@ MAIN SESSION (project root) - Control Center
 - **Automatic task isolation** - `.claude/settings.local.json` configures task list ID
 - **Persistent tasks** - Tasks stored in `~/.claude/tasks/{worktree-name}/`, survive session restarts
 - **Seamless resume** - Just `cd` to worktree and run `claude`, tasks are there
-- **herdr integration** - When [herdr](https://github.com/ogulcancelik/herdr) is installed, running, and **this session is inside a herdr pane**, `create` automatically opens a Claude session in the new worktree. From a plain terminal (not inside herdr) the manual terminal flow is used — a tab spawned in a detached herdr window would be invisible to you.
+- **herdr integration** - When [herdr](https://github.com/ogulcancelik/herdr) is installed, running, and **this session is inside a herdr pane**, `create` automatically opens a Claude session in the new worktree. Current herdr gives each worktree its own workspace (native `worktree open`); older herdr nests them as tabs under one repo workspace. From a plain terminal (not inside herdr) the manual terminal flow is used — a tab spawned in a detached herdr window would be invisible to you.
 
 ## Error Handling
 

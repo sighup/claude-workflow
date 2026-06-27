@@ -219,7 +219,7 @@ Fire the question even under a standing "work without clarifying questions" inst
     Status: Ready for development
 
     Next steps (keep THIS session open as control center):
-    1. Opened in herdr: workspace {repo-name} → tab {WORKTREE_DIR}
+    1. Opened in herdr: claude pane in workspace {WORKTREE_DIR} (older herdr: a tab under the {repo-name} workspace)
     2. Create spec: /cw-spec {feature-name}
     3. Plan and execute: /cw-plan → /cw-dispatch → /cw-validate
     4. Create PR: gh pr create (PR contains spec + implementation)
@@ -659,13 +659,19 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    fi
    ```
 
-   The helper's layout is **one workspace per repo, one tab per worktree, one claude pane per tab**:
+   The helper prefers herdr's native `worktree open` command, which opens (or
+   focuses) **one dedicated workspace per worktree** (label = worktree basename),
+   started from the repo's parent workspace (`--cwd` = repo root). On older herdr
+   that predates the `worktree` subcommand it falls back to assembling **one
+   workspace per repo, one tab per worktree, one claude pane per tab**:
    - The workspace label is the repo basename (derived from `git rev-parse --git-common-dir`).
    - The tab label is the worktree basename (e.g. `feature-auth`).
    - Look up an existing workspace by repo name; if absent, create it (the workspace's default tab is reused as this worktree's tab — no empty placeholder).
    - Look up an existing tab in that workspace by worktree-basename label; if absent, create it.
-   - If the tab's pane is already running `claude` at the matching cwd: focus workspace + tab and exit 0 without spawning a duplicate.
-   - Otherwise: run `claude` in the tab's existing root pane via `herdr pane run`.
+
+   In either mode:
+   - If the worktree's pane is already running `claude` at the matching cwd: focus it and exit 0 without spawning a duplicate.
+   - Otherwise: run `claude` in that pane via `herdr pane run`.
    - `--focus-if-exists` is accepted for backward compatibility; the reuse-on-duplicate behaviour above runs unconditionally.
 
 4. **Report result:**
@@ -677,7 +683,7 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    Path:   {resolved-worktree-dir}/
    Branch: {branch-name}
 
-   Opened (or focused) in herdr: workspace {repo-name} → tab {worktree-basename}
+   Opened (or focused) in herdr: claude pane in workspace {worktree-basename} (older herdr: a tab under the {repo-name} workspace)
 
    To resume work in the terminal:
      cd {resolved-worktree-dir} && claude
