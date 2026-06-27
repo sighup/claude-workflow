@@ -190,6 +190,8 @@ Fire the question even under a standing "work without clarifying questions" inst
 
    Read the cached `DRIVE_MODE` from per-invocation setup. `HERDR_OPEN_BIN` and `HERDR_AVAILABLE` were also resolved once in setup; this step uses those cached values. A failure on one worktree does not skip subsequent worktrees in a multi-create call.
 
+   **First, if `DRIVE_MODE=autonomous` and this feature has a non-empty `STARTER_PROMPT_GOAL`, write the committed goal file** (the `autonomous` block below) — do this **regardless of `HERDR_AVAILABLE`**, so the artifact exists both for the inline forward and for the step-11 copy-paste fallback when herdr is unavailable.
+
    If `HERDR_AVAILABLE=0`, set `HERDR_EXIT=$HERDR_PROBE_EXIT` (preserves 2 vs 3 — see step 10 hint logic) and skip the helper entirely regardless of `DRIVE_MODE`. Fall through to legacy output in step 10.
 
    Otherwise dispatch on `DRIVE_MODE`:
@@ -197,9 +199,29 @@ Fire the question even under a standing "work without clarifying questions" inst
    | `DRIVE_MODE` | Bash invocation |
    |---|---|
    | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
-   | `autonomous` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT_GOAL" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `autonomous` | Write the goal file (below), then `"$HERDR_OPEN_BIN" --max-prompt-chars 4000 --prompt "$(cat "$GOAL_FILE")" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
    | `empty` | `"$HERDR_OPEN_BIN" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
    | `skip_herdr` | `HERDR_EXIT=2` (do not invoke the helper) |
+
+   **`autonomous` — author the goal within its 4000-char budget, persist it to a committed file, then inline-forward it.** 4000 characters is the limit for a `/goal` directive: produce the goal so the file is ≤ 4000 chars (condense if it would run over — never truncate). Authoring it once in a *quoted* heredoc (no `$`/backtick/quote expansion) and forwarding it via `--prompt "$(cat …)"` means the goal text is never re-quoted on a command line — this is what makes long, punctuation-heavy goals safe to forward. The `--max-prompt-chars 4000` flag is a non-truncating backstop: it *rejects* a runaway (exit 2), it never cuts the prompt.
+
+   ```bash
+   GOAL_FILE=".claude/worktrees/${WORKTREE_DIR}/docs/specs/goal-${WORKTREE_DIR}.md"
+   mkdir -p ".claude/worktrees/${WORKTREE_DIR}/docs/specs"
+   cat > "$GOAL_FILE" <<'CW_GOAL_EOF'
+   <STARTER_PROMPT_GOAL verbatim — the full /goal … directive, placeholders
+    already resolved; see SKILL.md "Autonomous variant" for the template>
+   CW_GOAL_EOF
+   # Authoring budget: the goal must be ≤ 4000 chars. If it's over, rewrite it
+   # more tightly (do NOT truncate), then re-check.
+   if [ "$(wc -m < "$GOAL_FILE")" -gt 4000 ]; then
+     echo "NOTE: goal-${WORKTREE_DIR}.md exceeds 4000 chars — condense the /goal directive and rewrite before forwarding."
+   fi
+   # then forward inline (the autonomous row above), with a non-truncating backstop:
+   "$HERDR_OPEN_BIN" --max-prompt-chars 4000 --prompt "$(cat "$GOAL_FILE")" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?
+   ```
+
+   Write `$GOAL_FILE` even when `HERDR_AVAILABLE=0` (skip only the `"$HERDR_OPEN_BIN"` line) so the artifact persists for step 11.
 
    When `DRIVE_MODE=starter` or `autonomous` and this specific feature has an empty `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (rare — only possible when the batch is mixed and the user picked a mode that fits *some* features), fall back to the `empty` invocation for this feature so the tab still opens.
 
@@ -288,6 +310,16 @@ Fire the question even under a standing "work without clarifying questions" inst
 
     {STARTER_PROMPT or STARTER_PROMPT_GOAL verbatim — see SKILL.md
      "Starter Prompt Generation" and "Autonomous variant" for templates}
+    ```
+
+    For `DRIVE_MODE=autonomous`, the goal was already written to `docs/specs/goal-${WORKTREE_DIR}.md` in step 9. Point the user at that file and offer the shorter interactive form, which *does* expand on paste (unlike a launch argument):
+
+    ```
+    AUTONOMOUS GOAL (saved to docs/specs/goal-{WORKTREE_DIR}.md)
+    ═══════════════════════════════════════════════════════════
+    In the worktree session, paste either:
+      /goal @docs/specs/goal-{WORKTREE_DIR}.md      ← short form ('@' expands on interactive paste)
+    or the full goal text above.
     ```
 
 ---

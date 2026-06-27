@@ -13,7 +13,7 @@
 # without spawning a duplicate. Gracefully degrades on unavailable systems.
 #
 # Usage:
-#   cw-herdr-open [--focus-if-exists] [--prompt <text>] <worktree-path>
+#   cw-herdr-open [--focus-if-exists] [--prompt <text>] [--max-prompt-chars <n>] <worktree-path>
 #   cw-herdr-open --probe
 #   cw-herdr-open --help
 #
@@ -30,7 +30,13 @@
 #                       flag is now a no-op.
 #   --prompt <text>     Forward an initial prompt to the spawned claude
 #                       session as its first user turn. The text is passed
-#                       verbatim as the first argument to `claude`.
+#                       verbatim as the first argument to `claude`. It is
+#                       routed through a temp file (not inlined into the typed
+#                       pane command), so prompts of any length forward intact.
+#   --max-prompt-chars <n>  Reject --prompt longer than <n> characters (exit 2)
+#                       before any herdr work. Default 0 = unlimited. Opt-in,
+#                       scoped by the caller — e.g. cw-worktree passes 4000 for
+#                       the autonomous /goal directive but not for starter prompts.
 #   --probe             Run only the detection phase (binary + socket) and
 #                       exit with the same 0/2/3 codes — no worktree path
 #                       required and no workspace operations performed.
@@ -80,7 +86,7 @@ HERDR_TIMEOUT=5  # hard cap on all herdr invocations (seconds)
 # =============================================================================
 
 show_help() {
-    echo "Usage: cw-herdr-open [--focus-if-exists] [--prompt <text>] <worktree-path>"
+    echo "Usage: cw-herdr-open [--focus-if-exists] [--prompt <text>] [--max-prompt-chars <n>] <worktree-path>"
     echo "       cw-herdr-open --probe"
     echo ""
     echo "Open a herdr pane running claude in the given worktree directory."
@@ -90,9 +96,10 @@ show_help() {
     echo "                   Basename must match ^[a-z0-9-]+$."
     echo ""
     echo "Options:"
-    echo "  --focus-if-exists   No-op (accepted for compat); helper always reuses existing claude"
-    echo "  --prompt <text>     Forward initial prompt as first arg to claude"
-    echo "  --probe             Detection-only: exit 0/2/3 without any workspace ops"
+    echo "  --focus-if-exists       No-op (accepted for compat); helper always reuses existing claude"
+    echo "  --prompt <text>         Forward initial prompt as first arg to claude (any length)"
+    echo "  --max-prompt-chars <n>  Reject --prompt over <n> chars (exit 2); default 0 = unlimited"
+    echo "  --probe                 Detection-only: exit 0/2/3 without any workspace ops"
     echo ""
     echo "Exit Codes:"
     echo "  0   Success — claude pane opened (or focused), or --probe ok"
@@ -280,6 +287,7 @@ _probe_herdr() {
 FOCUS_IF_EXISTS=0
 PROBE_ONLY=0
 INITIAL_PROMPT=""
+MAX_PROMPT_CHARS=0   # opt-in --prompt length ceiling; 0 = unlimited
 
 if [[ $# -eq 0 ]]; then
     echo "cw-herdr-open: missing argument: worktree-path" >&2
@@ -318,6 +326,18 @@ while [[ $# -gt 0 ]]; do
             esac
             shift 2
             ;;
+        --max-prompt-chars)
+            if [[ $# -lt 2 ]]; then
+                echo "cw-herdr-open: --max-prompt-chars requires a value" >&2
+                exit 2
+            fi
+            if [[ ! "$2" =~ ^[0-9]+$ ]]; then
+                echo "cw-herdr-open: --max-prompt-chars must be a non-negative integer (got '$2')" >&2
+                exit 2
+            fi
+            MAX_PROMPT_CHARS="$2"
+            shift 2
+            ;;
         --)
             shift
             break
@@ -332,6 +352,22 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# =============================================================================
+# Prompt-length ceiling (opt-in, scoped by the caller)
+# =============================================================================
+#
+# --max-prompt-chars is OFF by default (0 = unlimited): free-form prompts
+# (e.g. cw-worktree starter prompts) are not length-limited. The caller opts in
+# per invocation — the cw-worktree skill passes --max-prompt-chars 4000 only for
+# the autonomous /goal directive, keeping that goal focused. Checked here, after
+# parsing (so flag order is irrelevant) and before any herdr work, so an
+# over-limit prompt fails fast.
+
+if [[ "$MAX_PROMPT_CHARS" -gt 0 && -n "$INITIAL_PROMPT" && "${#INITIAL_PROMPT}" -gt "$MAX_PROMPT_CHARS" ]]; then
+    echo "cw-herdr-open: --prompt is ${#INITIAL_PROMPT} chars, over the --max-prompt-chars limit of ${MAX_PROMPT_CHARS}. Refusing to forward." >&2
+    exit 2
+fi
 
 # =============================================================================
 # Platform Check (runs for both --probe and normal flows)
@@ -577,17 +613,69 @@ fi
 # =============================================================================
 # Run claude in the tab's root pane (pane run = send text + Enter)
 # =============================================================================
+#
+# The prompt is forwarded via a temp file rather than inlined into the typed
+# command. `herdr pane run` types $CMD into the pane's shell as a single line;
+# a long inlined prompt overruns the terminal-injection send buffer (or its
+# bracketed-paste boundary) and is truncated mid-string, leaving zsh stuck at a
+# `quote>` continuation prompt so claude never starts. Writing the prompt to a
+# temp file and substituting it in with $(cat ...) keeps the typed command
+# short and constant regardless of prompt length, and sidesteps shell-quoting
+# of arbitrary prompt content entirely.
 
+PROMPT_FILE=""
 if [[ -n "$INITIAL_PROMPT" ]]; then
-    QUOTED_PROMPT="$(_shell_quote "$INITIAL_PROMPT")"
-    CMD="claude $QUOTED_PROMPT"
+    # Portable template (trailing X's) works on both GNU and BSD/macOS mktemp;
+    # the `-t PREFIX` form differs between them. Kept outside any repo ($TMPDIR)
+    # so the prompt content never risks being committed.
+    PROMPT_FILE="$(mktemp "${TMPDIR:-/tmp}/cw-herdr-prompt.XXXXXX")" || {
+        echo "cw-herdr-open: failed to create temp file for --prompt" >&2
+        exit 4
+    }
+    printf '%s' "$INITIAL_PROMPT" > "$PROMPT_FILE"
+    # Write-integrity check: confirm the temp file holds the prompt byte-for-byte
+    # before we commit to it. `cmp` against the same bytes catches a partial
+    # write / disk-full / encoding surprise, so claude is never launched against
+    # a corrupted prompt. Bytes are compared directly (no $(...) round-trip) to
+    # avoid command substitution's trailing-newline stripping skewing the check.
+    if ! printf '%s' "$INITIAL_PROMPT" | cmp -s - "$PROMPT_FILE"; then
+        rm -f "$PROMPT_FILE"
+        echo "cw-herdr-open: --prompt temp-file write verification failed (incomplete write?); not launching claude" >&2
+        exit 4
+    fi
+    # The pane shell expands $(cat FILE) to the full prompt and passes it as a
+    # single argv to claude, then removes the file in the same substitution so
+    # it is consumed and cleaned up atomically once the pane executes. The path
+    # is single-quoted so spaces/specials in $TMPDIR are safe; inside the outer
+    # double quotes, single quotes in the prompt itself need no escaping.
+    QUOTED_FILE="$(_shell_quote "$PROMPT_FILE")"
+    CMD="claude \"\$(cat $QUOTED_FILE; rm -f $QUOTED_FILE)\""
 else
     CMD="claude"
+fi
+
+# Quoting/length guard on the string we're about to type into the pane. Routing
+# the prompt through a temp file exists precisely to keep this command short and
+# constant — a long single line is what overran herdr's send buffer and left
+# zsh stuck at a `quote>` continuation prompt. Assert the command is comfortably
+# under the smallest length that has ever truncated; if it isn't, inline content
+# has crept back in, so refuse rather than risk sending a quote-breaking line.
+CMD_MAX=1024
+if [[ "${#CMD}" -gt "$CMD_MAX" ]]; then
+    [[ -n "$PROMPT_FILE" ]] && rm -f "$PROMPT_FILE"
+    echo "cw-herdr-open: refusing to send an over-long pane command (${#CMD} > ${CMD_MAX} chars) — the prompt must be routed via the temp file, not inlined" >&2
+    exit 4
 fi
 
 RUN_EXIT=0
 _herdr pane run "$PANE_ID" "$CMD" >/dev/null 2>&1 || RUN_EXIT=$?
 if [[ "$RUN_EXIT" -ne 0 ]]; then
+    # pane run failed, so the pane never received (and will never consume +
+    # self-delete) the command. Remove the temp file ourselves to avoid a leak.
+    # On SUCCESS we must NOT remove it here: `pane run` returns as soon as the
+    # text is injected, before the pane's shell has run the substitution, so
+    # deleting it now would race the cat and hand claude an empty prompt.
+    [[ -n "$PROMPT_FILE" ]] && rm -f "$PROMPT_FILE"
     echo "cw-herdr-open: pane creation failed (pane run exit $RUN_EXIT)" >&2
     exit 4
 fi
