@@ -5,11 +5,12 @@
 # Detects herdr availability (binary on PATH + 2s socket probe) and, when
 # available, opens a herdr tab running `claude` for the given worktree.
 #
-# Layout: one workspace per repo (label = repo basename), one tab per worktree
-# (label = worktree basename), one claude pane per tab. If a claude session
-# is already running in the target tab at the right cwd, the helper focuses
-# the workspace+tab and exits 0 without spawning a duplicate. Gracefully
-# degrades on unavailable or unsupported systems.
+# Layout: prefers the native `herdr worktree open` command (one dedicated
+# workspace per worktree), which is portable and atomic. On older herdr builds
+# lacking the worktree subcommand it falls back to assembling one workspace per
+# repo with one tab per worktree. Either way, if a claude session is already
+# running in the target pane at the right cwd, the helper focuses it and exits 0
+# without spawning a duplicate. Gracefully degrades on unavailable systems.
 #
 # Usage:
 #   cw-herdr-open [--focus-if-exists] [--prompt <text>] <worktree-path>
@@ -140,6 +141,26 @@ _repo_name_for_worktree() {
     else
         basename "$worktree_abs"
     fi
+}
+
+# Derive the repo root (the main worktree path) for a worktree. Native worktree
+# actions must start from the repo's PARENT workspace, not a linked worktree, so
+# we pass this as --cwd. Prints the absolute repo root, or nothing on failure.
+_repo_root_for_worktree() {
+    local worktree_abs="$1"
+    local common_dir
+    if common_dir="$(git -C "$worktree_abs" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+       && [[ -n "$common_dir" ]]; then
+        dirname "$common_dir"
+    fi
+}
+
+# Whether this herdr build supports the `worktree` subcommand. Probes the
+# read-only `worktree list` (which needs a repo cwd) so we can prefer the native
+# path and fall back cleanly on older herdr that predates it.
+_herdr_supports_worktree() {
+    local repo_root="$1"
+    _herdr worktree list --cwd "$repo_root" >/dev/null 2>&1
 }
 
 # Find an existing workspace by label; prints workspace_id or returns 1
@@ -426,8 +447,41 @@ if [[ "$probe_rc" -ne 0 ]]; then
 fi
 
 # =============================================================================
-# Derive the workspace label (one per repo, not per worktree)
+# Open (or focus) the worktree's pane — native first, legacy fallback
 # =============================================================================
+#
+# Sets WORKSPACE_ID, TAB_ID, PANE_ID. The native `herdr worktree open` command
+# (preferred) atomically opens a dedicated workspace per worktree and is portable
+# (no bash realpath). On older herdr it leaves them empty and we fall through to
+# the legacy assembly (one workspace per repo, tab per worktree). Both converge
+# on the shared reuse + run logic below.
+
+WORKSPACE_ID=""
+TAB_ID=""
+PANE_ID=""
+
+REPO_ROOT="$(_repo_root_for_worktree "$WORKTREE_ABS")"
+
+if [[ -n "$REPO_ROOT" ]] && _herdr_supports_worktree "$REPO_ROOT"; then
+    OPEN_JSON=""
+    OPEN_JSON="$(_herdr worktree open --cwd "$REPO_ROOT" --path "$WORKTREE_ABS" --label "$TAB_LABEL" --no-focus --json 2>/dev/null)" || true
+    if [[ -n "$OPEN_JSON" ]]; then
+        if command -v jq >/dev/null 2>&1; then
+            PANE_ID="$(echo "$OPEN_JSON" | jq -r '.result.root_pane.pane_id // empty' 2>/dev/null)"
+            WORKSPACE_ID="$(echo "$OPEN_JSON" | jq -r '.result.root_pane.workspace_id // empty' 2>/dev/null)"
+            TAB_ID="$(echo "$OPEN_JSON" | jq -r '.result.root_pane.tab_id // empty' 2>/dev/null)"
+        else
+            # The root_pane object is flat, so pull its ids out directly.
+            ROOT_PANE="$(echo "$OPEN_JSON" | grep -o '"root_pane":{[^}]*}')" || true
+            PANE_ID="$(echo "$ROOT_PANE" | grep -o '"pane_id":"[^"]*"' | head -1 | sed 's/.*:"//;s/"//')"
+            WORKSPACE_ID="$(echo "$ROOT_PANE" | grep -o '"workspace_id":"[^"]*"' | head -1 | sed 's/.*:"//;s/"//')"
+            TAB_ID="$(echo "$ROOT_PANE" | grep -o '"tab_id":"[^"]*"' | head -1 | sed 's/.*:"//;s/"//')"
+        fi
+    fi
+fi
+
+# Legacy fallback: only when the native path produced no pane (older herdr).
+if [[ -z "$PANE_ID" || -z "$WORKSPACE_ID" ]]; then
 
 WORKSPACE_NAME="$(_repo_name_for_worktree "$WORKTREE_ABS")"
 # Reject names containing shell-meaningful chars; we pass this to herdr but
@@ -503,6 +557,8 @@ if [[ -z "$TAB_ID" || -z "$PANE_ID" ]]; then
     echo "cw-herdr-open: pane creation failed (could not find or create tab '$TAB_LABEL' in workspace '$WORKSPACE_NAME')" >&2
     exit 4
 fi
+
+fi  # end legacy fallback
 
 # =============================================================================
 # Reuse-on-duplicate: focus an existing claude session instead of spawning one
