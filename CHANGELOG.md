@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.3.0 (2026-06-27)
+
+### Features
+
+- **cw-herdr-open**: MacOS realpath fix + native herdr worktree open
+  ([#37](https://github.com/sighup/claude-workflow/pull/37),
+  [`1f56910`](https://github.com/sighup/claude-workflow/commit/1f56910802fdc63fcd563daf5e0a889ef7b16e62))
+
+
 ## v3.2.0 (2026-06-17)
 
 ### Features
