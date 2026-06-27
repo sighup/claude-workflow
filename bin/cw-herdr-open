@@ -371,15 +371,29 @@ WORKTREE_PATH="$1"
 # Input Validation — no shell injection
 # =============================================================================
 
-# Resolve the absolute path without requiring the directory to exist yet
-if command -v realpath >/dev/null 2>&1; then
+# Resolve the absolute path without requiring the directory to exist yet.
+# GNU realpath supports -m (resolve even when the path does not exist yet);
+# BSD/macOS realpath does NOT — there 'realpath -m' fails with "illegal
+# option -- m", which previously left WORKTREE_ABS empty and silently disabled
+# the entire herdr integration on macOS. Probe for working -m support (not mere
+# presence of a realpath binary) and fall back to a portable cwd-prefix.
+if realpath -m / >/dev/null 2>&1; then
     WORKTREE_ABS="$(realpath -m "$WORKTREE_PATH" 2>/dev/null || echo "")"
 else
-    # Portable fallback: prefix with cwd if relative
+    # Portable fallback (BSD/macOS realpath, or no realpath at all): prefix with
+    # cwd if relative. Does not collapse symlinks/.., but callers pass already-
+    # clean worktree paths and existence is verified below.
     case "$WORKTREE_PATH" in
         /*) WORKTREE_ABS="$WORKTREE_PATH" ;;
         *)  WORKTREE_ABS="$(pwd)/$WORKTREE_PATH" ;;
     esac
+fi
+
+# Strip a trailing slash so cwd-equality checks (reuse detection + native
+# worktree-open cwd match) compare cleanly. GNU realpath already normalizes
+# this; the portable fallback above does not.
+if [[ "$WORKTREE_ABS" != "/" ]]; then
+    WORKTREE_ABS="${WORKTREE_ABS%/}"
 fi
 
 if [[ -z "$WORKTREE_ABS" ]]; then
