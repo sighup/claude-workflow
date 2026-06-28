@@ -55,6 +55,7 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
 | `cw-gherkin` | Generate Gherkin BDD scenarios from spec acceptance criteria; called automatically by cw-spec |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
+| `/cw-loop` | Design bounded loops with explicit exit conditions — turn a fuzzy "keep going until X" into a loop with a real external check, hard caps, and named terminal states, then emit a runnable harness |
 
 ## Prerequisites
 

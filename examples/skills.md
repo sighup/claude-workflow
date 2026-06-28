@@ -148,3 +148,34 @@ gh pr create
 ```
 
 > **Legacy worktrees:** Worktrees created before this naming scheme (e.g. `feature-checkout-redesign`) are fully supported — all commands are prefix-agnostic.
+
+## /cw-loop
+
+Design a bounded loop with an explicit exit condition, or audit an existing one. `cw-loop` does not run loops — it designs them and emits a runnable harness.
+
+```
+# Design a loop from a task description
+/cw-loop design keep fixing lint until the linter is clean
+/cw-loop design iterate on the summary until a separate judge scores it >= 4/5
+
+# Audit an existing loop, prompt, or script against the exit-condition rubric
+/cw-loop check ./scripts/retry-deploy.sh
+/cw-loop check "keep refining the code until it looks correct"
+
+# Fast path: wrap a single command in a bounded loop
+/cw-loop wrap npm run build
+```
+
+The skill enforces the rules your loop needs to be safe: an **external, re-runnable check** (never "until it looks good"), a **hard cap**, a **no-progress stop**, and a **named terminal state** on exit (`success`, `clean-noop`, `blocked`, `needs-approval`, `exhausted`, `no-progress`). Output goes to `docs/loops/<slug>.md` plus an optional `<slug>.sh` harness.
+
+`/cw-loop check` is useful as a lint pass on any "keep going until…" prompt before you trust it:
+
+```
+I have a prompt that tells an agent to "rewrite the function until the output
+is good." Audit it.
+> /cw-loop check "rewrite the function until the output is good"
+```
+
+Claude reports that the success condition is self-graded (RULE 1 FAIL — no external check), and proposes replacing it with an external signal such as "until `npm test -- fn.test.ts` exits 0," plus the missing cap and no-progress stop.
+
+For running the harness afterward: drive per-iteration coding tasks with `/cw-execute`, use the built-in `/loop` for interval/self-paced cadence, or — if the loop *is* the whole spec pipeline — use `/cw-dispatch`, which already implements continuous execution with a hardened exit gate.
