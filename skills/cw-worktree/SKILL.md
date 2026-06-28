@@ -65,149 +65,25 @@ The naming computation lives in `cw_worktree_names()` in `scripts/lib/cw-common.
 
 Whenever multiple potential features are in play — whether **you** identified them from a codebase / spec / issue tracker, or **the user** enumerated them in their request (e.g., "auth, web, mobile, backend, database") — confirm the set with `AskUserQuestion` before spinning up worktrees. Creating N worktrees is a high-leverage action; one confirmation pass lets the user re-prioritise, drop one, or add via "Other" before the work starts. Fire the question even under a standing "work without clarifying questions" instruction: this is a one-time decomposition decision, not a per-step clarification.
 
-### Single-question shape (≤ 4 candidates)
+Shape the question by candidate count:
 
-```
-AskUserQuestion({
-  questions: [{
-    question: "Which features would you like to create worktrees for?",
-    header: "Features",
-    options: [
-      { label: "Team Settings Page", description: "High priority - unlocks integration management" },
-      { label: "Export Buttons", description: "Medium effort - completes import/export workflow" }
-    ],
-    multiSelect: true
-  }]
-})
-```
+- **≤ 4 candidates** → one `AskUserQuestion` (multiSelect) listing each feature.
+- **5–16 candidates** → split across up to 4 questions (the per-call max), grouped by semantic affinity (e.g. interfaces vs. services); each question needs ≥ 2 options. Don't drop any.
+- **> 16 candidates** → say so plainly and ask the user to prune or group by domain first; never silently drop.
 
-### Multi-question shape (> 4 candidates)
-
-`AskUserQuestion` enforces `options.maxItems: 4` per question but accepts up to **4 questions per call** (rendered as tabs in the UI). When you have 5–16 candidates, split them across multiple grouped questions instead of dropping any. Group by **semantic affinity** when there is one — e.g., interfaces vs. services — and fall back to arbitrary even chunks only when no natural grouping exists.
-
-Worked example for the fitness-app case ("auth, web, mobile, backend, database"):
-
-```
-AskUserQuestion({
-  questions: [
-    {
-      question: "Which interface worktrees?",
-      header: "Interfaces",
-      options: [
-        { label: "Web", description: "Browser-based interface" },
-        { label: "Mobile", description: "iOS/Android client" }
-      ],
-      multiSelect: true
-    },
-    {
-      question: "Which service worktrees?",
-      header: "Services",
-      options: [
-        { label: "Auth", description: "Authentication and session management" },
-        { label: "Backend", description: "API and business logic" },
-        { label: "Database", description: "Schema and migrations" }
-      ],
-      multiSelect: true
-    }
-  ]
-})
-```
-
-Each question still needs `options.minItems: 2`. If a residual group would end up with a single candidate, either fold it into a sibling group or add a "Skip this one" companion option to keep the array valid.
-
-If candidate count exceeds 16 (4 questions × 4 options), say so plainly and ask the user to either prune the list or group by domain before continuing — don't silently drop candidates.
-
-After the user's selection, create worktrees for every chosen feature sequentially.
+After selection, create worktrees for every chosen feature sequentially. Full `AskUserQuestion` JSON for both gates: **[references/interactive-gates.md](references/interactive-gates.md)**.
 
 ## Starter Prompt Generation
 
-When prior discussion gives you enough signal, **construct a starter prompt** to seed the new worktree's first claude session. After every feature has its `STARTER_PROMPT` (and, where applicable, `STARTER_PROMPT_GOAL`), the **Drive-Mode Selection** gate decides — once for the whole batch — what gets forwarded to each tab. When herdr is available the chosen prompt is forwarded via `cw-herdr-open --prompt`; when herdr is unavailable, step 11 prints it as a copy-paste block.
+When prior discussion gives enough signal, **construct a starter prompt** to seed each new worktree's first claude session; the **Drive-Mode Selection** gate (below) then decides — once for the whole batch — what is forwarded. Classify intent into one of three shapes:
 
-Classify the user's intent into one of three shapes:
+- **Research-mode** → `/cw-research {topic}` (user wants to investigate before scoping).
+- **Spec/build-mode** → a `Build {feature}…` directive ending in `Run: /cw-spec {feature}` (concrete components/routes/APIs identified).
+- **No starter prompt** → `STARTER_PROMPT=""` (bare create, user will self-drive, or ambiguous — a wrong guess is worse than none).
 
-**Research-mode** — the user said things like "look into X", "I want to understand Y", "let's research how Z works", or otherwise signaled they need to investigate before scoping. Construct:
+Whenever `STARTER_PROMPT` is non-empty, also construct an autonomous variant `STARTER_PROMPT_GOAL` — a `/goal`-prefixed directive that drives the whole pipeline hands-off (cw-spec → … → cw-testing), delivered as a committed `docs/specs/goal-<worktree>.md` file (≤ 4000 chars, authoring budget) and forwarded inline.
 
-```
-/cw-research {topic derived from the discussion}
-```
-
-**Spec/build-mode** — the user identified concrete components, routes, APIs, or requirements. Construct:
-
-```
-Build {feature-name}.
-
-{Brief description of what the feature does}
-
-Components/files to create:
-- {Component1}: {purpose}
-- {Component2}: {purpose}
-
-{Any routes, APIs, or patterns to follow}
-
-Run: /cw-spec {feature-name}
-```
-
-**No starter prompt** — `STARTER_PROMPT=""`. Use this when:
-- Bare `/cw-worktree create <name>` was issued without prior context.
-- The user said they want to drive the new session themselves.
-- Intent is ambiguous and a wrong guess would be worse than no guess.
-
-The Drive-Mode Selection gate always offers an "Other" escape hatch so the user can edit a misclassified preset before it is forwarded.
-
-### Autonomous variant (`STARTER_PROMPT_GOAL`)
-
-Whenever `STARTER_PROMPT` is non-empty, **also** construct an autonomous variant `STARTER_PROMPT_GOAL`. This wraps the same intent in a `/goal`-prefixed directive that drives the full pipeline end-to-end (cw-research → cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing). The Drive-Mode Selection gate surfaces this as the autonomous option so the user can promote the whole batch to hands-off execution without restating the request. `/goal` is a semantic marker, not a registered slash command — the spawned claude session reads it as plain text and follows the structured steps.
-
-**Template — when base mode is Research-mode** (no spec exists, greenfield or large-unknown task):
-
-```
-/goal Pipeline complete for `{feature-name}`: research done, spec committed, plan executed, all non-test tasks have status `completed` (verified via TaskList), `cw-validate` passes, `cw-review` has no blocking issues, and `cw-testing` is green.
-
-Workflow (research → spec → plan → dispatch → validate → review → testing):
-1. Invoke `cw-research` with the topic below. It saves a report under `docs/specs/research-*/` and appends a Meta-Prompt section ready for `cw-spec`.
-2. Without pausing for review, extract the meta-prompt from the research report and invoke `cw-spec` with it.
-3. Commit the spec and research artifacts (`git add docs/specs && git commit -m "spec: {feature-name}"`).
-4. Invoke `cw-plan` against the spec to populate this worktree's task list.
-5. Use `cw-dispatch` to advance ready tasks until non-test tasks are complete.
-6. Invoke `cw-validate`, then `cw-review`, then `cw-testing`. Treat their findings as new FIX tasks on the board and keep dispatching until the goal condition holds.
-
-Topic: {topic derived from the discussion — same text as Research-mode STARTER_PROMPT, minus the `/cw-research` prefix}
-
-Stop and report if three consecutive turns make no progress on task transitions.
-```
-
-**Template — when base mode is Spec/build-mode** (concrete build directive, no research needed):
-
-```
-/goal Pipeline complete for `{feature-name}`: spec committed, plan executed, all non-test tasks have status `completed` (verified via TaskList), `cw-validate` passes, `cw-review` has no blocking issues, and `cw-testing` is green.
-
-Workflow (spec → plan → dispatch → validate → review → testing):
-1. Invoke `cw-spec` with the build directive below as input.
-2. Commit the spec (`git add docs/specs && git commit -m "spec: {feature-name}"`).
-3. Invoke `cw-plan` against the spec to populate this worktree's task list.
-4. Use `cw-dispatch` to advance ready tasks until non-test tasks are complete.
-5. Invoke `cw-validate`, then `cw-review`, then `cw-testing`. Treat their findings as new FIX tasks on the board and keep dispatching until the goal condition holds.
-
-Build directive:
-{STARTER_PROMPT body without the trailing `Run: /cw-spec` line}
-
-Stop and report if three consecutive turns make no progress on task transitions.
-```
-
-When `STARTER_PROMPT=""`, leave `STARTER_PROMPT_GOAL=""` too — without a topic or build directive there is nothing concrete to drive the goal toward.
-
-### Delivery: committed goal file + inline forward
-
-`STARTER_PROMPT_GOAL` is large (≈1.5–3 kB once filled in). Do **not** type it onto a command line — backticks, `$`, and quotes in the body would be interpreted, and a long single line is what truncated under herdr (the `quote>`-stuck pane bug). For `DRIVE_MODE=autonomous`, persist the goal to a committed file and forward it inline **from that file**, so the text is authored exactly once and never re-quoted:
-
-1. Write the full `STARTER_PROMPT_GOAL` (the entire `/goal …` directive, placeholders already resolved) to `docs/specs/goal-${WORKTREE_DIR}.md` inside the worktree, using a **quoted** heredoc (`<<'CW_GOAL_EOF'`) so nothing in the body is expanded.
-2. Forward it with `--prompt "$(cat <that file>)"` — double-quoted command substitution passes the exact bytes as a single argv. `cw-herdr-open` then routes it through its own temp file, keeping the typed pane command short regardless of length.
-
-The file is a committed artifact (it lands in `docs/specs/`, which the autonomous pipeline already commits) and doubles as the human copy-paste source when herdr is unavailable (step 11). Name it after the worktree directory (`goal-${WORKTREE_DIR}.md`, e.g. `goal-feature-myrepo-auth.md`) so it never collides with spec files or other worktrees.
-
-**Author the goal within its 4000-character budget — do not rely on truncation.** 4000 characters is the limit for a `/goal` directive, so *produce* the goal to fit: write `goal-${WORKTREE_DIR}.md` so its content is ≤ 4000 characters. The templates above land well under that once filled in; if a goal would run over, **condense it** (tighten steps, drop redundant prose) and rewrite — never let it overflow. After writing the file, verify with `wc -m "$GOAL_FILE"` and rewrite more tightly if it exceeds 4000. Nothing truncates the goal: the transport forwards it intact at any length, and the `--max-prompt-chars 4000` guard on the forward (step 9) only *rejects* a runaway (exit 2) — it never cuts the prompt — so the budget is enforced by how you write the goal, not by the tooling clipping it.
-
-> **Why not `@docs/specs/goal-…md`?** Claude Code's `@`-file import only expands when typed **interactively** — not when the prompt is passed as claude's launch argument (which is how herdr injects it). So the goal is inlined in full rather than referenced by `@`. (`@` *does* expand on interactive paste, so the step-11 fallback can offer the short `@` form.)
+The full templates, the autonomous `/goal` variants, the 4000-char budget, and the file+inline delivery mechanics live in **[references/starter-prompts.md](references/starter-prompts.md)** — apply them during `create` (see worktree-commands.md step 9).
 
 ## Drive-Mode Selection
 
@@ -230,29 +106,9 @@ The available options collapse based on (a) whether **any** feature in the batch
 
 Drop the **autonomous** option when `STARTER_PROMPT_GOAL` is empty for every feature. If only one meaningful option remains after collapsing, skip the question and use that option as `DRIVE_MODE`.
 
-### Question shape (full 4-option variant)
+### Question shape
 
-```
-AskUserQuestion({
-  questions: [{
-    question: "How should the {N} worktree(s) be driven after creation?",
-    header: "Drive mode",
-    options: [
-      { label: "Starter prompt (Recommended)",
-        description: "Forward the classified /cw-spec or /cw-research kickoff to each tab; you steer from there",
-        preview: "<STARTER_PROMPT verbatim for first feature; if N>1 add '\\n\\n…and similar for the other {N-1} worktree(s).'>" },
-      { label: "Autonomous (/goal)",
-        description: "Drive end-to-end through cw-spec → cw-plan → cw-dispatch → cw-validate → cw-review → cw-testing without further input",
-        preview: "<STARTER_PROMPT_GOAL verbatim for first feature; if N>1 add '\\n\\n…and similar for the other {N-1} worktree(s).'>" },
-      { label: "Empty session",
-        description: "Open the herdr tab(s) with no auto-prompt" },
-      { label: "Skip herdr",
-        description: "Just create the worktree(s); start sessions manually with cd ... && claude" }
-    ],
-    multiSelect: false
-  }]
-})
-```
+Present a **single-select** with the surfaced options (Starter prompt = Recommended; Autonomous (/goal); Empty session; Skip herdr), each option's `preview` showing the relevant `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` for the first feature. Full JSON: **[references/interactive-gates.md](references/interactive-gates.md)**.
 
 Map the chosen label to `DRIVE_MODE`:
 
@@ -334,37 +190,11 @@ See [worktree-commands.md](references/worktree-commands.md#cleanup) for full imp
 
 ## Integration with Claude Workflow
 
-Each worktree is a **self-contained feature unit**: one worktree = one spec + one implementation = one PR to main.
+Each worktree is a **self-contained feature unit**: one worktree = one spec + one implementation = one PR to main. The main session stays open as a **control center** (`create` / `list` / `cleanup`); each worktree runs its own pipeline (`/cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create`) on an isolated, persistent task board (`~/.claude/tasks/{worktree-name}/`, configured via `.claude/settings.local.json`, restored just by re-running `claude` in the worktree).
 
-### Session Layout
+When herdr is installed, running, and **this session is inside a herdr pane**, `create` opens a Claude session in each new worktree automatically (current herdr: one workspace per worktree; older herdr: tabs under one repo workspace). From a plain terminal the manual `cd … && claude` flow is used — a tab spawned in a detached herdr window would be invisible to you.
 
-```
-MAIN SESSION (project root) - Control Center
-  /cw-worktree create <feature>
-  /cw-worktree list
-  /cw-worktree cleanup
-     |
-     +---> herdr workspace: fix-myrepo-login     (one per worktree, native worktree-open)
-     |       /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
-     |
-     +---> herdr workspace: feature-myrepo-auth  (auto-opened when herdr is running)
-             /cw-spec -> /cw-plan -> /cw-dispatch -> /cw-validate -> gh pr create
-     (older herdr without the worktree subcommand: one {repo-name} workspace
-      with a tab per worktree instead)
-
-  Without herdr (or when CW_DISABLE_HERDR=1):
-     +---> Terminal 1: cd .claude/worktrees/fix-myrepo-login && claude
-     +---> Terminal 2: cd .claude/worktrees/feature-myrepo-auth && claude
-```
-
-**Key Points:**
-- **Control center pattern** - Main session stays open to manage worktrees
-- **Worktree first** - Create worktree, then spec inside it
-- **Self-contained PRs** - Spec and implementation on same branch, reviewed together
-- **Automatic task isolation** - `.claude/settings.local.json` configures task list ID
-- **Persistent tasks** - Tasks stored in `~/.claude/tasks/{worktree-name}/`, survive session restarts
-- **Seamless resume** - Just `cd` to worktree and run `claude`, tasks are there
-- **herdr integration** - When [herdr](https://github.com/ogulcancelik/herdr) is installed, running, and **this session is inside a herdr pane**, `create` automatically opens a Claude session in the new worktree. Current herdr gives each worktree its own workspace (native `worktree open`); older herdr nests them as tabs under one repo workspace. From a plain terminal (not inside herdr) the manual terminal flow is used — a tab spawned in a detached herdr window would be invisible to you.
+See [worktree-lifecycle.md](references/worktree-lifecycle.md) for states, transitions, persistence, and concurrent-worktree guidance.
 
 ## Error Handling
 
@@ -415,31 +245,9 @@ Command: create | list | status | merge | sync | cleanup
 
 ## What Comes Next
 
-After creating a worktree (keep main session open as control center):
+After `create` (keep the main session open as control center):
 
-**When running inside herdr** — a Claude session opens automatically in the new worktree's tab (inside the repo's workspace). Switch to that tab and:
-1. `/cw-spec` - create specification (committed to feature branch)
-2. `/cw-plan` - create tasks from the spec
-3. `/cw-dispatch` - execute tasks (can exit and resume anytime)
-4. `/cw-validate` - verify completion
-5. `/cw-worktree sync` - rebase on main (if needed)
-6. `gh pr create` - open PR (contains spec + implementation)
+- **In the worktree session** — the auto-opened herdr tab, or `cd .claude/worktrees/{dir} && claude`: run `/cw-spec → /cw-plan → /cw-dispatch → /cw-validate → /cw-worktree sync → gh pr create`. The task board persists across sessions; resume any time by re-running `claude` in the worktree.
+- **From the main session** — `/cw-worktree list`, `create <other>`, or `cleanup` (after PRs merge).
 
-**Without herdr** — open a new terminal manually:
-1. `cd .claude/worktrees/fix-myrepo-login && claude` - task list auto-configured
-2. `/cw-spec` - create specification (committed to fix branch)
-3. `/cw-plan` - create tasks from the spec
-4. `/cw-dispatch` - execute tasks (can exit and resume anytime)
-5. `/cw-validate` - verify completion
-6. `/cw-worktree sync` - rebase on main (if needed)
-7. `gh pr create` - open PR (contains spec + implementation)
-
-**From main session (control center):**
-- `/cw-worktree list` - check status of all worktrees
-- `/cw-worktree create <other>` - create more worktrees
-- `/cw-worktree cleanup` - remove merged worktrees (after PRs merged)
-
-**To resume work later:**
-- `cd .claude/worktrees/fix-myrepo-login && claude` - tasks are restored
-
-> **Legacy worktrees:** Worktrees created before this naming scheme (e.g. `feature-auth`) are fully supported. Discovery, list, cleanup, and all subcommands match by value — the lookup is prefix-agnostic.
+> **Legacy worktrees:** Worktrees created before this naming scheme (e.g. `feature-auth`) are fully supported — discovery, list, cleanup, and all subcommands match by value (prefix-agnostic lookup).

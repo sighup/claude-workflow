@@ -40,7 +40,7 @@ fi
 
 **Drive-mode selection (runs once for the whole batch):**
 
-After classifying each feature into a `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (see SKILL.md "Starter Prompt Generation"), but **before** entering the per-feature loop, present a single `AskUserQuestion` to pick `DRIVE_MODE ∈ {starter, autonomous, empty, skip_herdr}`. The full question shape, option-collapsing rules, and label-to-mode mapping live in SKILL.md "Drive-Mode Selection". The chosen `DRIVE_MODE` is cached and read by step 9 of every feature in this call — there is no per-worktree confirmation.
+After classifying each feature into a `STARTER_PROMPT` / `STARTER_PROMPT_GOAL` (see [starter-prompts.md](starter-prompts.md)), but **before** entering the per-feature loop, present a single `AskUserQuestion` to pick `DRIVE_MODE ∈ {starter, autonomous, empty, skip_herdr}`. The option-collapsing rules and label-to-mode mapping live in SKILL.md "Drive-Mode Selection"; the full `AskUserQuestion` JSON is in [interactive-gates.md](interactive-gates.md). The chosen `DRIVE_MODE` is cached and read by step 9 of every feature in this call — there is no per-worktree confirmation.
 
 Fire the question even under a standing "work without clarifying questions" instruction. Skip it only when zero meaningful options remain (no starter prompts AND no herdr) — in that case set `DRIVE_MODE=skip_herdr` and fall through.
 
@@ -210,7 +210,7 @@ Fire the question even under a standing "work without clarifying questions" inst
    mkdir -p ".claude/worktrees/${WORKTREE_DIR}/docs/specs"
    cat > "$GOAL_FILE" <<'CW_GOAL_EOF'
    <STARTER_PROMPT_GOAL verbatim — the full /goal … directive, placeholders
-    already resolved; see SKILL.md "Autonomous variant" for the template>
+    already resolved; see starter-prompts.md "Autonomous variant" for the template>
    CW_GOAL_EOF
    # Authoring budget: the goal must be ≤ 4000 chars. If it's over, rewrite it
    # more tightly (do NOT truncate), then re-check.
@@ -308,7 +308,7 @@ Fire the question even under a standing "work without clarifying questions" inst
     STARTER PROMPT (copy into worktree session)
     ═══════════════════════════════════════════
 
-    {STARTER_PROMPT or STARTER_PROMPT_GOAL verbatim — see SKILL.md
+    {STARTER_PROMPT or STARTER_PROMPT_GOAL verbatim — see starter-prompts.md
      "Starter Prompt Generation" and "Autonomous variant" for templates}
     ```
 
