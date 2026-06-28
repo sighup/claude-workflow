@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.3.1 (2026-06-28)
+
+### Bug Fixes
+
+- **cw-herdr-open**: Forward long --prompt reliably via temp file
+  ([#38](https://github.com/sighup/claude-workflow/pull/38),
+  [`b102255`](https://github.com/sighup/claude-workflow/commit/b10225588bef2661f6532ccbb8e58c482ae7d3b9))
+
+
 ## v3.3.0 (2026-06-27)
 
 ### Features
