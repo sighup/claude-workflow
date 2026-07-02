@@ -94,7 +94,7 @@ Before reporting completion, check the artifact:
 
 ```bash
 grep -c '<style>' <artifact>                          # ≥ 1
-grep -c '<script>' <artifact>                         # ≥ 1 (unless quiz omitted and no interactivity)
+grep -c '<script>' <artifact>                         # ≥ 1 — micro-interactions (and quiz) require JS
 grep -cE 'id="(background|intuition|code|quiz)"' <artifact>   # 4 (3 when quiz omitted)
 grep -cE '(src|href)="https?://' <artifact>           # must be 0 — no external assets
 ```

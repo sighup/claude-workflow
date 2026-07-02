@@ -30,6 +30,7 @@ The core essence of the change, taught through concreteness:
 - Use **figures and diagrams liberally**. Diagrams are HTML/SVG, never ASCII art:
   - System/data-flow diagrams: boxes and arrows with the example data written on the arrows.
   - UI changes: simplified HTML mockups of the interface before/after.
+- Make at least one figure manipulable — a micro-interactable the reader operates to see the behavior change (see Micro-Interactions below).
 - End with the one-paragraph "aha": what single idea, once grasped, makes the whole diff obvious.
 
 ### 3. Code
@@ -49,6 +50,20 @@ Interactive behavior (embedded JS):
 - Selecting an answer immediately reveals right/wrong plus a one-sentence explanation.
 - Wrong answers show the explanation for why that choice is tempting but incorrect.
 - No score submission, no persistence — it's a self-check.
+
+## Micro-Interactions
+
+Interactivity in this artifact exists to explain, and it belongs inline with the content it explains. Requirements:
+
+- **At least one micro-interactable in the Intuition section** — a visual aid the reader manipulates to *see* the change's behavior rather than read about it. Preferred forms:
+  - **Before/after toggle**: one click swaps a diagram between old and new behavior — same layout, so the difference pops.
+  - **Step-through data flow**: Next/Back buttons advance example data along a diagram's arrows, one state per step, with a one-line narration per state.
+  - **Hover/tap reveal**: pointing at a diagram node surfaces the example value or rule active at that point.
+- Each interaction must teach something a static figure can't — if removing the interaction loses no understanding, cut it (decoration is noise).
+- The initial state must stand alone: the page still makes sense printed or with JS blocked.
+- Plain `<button>` / `<details>` elements, keyboard-operable, no libraries — everything stays inline per the self-containment rule.
+
+The Quiz's answer-reveal is part of this same philosophy: interaction as comprehension aid, never chrome.
 
 ## Callouts
 
