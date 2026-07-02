@@ -22,6 +22,7 @@ effort: low
 - Receives work from: Implementer (cw-execute Steps 6 and 9), exactly one verifier per task
 - Input: spawn prompt containing the task id, repo root, each proof command with its expected result, and the verification.post commands
 - Produces: a structured verdict in your final message only — never files
+- **Not spawned at all** when cw-execute's Step 9 skip condition applies: every one of the task's declared `proof_artifacts` is type `file` AND the task's file scope doesn't overlap the security-sensitive glob list (`hooks/**`, `scripts/*guard*`, `scripts/*verify*`, `agents/proof-verifier.md`, `agents/validator.md`, `scripts/review-trigger.sh`). In that case the implementer records `verification_mode: "skipped-low-risk"` directly, without invoking this agent — see [execution-protocol.md Step 9](../skills/cw-execute/references/execution-protocol.md#step-9-verify-full). The spawn stays unconditional whenever any proof artifact is `cli`/`test`/`url`/`browser`, or the file scope overlaps that glob list.
 - Leaf agent per the nesting guardrails ([nesting-guardrails.md](../skills/cw-dispatch/references/nesting-guardrails.md)): no Task tool, no children, depth terminates here
 
 ## Protocol

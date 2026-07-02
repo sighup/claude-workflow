@@ -137,6 +137,23 @@ The journal is written once and never edited after finalization. `commit_sha` is
 
 **Goal**: Confirm nothing broke after commit, with the result independently confirmed by one proof-verifier child ([proof-verifier.md](../../../agents/proof-verifier.md)) covering both the Step 6 proof commands and `verification.post`. Policy: [nesting guardrails](../../cw-dispatch/references/nesting-guardrails.md).
 
+**Skip condition (low-risk, file-only proofs):** Before spawning, check every entry in `metadata.proof_artifacts` against its `type`, and check the task's declared file scope (`scope.files_to_create` + `scope.files_to_modify`) against the security-sensitive glob list below:
+
+- **Skip the spawn** only when *both* hold: every proof artifact is type `file`, AND the file scope does not overlap the security-sensitive glob list. In that case, do not spawn a proof-verifier child at all — record `verification_mode: "skipped-low-risk"` in the journal (leave `verifier_verdict`/`verifier_tokens` per [result-journal-schema.md](result-journal-schema.md)'s guidance for this mode, never a fabricated PASS) and proceed straight to Step 10.
+- **Spawn is unconditional** (this rule never skips it) when any proof artifact is type `cli`, `test`, `url`, or `browser` — regardless of file scope.
+- **Spawn is unconditional** regardless of proof type when the task's declared file scope overlaps any entry in the security-sensitive glob list below. Overlap forces the spawn even if every proof artifact is type `file`.
+
+Security-sensitive glob list (must stay in sync with `scripts/review-trigger.sh`'s list — duplicated here per the spec's Open Questions resolution rather than centralized, so update both together):
+
+- `hooks/**`
+- `scripts/*guard*`
+- `scripts/*verify*`
+- `agents/proof-verifier.md`
+- `agents/validator.md`
+- `scripts/review-trigger.sh`
+
+When the skip condition does not apply, proceed with the spawn:
+
 1. Spawn one proof-verifier child per verification attempt (never concurrent, never an implementer-type child), with `model: haiku` pinned explicitly
 2. Spawn prompt: task id, repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn sub-agents" — never the skill's all-caps context marker or raw task metadata JSON (SubagentStop hook pattern-matches both)
 3. Gate on the verdict:
@@ -145,7 +162,9 @@ The journal is written once and never edited after finalization. `commit_sha` is
    - No usable verdict (spawn error, timeout, malformed): re-run checks inline for this attempt, record `verification_mode: "inline-degraded"`
 4. **Inline fallback**: if the Task tool is not in your toolset, run each `verification.post` command yourself exactly as before (fix, amend, re-verify on failure, max 3 attempts) and record `verification_mode: "inline"` — spawn unavailability is never a task failure
 
-**Exit criteria**: PASS verdict (spawned) or all checks green (inline). The completion gate applies in both modes.
+Valid `verification_mode` values (keep in sync with [result-journal-schema.md](result-journal-schema.md)): `spawned`, `inline`, `inline-degraded`, and `skipped-low-risk` (this rule's low-risk file-only skip).
+
+**Exit criteria**: PASS verdict (spawned), all checks green (inline), or the skip condition satisfied (skipped-low-risk). The completion gate applies in all three modes.
 
 ## Step 10: Report
 
@@ -156,7 +175,7 @@ You hold no Task tools. The orchestrator applies your completion `TaskUpdate` it
 1. Finalize `{task_id}.result.json` with the Step 9 verifier fields and `completed_at`, conforming to [result-journal-schema.md](result-journal-schema.md).
 2. Emit the `CW-RESULT-BLOCK` sentinel holding exactly the same fields as the journal — keep the block and the on-disk journal byte-identical. Format and contract: [result-journal-schema.md](result-journal-schema.md).
 
-Never report `status: "completed"` (in the journal or the sentinel) unless `verifier_verdict` is PASS.
+Never report `status: "completed"` (in the journal or the sentinel) unless `verifier_verdict` is PASS — except when Step 9's skip condition applied, in which case `verification_mode: "skipped-low-risk"` with all Step 6 proof results PASS satisfies the completion gate instead.
 
 **Exit criteria**: `{task_id}.result.json` finalized with proof_dir, proof_results, proof_summary, commit_sha, completed_at, verification_mode, and verifier_verdict; matching `CW-RESULT-BLOCK` sentinel emitted as the final message.
 
