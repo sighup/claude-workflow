@@ -100,29 +100,11 @@ When `lsp_available = true`, use LSP to accelerate context assessment:
 
 Use this context to inform scope validation and requirements.
 
-### Step 3: Scope Assessment
+### Step 3: Scope & Effort Assessment
 
-Evaluate whether the feature is appropriately sized.
+Two questions decide how much process this work needs: **is it appropriately sized**, and **which tier of process fits its behavioral impact**.
 
-**Too Large (split into multiple specs):**
-- Rewriting entire application plannerure
-- Migrating complete database systems
-- Implementing full authentication from scratch
-- Building complete admin dashboards
-
-**Too Small (implement directly):**
-- Single console.log statements
-- CSS color changes
-- Adding missing imports
-- Simple off-by-one fixes
-
-**Just Right:**
-- New CLI flag with validation and help
-- Single API endpoint with request/response validation
-- Refactoring one module maintaining backward compatibility
-- Single user story with end-to-end flow
-
-**ALWAYS** report scope assessment to the user. If inappropriate, use AskUserQuestion to present alternatives:
+**3a. Size** — if the work is too large for one spec (rewriting an app, migrating a database, implementing full auth from scratch, building a complete dashboard), stop and use AskUserQuestion to split, reduce, or proceed:
 
 ```
 AskUserQuestion({
@@ -138,6 +120,39 @@ AskUserQuestion({
   }]
 })
 ```
+
+**3b. Tier** — classify along three axes, **impact-first**, and route to one of three tiers. The full decision table and worked examples are in [scope-effort-gate.md](references/scope-effort-gate.md).
+
+| Axis | Question |
+|------|----------|
+| **Behavioral impact** (primary) | Does this change how the system/agents/workflow *behave*, or is it cosmetic? |
+| **Deliverable type** | Authored prose (docs, skills, markdown) or runtime-bearing code with an executable proof surface? |
+| **Effort** | Trivial, small/moderate, or substantial? |
+
+- **Direct implementation** — trivial effort **and** no behavioral impact (typo, CSS color, missing import). Write no spec; report that the work is direct-implementation tier and stop.
+- **Spec-lite** — deliverable is authored prose/docs/skills at small-to-moderate effort, **including behavior-bearing changes**. Produce the standard spec template *scaled to impact* (only applicable sections, 1–2 demoable units, few requirements) with BDD sized to behavioral impact, then hand off to direct implementation — skip cw-plan/cw-dispatch. Adjust Steps 5, 6, and What Comes Next per the notes there.
+- **Full pipeline** — runtime-bearing feature with an executable proof surface. The current default: full spec + full Gherkin + cw-plan + cw-dispatch.
+
+**Impact is primary.** Do not treat "it's just markdown" as "no validation needed" — a small skill edit that changes how agents route work is high-impact prose and belongs in spec-lite *with* scaled BDD, not direct implementation. Symmetrically, a runtime change with no behavioral surface is direct, not full pipeline.
+
+**Auto-classify, then confirm.** State your tier verdict and the axes that drove it, then confirm with the user (they can override):
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "This looks like {tier} work because {driving axes}. Which tier should we use?",
+    header: "Tier",
+    options: [
+      { label: "Spec-lite", description: "Scaled spec (fewer sections/units, BDD sized to impact), then implement directly — for prose/skill/doc work" },
+      { label: "Full pipeline", description: "Full spec + Gherkin + cw-plan + cw-dispatch — for runtime-bearing features" },
+      { label: "Direct implementation", description: "No spec — trivial, no behavioral impact" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+Order the options so your recommended tier is first (labelled `(Recommended)`). On **Direct implementation**, stop here — write no spec. On **Spec-lite** or **Full pipeline**, continue.
 
 ### Step 4: Clarifying Questions
 
@@ -275,6 +290,10 @@ Task({
 })
 ```
 
+**Scale by tier.** For **full pipeline**, use the prompt above as-is. For **spec-lite**, append a scaling instruction so the scenarios track behavioral impact, not requirement count:
+
+> `This is a SPEC-LITE spec — size the scenarios to behavioral impact, not one per requirement. Produce a small set of decision/behavior scenarios covering the key routing/decision matrix (a handful, not exhaustive). If the change is purely cosmetic prose with no behavioral impact, skip Gherkin entirely and return.`
+
 This runs silently. Once complete, note in the Step 6 review that `.feature` files were created alongside the spec.
 
 ### Step 6: Review and Refinement
@@ -338,7 +357,11 @@ Gherkin scenarios: N (if generated)
 
 ## What Comes Next
 
-Once the spec is complete and approved, offer next steps based on context.
+Once the spec is complete and approved, offer next steps based on the tier from Step 3.
+
+**Spec-lite tier:** the next step is **direct implementation**, not the plan → dispatch fan-out. Offer to implement directly — via `/cw-execute` for a single-task handoff, or inline in this session — using the scaled spec as the brief. Do not recommend `/cw-plan`. Skip the worktree/plan prompts below.
+
+**Full pipeline tier:** proceed with the worktree/plan prompts below.
 
 **First, check if already in a worktree:**
 ```bash

@@ -382,15 +382,24 @@ Key findings:
 A meta-prompt for /cw-spec has been generated at the end of the report.
 ```
 
-**10b. Present next-step options:**
+**10b. Recommend a tier, then present next-step options:**
+
+Research has already surfaced the **deliverable type** (authored prose/docs/skills vs. runtime-bearing code) and the **behavioral impact** of the proposed change. Use them to recommend the process tier cw-spec's Step 3 gate would pick — so the user enters cw-spec already knowing the tier, or skips it entirely for trivial work:
+
+- **Direct implementation** — trivial effort and no behavioral impact. No spec needed; implement directly.
+- **Spec-lite** — authored prose/docs/skills (even when behavior-bearing). cw-spec produces a scaled spec, then implement directly.
+- **Full pipeline** — runtime-bearing feature with an executable proof surface. Full spec + Gherkin + plan + dispatch.
+
+State the recommended tier and the deliverable type / impact that drove it, then offer next steps (order options so the recommended path is first):
 
 ```
 AskUserQuestion({
   questions: [{
-    question: "How would you like to proceed?",
+    question: "Based on the research, this looks like {tier} work ({deliverable type}, {impact}). How would you like to proceed?",
     header: "Next Steps",
     options: [
-      { label: "Run /cw-spec with context (Recommended)", description: "Invoke cw-spec with the generated meta-prompt as enriched context" },
+      { label: "Run /cw-spec with context", description: "Invoke cw-spec with the meta-prompt; its Step 3 gate confirms the {tier} tier" },
+      { label: "Implement directly", description: "Skip cw-spec — for direct-implementation tier (trivial, no behavioral impact)" },
       { label: "Review report first", description: "Review and optionally edit the research report before proceeding" },
       { label: "Done for now", description: "Save the report and exit -- you can run /cw-spec later" }
     ],
