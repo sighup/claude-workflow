@@ -54,6 +54,7 @@ Use `/cw-worktree` to develop multiple features simultaneously. Each worktree ge
 | `/cw-review-team` | Concern-partitioned team review — each reviewer sees all files through a specialized lens (security, correctness, spec compliance) |
 | `/cw-testing` | E2E testing with auto-fix — generate tests from specs, execute, and fix failures |
 | `cw-gherkin` | Generate Gherkin BDD scenarios from spec acceptance criteria; called automatically by cw-spec |
+| `/cw-explain` | Generate a self-contained interactive HTML explanation of a diff/branch/PR (Background, Intuition, Code walkthrough, Quiz) before creating a PR |
 | `/cw-worktree` | Manage git worktrees for multi-feature parallel development |
 
 ## Prerequisites
