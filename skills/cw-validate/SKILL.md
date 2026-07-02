@@ -89,7 +89,7 @@ For **each manifest `task_id`** (Step 1's canonical set), collect:
 
 #### Completed-by-Evidence
 
-A manifest `task_id` that is **board-missing or still `in_progress`** but has a **sha-verified journal** (or a complete, git-reachable proof set) is **completed-by-evidence**: treat it as completed for coverage and read its proof metadata from the journal / proof dir. The board lagging behind durable evidence is the expected single-writer state — a half-harvested board still validates from `result.json` + proofs instead of failing Gate B on `Unknown`.
+A manifest `task_id` that is **board-missing or still `in_progress`** but has complete evidence (a sha-verified journal and git-reachable proof artifacts) is **completed-by-evidence**: treat it as completed for coverage and read its proof artifacts from the journal / proof dir. The board lagging behind this evidence is the expected single-writer state — a half-harvested board still validates from `result.json` + proofs instead of failing Gate B on `Unknown`.
 
 5. **Git history**: `git log --stat` for implementation commits across the run.
 6. **Changed files**: `git diff --name-only <base>..HEAD`.
@@ -108,7 +108,7 @@ Cross-check the manifest's R-IDs against the loaded spec and report skew as its 
 For each functional requirement in the spec:
 
 1. Find which task(s) address it (via the manifest entry's `metadata.requirements`; reconstruct a missing task's requirements from the manifest, not the board)
-2. Check completion by **evidence**, not board status: a sha-verified journal or git-reachable proof set marks the task complete (completed-by-evidence), even if the board shows `in_progress` or omits it
+2. Check completion by **evidence** (a sha-verified journal and git-reachable proof artifacts), not board status: these mark the task complete (completed-by-evidence), even if the board shows `in_progress` or omits it
 3. Check if proof artifacts exist and passed
 4. Mark as: `Verified`, `Failed`, `Missing` (no evidence — a coverage gap or pre-validation wipe), or `Unknown`
 

@@ -88,7 +88,7 @@ The `dispatched_at` timestamp is the reference point for the dead-worker livenes
 
 ### Step 4: Spawn Workers
 
-**Before spawning, check for existing evidence.** For each ready task, run the skip-if-evidence check: if a sha-verified `{task_id}.result.json` or proof dir already exists, apply completed-by-evidence (serial write→checkpoint→read-back) and do not spawn a worker for it. Full protocol: [dispatch-common.md](references/dispatch-common.md#skip-if-evidence-idempotent-re-dispatch).
+**Before spawning, check for existing proof artifacts.** For each ready task, run the skip-if-proof check: if a sha-verified `{task_id}.result.json` or proof dir already exists, apply completed-by-evidence (serial write→checkpoint→read-back) and do not spawn a worker for it. Full protocol: [dispatch-common.md](references/dispatch-common.md#skip-if-proof-idempotent-re-dispatch).
 
 Send a **single message** with multiple Task tool calls for parallel execution.
 
