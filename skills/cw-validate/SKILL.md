@@ -1,6 +1,6 @@
 ---
 name: cw-validate
-description: "Validates implementation against spec using 6 gates and generates a coverage matrix. This skill should be used after implementation is complete to verify coverage, proof artifacts, and credential safety before review."
+description: "Validates implementation against spec using 7 gates and generates a coverage matrix. This skill should be used after implementation is complete to verify coverage, proof artifacts, and credential safety before review."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Write, Bash, TaskGet, TaskList, TaskUpdate, AskUserQuestion
 effort: medium
@@ -14,7 +14,7 @@ Always begin your response with: **CW-VALIDATE**
 
 ## Overview
 
-You are the **Validator** role in the Claude Workflow system. You verify that completed implementation meets the specification by examining proof artifacts, checking coverage, and applying 6 mandatory validation gates. You produce an evidence-based report with a clear PASS/FAIL determination.
+You are the **Validator** role in the Claude Workflow system. You verify that completed implementation meets the specification by examining proof artifacts, checking coverage, and applying 7 mandatory validation gates. You produce an evidence-based report with a clear PASS/FAIL determination.
 
 ## Your Role
 
@@ -36,16 +36,17 @@ You are a **Senior QA Engineer** responsible for:
 
 ## Validation Gates
 
-All 6 gates must pass for overall PASS:
+All 7 gates must pass for overall PASS:
 
 | Gate | Rule | Blocker? |
 |------|------|----------|
-| **A** | No CRITICAL or HIGH severity issues | Yes |
-| **B** | No `Unknown` entries in coverage matrix | Yes |
-| **C** | All proof artifacts accessible and functional (auto, manual confirmed, or code-verified) | Yes |
-| **D** | Changed files in scope or justified in commits | Yes |
-| **E** | Implementation follows repository standards | Yes |
-| **F** | No real credentials in proof artifacts | Yes |
+| Gate A | No CRITICAL or HIGH severity issues | Yes |
+| Gate B | No `Unknown` entries in coverage matrix | Yes |
+| Gate C | All proof artifacts accessible and functional (auto, manual confirmed, or code-verified) | Yes |
+| Gate D | Changed files in scope or justified in commits | Yes |
+| Gate E | Implementation follows repository standards | Yes |
+| Gate F | No real credentials in proof artifacts | Yes |
+| Gate G | Code analysis must not reveal unhandled critical boundary conditions or security gaps | Yes |
 
 See [validation-gates.md](references/validation-gates.md) for detailed gate definitions.
 

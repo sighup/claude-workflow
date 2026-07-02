@@ -126,7 +126,7 @@ Review all changed non-test files directly. For each file:
 
 1. Read the full file: `Read({ file_path: "<path>" })`
 2. Get its diff: `git diff main...HEAD -- <path>`
-3. Evaluate against categories A-D (see [review-categories.md](../cw-review/references/review-categories.md))
+3. Evaluate against categories A-E (see [review-categories.md](../cw-review/references/review-categories.md))
 4. Record findings
 
 After reviewing all files, skip to **Step 10: Create FIX Tasks**.
