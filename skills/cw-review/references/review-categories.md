@@ -31,6 +31,8 @@
 - Performance concerns (N+1 queries, unnecessary loops)
 - Inconsistency with repository patterns
 
+**Note:** This category subsumes cw-validate's Gate E (repository-standards conformance: coding style, testing patterns, file organization, naming conventions, CI/build status).
+
 #### Category E: Reuse (Advisory)
 
 - New utility functions that duplicate existing ones in the codebase
