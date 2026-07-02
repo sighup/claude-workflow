@@ -210,6 +210,14 @@ For `playwright-bdd`, `automation` is:
 - **Found** → skip creation. Report the count to the user.
 - **Not found** → create one step task per scenario using the fields extracted in Step 6. Each step task must include `test_result: "pending"` and `fix_attempt: 0` in its metadata so the Check Fix Eligibility step's decision table can evaluate correctly on first run. After creating all step tasks, call `TaskUpdate` on each with `addBlockedBy: [<suite_task_id>]`.
 
+**Scenario-scope manifest (R4.1)**: Once the step tasks exist, record each scenario's exercised file scope in a scenario-scope manifest maintained alongside the suite task at `[artifacts_dir]/scenario-scope.jsonl` (JSONL — one JSON object per line). Derive each scenario's `scope` from the `scope.files_to_create` + `scope.files_to_modify` metadata of the implementation task(s) that scenario exercises — reuse those fields already present on the board, do not invent a new schema. Each line has the form:
+
+```json
+{"scenario_id": "<step task_id>", "scope": ["src/auth/*", "lib/pay.ts"]}
+```
+
+Rewrite the manifest whenever the scenario set or any scenario's declared scope changes, so it stays in sync with the board. This manifest is the input `scripts/regression-scope-select.sh` reads to pick impacted scenarios for the post-fix regression check.
+
 ### Step 8: Output summary — see `references/output-examples.md`
 
 ***
@@ -231,7 +239,7 @@ If `bddgen` exits non-zero, stop immediately — missing step definitions must b
 
 **Regression check** (run once before the loop begins):
 
-For each task with `test_result == "passed"`, verify it still passes:
+Ensure the scenario-scope manifest (Step 7) exists and is current first — the post-fix checks depend on it. At session start there is no fix delta yet, so for each task with `test_result == "passed"`, verify it still passes:
 
 - **playwright-bdd**: run each scenario individually via `--grep` (escape regex-special characters `(`, `)`, `.`, `[`, `]`, `*`, `+`, `?`); parse `results.json`
 - **Other backends**: spawn a `claude-workflow:test-executor` sub-agent per passed task
@@ -360,7 +368,19 @@ Wait for the sub-agent to complete, then harvest its fix result (Step 6.5).
 
 The reset of the linked test task (`test_result: "pending"`, increment `fix_attempt`) is applied by the harvest step from the fixer's `linked_test_task_id` + `attempt`, not here — the orchestrator is the sole board writer.
 
-Then run a **regression check** against all tasks with `test_result == "passed"` (same procedure as the pre-run regression check). If a regression is detected, stop immediately and report before proceeding to Step 7.
+Then run an **impact-based regression check** for this fix attempt (R4.3) — re-run only the passed scenarios whose recorded scope overlaps what the fix changed, not the full passed set:
+
+1. Get the fix's changed files from the bug-fixer's commit (its harvested `commit_sha`): `git show --name-only --pretty=format: <fixer commit_sha>`.
+2. Collect the currently-passed scenario IDs (tasks with `test_result == "passed"`).
+3. Select the impacted subset (R4.2):
+   ```bash
+   scripts/regression-scope-select.sh \
+     --manifest [artifacts_dir]/scenario-scope.jsonl \
+     --changed "<comma-separated changed files>" \
+     --passed "<comma-separated passed scenario IDs>"
+   ```
+4. Re-run **only** the scenario IDs the script returns, using the same per-scenario procedure as the pre-run check (`--grep` for playwright-bdd, a `claude-workflow:test-executor` sub-agent otherwise). If a re-run scenario regresses, stop immediately and report before proceeding to Step 7.
+5. **Empty overlap (R4.4)**: if the script returns no scenario IDs, the fix touched no file any passed scenario covers — skip the regression check for this attempt and record the skip **explicitly** in the run output (e.g. `Regression check skipped for [step_id] fix attempt N: fix scope overlaps no passed scenario`). Never silently treat an empty overlap as "all passed".
 
 #### Step 6.5: Harvest and Apply
 
