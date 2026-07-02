@@ -109,6 +109,20 @@ E2E testing with auto-fix. Generate tests, execute them, and auto-fix applicatio
 /cw-testing reset --step T04           # Reset a specific test
 ```
 
+## /cw-explain
+
+Generate a rich, self-contained interactive HTML explanation of a change — Background, Intuition, Code walkthrough, and Quiz sections in one offline-viewable file. Use before `gh pr create` to deeply understand (or hand off) a change.
+
+```
+/cw-explain                            # Explain the current branch (main...HEAD)
+/cw-explain 42                         # Explain PR #42 (via gh)
+/cw-explain my uncommitted changes     # Explain the working tree (git diff HEAD)
+/cw-explain abc123..def456             # Explain an arbitrary range
+/cw-explain no quiz                    # Skip the quiz section
+```
+
+Writes to `docs/specs/[NN]-spec-*/[NN]-explain-*.html` when a spec directory is active, else `docs/specs/explain-{slug}/`. Never committed, never a gate — purely a human-understanding artifact.
+
 ## /cw-worktree
 
 Manage git worktrees for parallel feature development.
