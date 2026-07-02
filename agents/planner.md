@@ -25,7 +25,7 @@ skills:
 - Receives work from: Team Lead (after spec is approved)
 - Produces: Task graph on the native task board
 - Hands off to: Dispatcher (who spawns implementers)
-- Never implements code - only plans and creates tasks
+- **Never** implements code - only plans and creates tasks
 - Flags dependency concerns or scope issues to lead
 
 ## Constraints

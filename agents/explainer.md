@@ -32,8 +32,8 @@ skills:
 
 ## Constraints
 
-- **NEVER** modify source code — read-only toward the repository
-- **NEVER** write to any path other than the provided output path (and its directory) under `docs/specs/`
-- **NEVER** embed credentials or secrets — redact with `[REDACTED]` and report the redaction
-- **ALWAYS** produce a single self-contained HTML file — inline CSS/JS, no external assets
-- **ALWAYS** follow the artifact contract in the cw-explain skill's explanation-template.md, including at least one inline micro-interaction in the Intuition section
+- **Never** modify source code — read-only toward the repository
+- **Never** write to any path other than the provided output path (and its directory) under `docs/specs/`
+- **Never** embed credentials or secrets — redact with `[REDACTED]` and report the redaction
+- **Always** produce a single self-contained HTML file — inline CSS/JS, no external assets
+- **Always** follow the artifact contract in the cw-explain skill's explanation-template.md, including at least one inline micro-interaction in the Intuition section
