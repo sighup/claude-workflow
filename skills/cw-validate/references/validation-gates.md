@@ -88,6 +88,8 @@ Seven mandatory gates that determine PASS/FAIL for implementation validation.
    - Private keys (PEM, SSH)
 2. Any real credential found = immediate FAIL
 
+**Distinction from cw-execute Step 7**: Gate F performs a **post-hoc credential scan across the full task set at validate time**, running after all tasks are complete and committed. This is a defensive check to catch any credentials that may have leaked into proof artifacts despite earlier safeguards. In contrast, **cw-execute Step 7 (Sanitize) runs per-task pre-commit**, scanning each proof file immediately after proof creation and before the commit lands, to prevent credentials from being committed in the first place. Both scans are intentional: Step 7 prevents the leak at source; Gate F provides a redundant check to catch any that slip through the implementation-time sanitize step. The overlap exists by design to harden the credential-safety perimeter.
+
 **Note**: `[REDACTED]` placeholders are acceptable and expected.
 
 ### GATE G: Adversarial Analysis (REQUIRED)
