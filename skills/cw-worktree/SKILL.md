@@ -35,7 +35,7 @@ You are a **DevOps Engineer** who:
 
 ## Automatic Task List Configuration
 
-When `/cw-worktree create` runs, it creates `.claude/settings.local.json` in the worktree with `CLAUDE_CODE_TASK_LIST_ID` set to the worktree directory name (e.g., `feature-myrepo-auth` or `fix-myrepo-login`). This provides isolated task boards at `~/.claude/tasks/{worktree-name}/`, persistent across sessions. A SessionStart hook provides worktree context to Claude. No setup required - just `cd` to worktree and run `claude`.
+When `/cw-worktree create` runs, it creates `.claude/settings.local.json` in the worktree with `CLAUDE_CODE_TASK_LIST_ID` set to the worktree directory name (e.g., `feature-myrepo-auth` or `fix-myrepo-login`). This provides isolated task lists at `~/.claude/tasks/{worktree-name}/`, persistent across sessions. A SessionStart hook provides worktree context to Claude. No setup required - just `cd` to worktree and run `claude`.
 
 ## Worktree Naming Convention
 
@@ -190,7 +190,7 @@ See [worktree-commands.md](references/worktree-commands.md#cleanup) for full imp
 
 ## Integration with Claude Workflow
 
-Each worktree is a **self-contained feature unit**: one worktree = one spec + one implementation = one PR to main. The main session stays open as a **control center** (`create` / `list` / `cleanup`); each worktree runs its own pipeline (`/cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create`) on an isolated, persistent task board (`~/.claude/tasks/{worktree-name}/`, configured via `.claude/settings.local.json`, restored just by re-running `claude` in the worktree).
+Each worktree is a **self-contained feature unit**: one worktree = one spec + one implementation = one PR to main. The main session stays open as a **control center** (`create` / `list` / `cleanup`); each worktree runs its own pipeline (`/cw-spec → /cw-plan → /cw-dispatch → /cw-validate → gh pr create`) on an isolated, persistent task list (`~/.claude/tasks/{worktree-name}/`, configured via `.claude/settings.local.json`, restored just by re-running `claude` in the worktree).
 
 When herdr is installed, running, and **this session is inside a herdr pane**, `create` opens a Claude session in each new worktree automatically (current herdr: one workspace per worktree; older herdr: tabs under one repo workspace). From a plain terminal the manual `cd … && claude` flow is used — a tab spawned in a detached herdr window would be invisible to you.
 
@@ -247,7 +247,7 @@ Command: create | list | status | merge | sync | cleanup
 
 After `create` (keep the main session open as control center):
 
-- **In the worktree session** — the auto-opened herdr tab, or `cd .claude/worktrees/{dir} && claude`: run `/cw-spec → /cw-plan → /cw-dispatch → /cw-validate → /cw-worktree sync → gh pr create`. The task board persists across sessions; resume any time by re-running `claude` in the worktree.
+- **In the worktree session** — the auto-opened herdr tab, or `cd .claude/worktrees/{dir} && claude`: run `/cw-spec → /cw-plan → /cw-dispatch → /cw-validate → /cw-worktree sync → gh pr create`. The task list persists across sessions; resume any time by re-running `claude` in the worktree.
 - **From the main session** — `/cw-worktree list`, `create <other>`, or `cleanup` (after PRs merge).
 
 > **Legacy worktrees:** Worktrees created before this naming scheme (e.g. `feature-auth`) are fully supported — discovery, list, cleanup, and all subcommands match by value (prefix-agnostic lookup).
