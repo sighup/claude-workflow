@@ -86,6 +86,19 @@ LSP({
 
 **Capture the total diff line count** from the `--stat` summary line (e.g. "10 files changed, 185 insertions(+), 42 deletions(-)"). Add insertions + deletions = total diff lines. This determines the review path.
 
+### Step 1.5: Risk-Adaptive Trigger
+
+Before choosing a review path, invoke `scripts/review-trigger.sh` with the changed-file list and diff line count already gathered in Step 1:
+
+```bash
+scripts/review-trigger.sh --files "$(git diff main...HEAD --name-only | paste -sd, -)" --lines <total-diff-lines>
+```
+
+The script forces `team` when any changed file matches its security-sensitive glob list (e.g. `hooks/**`, `scripts/*guard*`), regardless of diff size, and otherwise outputs `team` when the diff crosses more than 2 top-level directories or 400 changed lines (both editable constants at the top of the script). See [Unit 2 of the risk-adaptive-validation spec](../../../docs/specs/01-spec-risk-adaptive-validation/01-spec-risk-adaptive-validation.md) for the rationale.
+
+- **Output `solo`**: continue to Step 2 below.
+- **Output `team`**: redirect to `cw-review-team`'s protocol — invoke `Skill({ skill: "cw-review-team" })`. If `CLAUDE_CODE_TASK_LIST_ID` is unset (cw-review-team's documented prerequisite — see its Prerequisite section), that skill will refuse to start; in that case fall back to this file's own file-partitioned mode, continuing at Step 2 below instead of exiting.
+
 ### Step 2: Choose Review Path
 
 Get the list of all changed non-test files:

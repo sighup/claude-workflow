@@ -18,6 +18,8 @@ You are the **Code Review Orchestrator** in the Claude Workflow system, using a 
 
 For small diffs you review inline (same as `cw-review`). For larger diffs you spawn the concern-partitioned team.
 
+**Entry point**: `cw-review`'s Step 1.5 runs `scripts/review-trigger.sh` and redirects here whenever the script outputs `team` — a diff crossing more than 2 top-level directories, exceeding 400 changed lines, or touching a security-sensitive path (e.g. `hooks/**`, `scripts/*guard*`), regardless of size. This skill remains directly user-invocable too.
+
 ## Your Role
 
 You are a **Senior Staff Engineer** leading a review team. You:
@@ -52,7 +54,7 @@ ERROR: CLAUDE_CODE_TASK_LIST_ID is not set.
 /cw-review-team requires this env var so all teammates share the project task list.
 Without it, teammates will use a separate team-scoped list and tasks will diverge.
 
-Tip: Use /cw-review instead for zero-config parallel sub-agent reviewers.
+Tip: Use /cw-review instead for zero-config parallel sub-agent reviewers. When this skill is reached via cw-review's Step 1.5 redirect (not invoked directly by a user), the caller falls back to its own file-partitioned mode instead of surfacing this error.
 
 Run /cw-plan to auto-configure it, or add it manually to .claude/settings.json:
 {
