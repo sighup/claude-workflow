@@ -52,7 +52,7 @@ ERROR: CLAUDE_CODE_TASK_LIST_ID is not set.
 /cw-review-team requires this env var so all teammates share the project task list.
 Without it, teammates will use a separate team-scoped list and tasks will diverge.
 
-Tip: Use /cw-review instead for zero-config parallel sub-agent reviewers.
+Tip: Use /cw-review instead for zero-config parallel subagent reviewers.
 
 Run /cw-plan to auto-configure it, or add it manually to .claude/settings.json:
 {

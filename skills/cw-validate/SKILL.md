@@ -278,7 +278,7 @@ These automatically become CRITICAL or HIGH:
 
 ## Output Requirements
 
-**CRITICAL**: When validation completes, you MUST output an executive summary so the caller can relay results to the user. Sub-agent results are not automatically visible to users.
+**CRITICAL**: When validation completes, you MUST output an executive summary so the caller can relay results to the user. Subagent results are not automatically visible to users.
 
 Always end with this output format:
 

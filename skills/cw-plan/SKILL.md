@@ -353,7 +353,7 @@ Before presenting to user:
 
 ## Output Requirements
 
-**CRITICAL**: When planning completes, you MUST output a summary so the caller can relay results to the user. Sub-agent results are not automatically visible to users.
+**CRITICAL**: When planning completes, you MUST output a summary so the caller can relay results to the user. Subagent results are not automatically visible to users.
 
 The CW-PLAN COMPLETE block in Step 2 serves as the primary output block:
 

@@ -217,7 +217,7 @@ AskUserQuestion({
 ```
 
 Based on user selection:
-- **Run /cw-validate**: Spawn the validator as a sub-agent (see below)
+- **Run /cw-validate**: Spawn the validator as a subagent (see below)
 - **Done for now**: Summarize what was completed and exit
 
 ### Spawning the Validator

@@ -39,7 +39,7 @@ When setting up the `playwright-bdd` backend for a spec:
 
 2. **Generate `playwright.config.ts`** — write to `[artifacts_dir]/playwright.config.ts` using the template below. If the file already exists, ask the user to confirm overwrite before writing.
 
-3. **Generate step definitions** — spawn an implementer sub-agent:
+3. **Generate step definitions** — spawn an implementer subagent:
    ```
    Task({
      subagent_type: "claude-workflow:implementer",
@@ -54,7 +54,7 @@ When setting up the `playwright-bdd` backend for a spec:
    npx bddgen --config [artifacts_dir]/playwright.config.ts
    ```
    - Exit 0 → setup complete; proceed
-   - Exit non-zero → show the output (which includes TypeScript scaffolds for missing steps); prompt user to review the scaffolds and retry, or spawn an implementer sub-agent to fill in the missing step bodies before retrying
+   - Exit non-zero → show the output (which includes TypeScript scaffolds for missing steps); prompt user to review the scaffolds and retry, or spawn an implementer subagent to fill in the missing step bodies before retrying
 
 ---
 

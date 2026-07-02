@@ -138,7 +138,7 @@ The journal is written once and never edited after finalization. `commit_sha` is
 **Goal**: Confirm nothing broke after commit, with the result independently confirmed by one proof-verifier child ([proof-verifier.md](../../../agents/proof-verifier.md)) covering both the Step 6 proof commands and `verification.post`. Policy: [nesting guardrails](../../cw-dispatch/references/nesting-guardrails.md).
 
 1. Spawn one proof-verifier child per verification attempt (never concurrent, never an implementer-type child), with `model: haiku` pinned explicitly
-2. Spawn prompt: task id, repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn sub-agents" — never the skill's all-caps context marker or raw task metadata JSON (SubagentStop hook pattern-matches both)
+2. Spawn prompt: task id, repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn subagents" — never the skill's all-caps context marker or raw task metadata JSON (SubagentStop hook pattern-matches both)
 3. Gate on the verdict:
    - `Overall: PASS`: record verdict + verifier tokens, proceed to Step 10
    - `Overall: FAIL`: do NOT mark completed; if your changes caused it: fix, amend commit, re-verify with a fresh verifier (max 3 attempts); if pre-existing: document in proof_results

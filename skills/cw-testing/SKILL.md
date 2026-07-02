@@ -1,6 +1,6 @@
 ---
 name: cw-testing
-description: "E2E testing with auto-fix. Generates tests from specs, executes in isolated sub-agents, and auto-fixes application bugs. This skill should be used after implementation to verify end-to-end behavior."
+description: "E2E testing with auto-fix. Generates tests from specs, executes in isolated subagents, and auto-fixes application bugs. This skill should be used after implementation to verify end-to-end behavior."
 user-invocable: true
 allowed-tools: Glob, Grep, Read, Edit, Write, Bash, TaskCreate, TaskUpdate, TaskList, TaskGet, Task, AskUserQuestion
 effort: high
@@ -20,7 +20,7 @@ You are the **Test Orchestrator** in the Claude Workflow system. You verify impl
 
 You are a **Senior QA Engineer** responsible for:
 - Generating E2E tests from specifications or Gherkin scenarios
-- Orchestrating test execution via sub-agent workers
+- Orchestrating test execution via subagent workers
 - Managing the auto-fix loop when tests reveal application bugs
 - Producing structured test reports with pass/fail evidence
 
@@ -31,8 +31,8 @@ You are a **Senior QA Engineer** responsible for:
 ## Critical Constraints
 
 - **NEVER** modify test assertions to make them pass — tests define truth
-- **ALWAYS** use Task tool for each test step — spawn `claude-workflow:test-executor` sub-agent, **NEVER** execute tests inline in the orchestrator context
-- **ALWAYS** use Task tool for bug fixes — spawn `claude-workflow:bug-fixer` sub-agent, **NEVER** fix bugs inline
+- **ALWAYS** use Task tool for each test step — spawn `claude-workflow:test-executor` subagent, **NEVER** execute tests inline in the orchestrator context
+- **ALWAYS** use Task tool for bug fixes — spawn `claude-workflow:bug-fixer` subagent, **NEVER** fix bugs inline
 - **ALWAYS** fix application code, not tests — when tests fail, the application has a bug
 - **ALWAYS** run regression check at session start and re-check after each bug fix
 - **ALWAYS** update task status via TaskUpdate before exiting
@@ -234,7 +234,7 @@ If `bddgen` exits non-zero, stop immediately — missing step definitions must b
 For each task with `test_result == "passed"`, verify it still passes:
 
 - **playwright-bdd**: run each scenario individually via `--grep` (escape regex-special characters `(`, `)`, `.`, `[`, `]`, `*`, `+`, `?`); parse `results.json`
-- **Other backends**: spawn a `claude-workflow:test-executor` sub-agent per passed task
+- **Other backends**: spawn a `claude-workflow:test-executor` subagent per passed task
 
 If any regression is detected, stop immediately and report which test failed before beginning the loop.
 
@@ -260,7 +260,7 @@ Check task metadata to determine next action. Use the step task's `max_fix_attem
 > - If `automation.backend == "playwright-bdd"` → use **Step 3b** instead.
 > - Otherwise → use the standard flow below.
 
-**REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT execute tests inline.
+**REQUIRED**: Use the Task tool to spawn a subagent. Do NOT execute tests inline.
 
 The executor holds no Task tools — it cannot read the board. `TaskGet` the step task and its parent suite task here and inline the **complete** assignment into the spawn prompt: the step's `action`/`verify` fields, its `task_id`, and the suite context the protocol's Step 1 requires (`base_url`, `automation.backend`, `artifacts_dir`). An incomplete prompt cannot be recovered — verify the serialized assignment is complete before spawning.
 
@@ -287,7 +287,7 @@ You hold no Task tools — orient from this assignment, capture artifacts under 
 })
 ```
 
-Wait for the sub-agent to complete, then harvest its result (Step 6.5). Proceed to Step 4.
+Wait for the subagent to complete, then harvest its result (Step 6.5). Proceed to Step 4.
 
 #### Step 3b: Playwright Runner (playwright-bdd only)
 
@@ -320,7 +320,7 @@ If `fix_config.enabled` and `fix_attempt < max_fix_attempts` (step-level, fallin
 
 #### Step 6: Spawn Bug Fixer
 
-**REQUIRED**: Use the Task tool to spawn a sub-agent. Do NOT fix bugs inline.
+**REQUIRED**: Use the Task tool to spawn a subagent. Do NOT fix bugs inline.
 
 1. Create fix task with failure context (TaskCreate + TaskUpdate with metadata)
 2. **Append one JSON line to the manifest test segment** so the dispatch exit gate's completion predicate includes this task. Guard the append: bail if `CLAUDE_CODE_TASK_LIST_ID` is unset (an unguarded append to a `.../...//manifest.test.jsonl` path silently excludes the fix task from the exit-gate union), and `mkdir -p` the segment directory so a first append on a fresh list does not fail on a missing path:
@@ -356,7 +356,7 @@ Fix application code only, never test code. You hold no Task tools — orient fr
 })
 ```
 
-Wait for the sub-agent to complete, then harvest its fix result (Step 6.5).
+Wait for the subagent to complete, then harvest its fix result (Step 6.5).
 
 The reset of the linked test task (`test_result: "pending"`, increment `fix_attempt`) is applied by the harvest step from the fixer's `linked_test_task_id` + `attempt`, not here — the orchestrator is the sole board writer.
 

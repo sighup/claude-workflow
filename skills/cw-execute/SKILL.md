@@ -288,7 +288,7 @@ Post-commit verification, independently confirmed by one [proof-verifier](../../
 
 1. One verifier per verification attempt — never concurrent verifiers, never implementer-type children
 2. Pin the model explicitly: `model: haiku` — unpinned children inherit yours
-3. Spawn prompt contains: the task id, the repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn sub-agents"
+3. Spawn prompt contains: the task id, the repo root path, each proof command with its expected result, each `verification.post` command, and "Do not spawn subagents"
 4. Spawn prompt must NOT contain this skill's all-caps context marker or raw task metadata JSON — the SubagentStop hook pattern-matches both (see the [verifier's stop-hook contract](../../agents/proof-verifier.md))
 
 **Gate on the verdict (BLOCKING):**
