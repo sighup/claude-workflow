@@ -32,9 +32,9 @@ Workers write one `{task_id}.result.json` per task into `docs/specs/<run>/result
 | `proof_dir` | string | yes | Repo-root-relative path to the proof artifact directory. |
 | `proof_results` | array | yes | One entry per artifact. Each entry: `type` (proof type string), `status` (`"pass"` or `"fail"`), `output_file` (filename only — no path). |
 | `proof_summary` | string | yes | Filename of the `{task_id}-proofs.md` summary (no path). |
-| `verifier_verdict` | `"PASS"` \| `"FAIL"` | yes | Verbatim overall verdict from the proof-verifier child. When `verification_mode` is `"inline"` or `"inline-degraded"`, record the implementer's own inline check result. |
-| `verifier_tokens` | number \| `"n/a"` | yes | Token usage relayed from the verifier child. Literal `"n/a"` when verification ran inline. |
-| `verification_mode` | `"spawned"` \| `"inline"` \| `"inline-degraded"` | yes | `"spawned"` when a proof-verifier child ran; `"inline"` when the Task tool was unavailable; `"inline-degraded"` when the child spawned but returned no usable verdict. |
+| `verifier_verdict` | `"PASS"` \| `"FAIL"` \| `null` | yes | Verbatim overall verdict from the proof-verifier child. When `verification_mode` is `"inline"` or `"inline-degraded"`, record the implementer's own inline check result. When `verification_mode` is `"skipped-low-risk"`, set to `null` (no verifier ran). |
+| `verifier_tokens` | number \| `"n/a"` \| `null` | yes | Token usage relayed from the verifier child. Literal `"n/a"` when verification ran inline. Set to `null` when `verification_mode` is `"skipped-low-risk"` (no verifier spawned). |
+| `verification_mode` | `"spawned"` \| `"inline"` \| `"inline-degraded"` \| `"skipped-low-risk"` | yes | `"spawned"` when a proof-verifier child ran; `"inline"` when the Task tool was unavailable; `"inline-degraded"` when the child spawned but returned no usable verdict; `"skipped-low-risk"` when verification was skipped because all proof artifacts were type `file` (no verifier spawned). |
 | `completed_at` | ISO 8601 string | yes | Timestamp of journal write. |
 
 ## Failure Record
