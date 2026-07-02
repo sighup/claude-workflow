@@ -1,0 +1,8 @@
+# Generated per-run evidence tree: raw patch.diff / stream.jsonl / metrics.json
+# artifacts produced by run_instance.sh. Durable evidence, but regenerated from
+# fixtures — not committed source.
+results/
+
+# The repo-root .gitignore excludes any directory named "tests/". The eval
+# harness's own tests ARE source and must be tracked, so re-include them here.
+!tests/

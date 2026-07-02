@@ -1,0 +1,11 @@
+# Minimal LOCAL fixture image for the eval-harness proofs.
+#
+# This is intentionally NOT a real SWE-bench image (never swebench/*) and needs
+# no external pull beyond a base layer. bench/run_instance.sh records this
+# image's tag (default bench-fixture:local) in metrics.json. By default the
+# runner does NOT build or run this image at all — it runs the agent against a
+# local working copy of the repo. The image is built only with --use-docker,
+# the documented on-ramp for a real containerized run.
+FROM alpine:3.20
+RUN apk add --no-cache git bash
+WORKDIR /workspace
