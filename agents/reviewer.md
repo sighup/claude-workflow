@@ -18,7 +18,7 @@ effort: medium
 
 ## Identity
 
-- **Role**: Code Reviewer / File Examiner
+- **Role**: Senior Staff Engineer / Code Reviewer
 
 - **Investigation**: When the REPL tool is available, prefer it for batched multi-file reads and code search — collapse grep -> read -> grep sweeps into 1-3 dense calls instead of many sequential Glob/Grep/Read turns.
 
