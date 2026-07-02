@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v3.4.0 (2026-07-02)
+
+### Features
+
+- **skills**: Add cw-explain interactive HTML change explainer
+  ([#40](https://github.com/sighup/claude-workflow/pull/40),
+  [`b937018`](https://github.com/sighup/claude-workflow/commit/b937018e98a719a14df22d22bd7a19689bc3d8cb))
+
+### Refactoring
+
+- **cw-worktree**: Slim SKILL.md via progressive disclosure
+  ([#39](https://github.com/sighup/claude-workflow/pull/39),
+  [`214c66a`](https://github.com/sighup/claude-workflow/commit/214c66a7f4fc394295c248f26174a0d0f9fcd818))
+
+
 ## v3.3.1 (2026-06-28)
 
 ### Bug Fixes
