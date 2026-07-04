@@ -1,0 +1,21 @@
+{
+  "instance_id": "instance-2",
+  "arm": "treatment",
+  "run_n": "1",
+  "agent_cmd": "bench/fixtures/stub-agent.sh",
+  "task_list_id": "bench-tl-instance-2-treatment-1",
+  "image": "bench-fixture:local",
+  "container_mode": "local",
+  "status": "completed",
+  "test_tampering": false,
+  "regression_count": 0,
+  "designated_test_files": [
+    "failing_test.sh"
+  ],
+  "resolved": true,
+  "agent_exit_code": 0,
+  "started_at": "2026-01-01T00:00:00Z",
+  "finished_at": "2026-01-01T00:00:15Z",
+  "patch_file": "patch.diff",
+  "stream_file": "stream.jsonl"
+}
