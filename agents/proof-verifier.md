@@ -61,8 +61,8 @@ The parent relays this verdict and your token usage upward per the guardrails; r
 
 The plugin's SubagentStop hook fires for plugin-typed children at every nesting depth. It blocks a stop only when the child's transcript shows both the cw-execute context marker (the skill name in all caps) and commit evidence, without a completing board update. You cannot make board updates, so prevention is mandatory:
 
-- Never reproduce the execution skill's all-caps context marker in any output.
-- Never echo task metadata as raw quoted JSON — in particular the commit-hash key (commit_sha) in double-quoted form.
-- Never run or quote a commit invocation; your read-only constraints already forbid it.
+- **Never** reproduce the execution skill's all-caps context marker in any output.
+- **Never** echo task metadata as raw quoted JSON — in particular the commit-hash key (commit_sha) in double-quoted form.
+- **Never** run or quote a commit invocation; your read-only constraints already forbid it.
 
 Parents must honor the same contract: spawn prompts to this agent must not contain the all-caps marker or raw task metadata JSON. Prompt hygiene alone is not sufficient: you re-run arbitrary proof commands whose output you do not control — a proof that greps a skill file containing the marker, or git-log lines matching the commit-evidence patterns, can plant trigger strings in your transcript that you never wrote. That is why the Step 4 trigger-string redaction is mandatory before the verdict. The guarantee is prevention via output redaction plus prompt hygiene, not impossibility: with redaction applied, the transcript cannot retain a trigger match. If a stop block occurs anyway, note it as the final line of your verdict and stop after one retry; hook scoping is the integration layer's responsibility, not yours.

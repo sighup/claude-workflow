@@ -7,6 +7,13 @@
 # CW_OVERRIDE_CWD is accepted for testing; in normal operation pwd is used.
 CURRENT_DIR="${CW_OVERRIDE_CWD:-$(pwd)}"
 
+# Read the SessionStart hook JSON input from stdin once. Malformed or empty
+# stdin must not crash the hook: jq failures leave these empty via command
+# substitution rather than aborting the script.
+HOOK_INPUT=$(cat)
+SOURCE=$(printf '%s' "$HOOK_INPUT" | jq -r '.source // empty' 2>/dev/null)
+SESSION_TITLE_INPUT=$(printf '%s' "$HOOK_INPUT" | jq -r '.session_title // empty' 2>/dev/null)
+
 # Detect worktree location: supports both .claude/worktrees/ (new) and .worktrees/ (legacy)
 WORKTREE_NAME=""
 WORKTREE_ROOT=""
@@ -49,11 +56,22 @@ if [ -n "$WORKTREE_NAME" ]; then
   # Prefer the configured task-list id from settings; fall back to the dir name
   # (keeps this hook consistent with cwd-changed-worktree.sh)
   TASK_ID="${CONFIGURED_ID:-$WORKTREE_NAME}"
+
+  # Only set sessionTitle on startup/resume, and only if the caller hasn't
+  # already set a title (via --name or a prior /rename) — never clobber it.
+  SET_TITLE=false
+  if [[ "$SOURCE" == "startup" || "$SOURCE" == "resume" ]] && [ -z "$SESSION_TITLE_INPUT" ]; then
+    SET_TITLE=true
+  fi
+
   # Build the JSON with jq so quotes/backslashes in path-derived values
   # cannot break the hook output
   jq -n \
     --arg ctx "WORKTREE SESSION: You are working in git worktree '${CONTAINING_DIR}/' on branch '${BRANCH_NAME}'. ${STATUS}. Tasks persist across sessions in ~/.claude/tasks/${TASK_ID}/. Use /cw-spec, /cw-plan, /cw-dispatch, /cw-validate to manage the workflow. When complete, create a PR with 'gh pr create'." \
-    '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$ctx}}'
+    --arg title "$TASK_ID" \
+    --argjson setTitle "$SET_TITLE" \
+    '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$ctx}}
+     | if $setTitle then .hookSpecificOutput.sessionTitle = $title else . end'
 fi
 
 exit 0

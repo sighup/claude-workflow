@@ -50,7 +50,7 @@ npx playwright test --config [playwright_config] \
 Parse `results.json`: `spec.ok == true` → pass; `spec.ok == false` → regression detected.
 
 **Other backends (chrome-devtools, cli, manual):**
-Spawn a `test-executor` sub-agent per passed test:
+Spawn a `test-executor` subagent per passed test:
 ```
 Task({
   subagent_type: "claude-workflow:test-executor",

@@ -17,7 +17,7 @@
 # removed only after the single-writer cut-over has proven out in production.
 #
 # Decision logic:
-# - No commit happened → Allow stop (incomplete work, cw-loop will retry)
+# - No commit happened → Allow stop (incomplete work; the dispatcher's dead-worker reset will re-queue this task)
 # - Commit + (journal evidence OR TaskUpdate(completed)) → Allow stop
 # - Commit with neither → Block stop (write the journal + emit the sentinel)
 #

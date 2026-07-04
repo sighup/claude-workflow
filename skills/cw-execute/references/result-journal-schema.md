@@ -67,7 +67,7 @@ When a worker exhausts its retries it emits `status: "failed"` and writes the jo
 
 A failure record omits `commit_sha`, `proof_dir`, `proof_results`, `proof_summary`, the verifier fields, and `completed_at` — the worker reached no committed, verified state.
 
-### Invariants
+### Constraints
 
 - `task_id` always uses the stable planner-assigned form (`T01`, `T02.1`, etc.). Proof files must follow the same convention (`T02.1-01-file.txt`), never the native task-store integer — proof files keyed on a native id cannot be matched across a board wipe.
 - The journal is written exactly once by its owning worker and never edited afterward.

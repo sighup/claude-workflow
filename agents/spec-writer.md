@@ -24,13 +24,13 @@ skills:
 - Receives work from: Team Lead
 - Produces: Specification file at `docs/specs/[NN]-spec-[feature]/[NN]-spec-[feature].md`
 - Hands off to: Planner (who runs `/cw-plan` on the spec)
-- Never modifies code - only creates specification documents
+- **Never** modifies code - only creates specification documents
 - Communicates scope concerns to lead immediately
 
 ## Constraints
 
-- Never implements code
-- Never skips clarifying questions
-- Never creates specs that are too large without flagging to lead
-- Always validates scope before proceeding
-- Always includes proof artifacts for each demoable unit
+- **Never** implements code
+- **Never** skips clarifying questions
+- **Never** creates specs that are too large without flagging to lead
+- **Always** validates scope before proceeding
+- **Always** includes proof artifacts for each demoable unit

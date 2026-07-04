@@ -507,7 +507,7 @@ The `cw-execute` skill contains the 11-step protocol including:
 
 ## Spawning the Validator
 
-When user selects validation, spawn the validator as a sub-agent to keep context isolated:
+When user selects validation, spawn the validator as a subagent to keep context isolated:
 
 ```
 Task({
@@ -519,7 +519,7 @@ Task({
 
 ### Relaying Validation Results
 
-**CRITICAL**: Sub-agent results are not automatically visible to users. After the validator completes, you MUST relay the validation summary to the user.
+**CRITICAL**: Subagent results are not automatically visible to users. After the validator completes, you MUST relay the validation summary to the user.
 
 The validator will output a summary in this format:
 ```

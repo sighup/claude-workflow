@@ -181,6 +181,34 @@ PATH                                      BRANCH              STATE           ST
 
 > **Legacy worktrees:** Worktrees with the old `feature-*` naming (e.g. `.worktrees/feature-auth`) continue to appear here. The list command is prefix-agnostic and matches all registered worktrees by value.
 
+## Session Identification
+
+Worktree sessions are automatically assigned a title derived from the task-list ID when the session starts or resumes. This behavior is consistent across all worktree entry points.
+
+### Auto-Titling on Startup/Resume
+
+When you open a Claude Code session in a worktree via any of these methods:
+- `cw-herdr-open` (CLI command to open in a herdr pane)
+- `/cw-worktree create` (creating a new worktree)
+- Plain `cd <worktree-path> && claude` (starting a session in the worktree directory)
+
+The **SessionStart hook** (registered in `.claude-plugin/plugin.json` with matcher `startup|resume`) automatically sets the session title to the resolved task-list ID. This occurs only when:
+- The session is being started (not resumed with an existing title)
+- The source is `startup` or `resume` (not programmatic)
+- No `session_title` was already set on the session input
+
+**Example:** If your worktree has a task-list ID of `task-list-abc123`, the session title will be automatically set to `task-list-abc123` on startup.
+
+### Explicit Session Title Takes Precedence
+
+If you provide an explicit session title via either method:
+- `--name <title>` flag when starting the session
+- `/rename <new-title>` slash command during the session
+
+The hook will **never overwrite** these explicit values. Once set, an explicit session title persists across session restarts and takes full precedence over the auto-titling behavior.
+
+**Example:** `claude --name my-session` in a worktree will set the title to `my-session`, and the SessionStart hook will leave it unchanged on subsequent resumes.
+
 ## Persistence
 
 **What persists between sessions:**

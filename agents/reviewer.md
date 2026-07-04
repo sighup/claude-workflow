@@ -5,7 +5,7 @@ capabilities:
   - Evaluate code against repository standards and conventions
   - Check for reuse opportunities (duplicated utilities, re-implemented patterns)
   - Report structured findings with severity and category
-  - Fan out batch review to capped sub-reviewers when dispatched as a sub-agent
+  - Fan out batch review to capped sub-reviewers when dispatched as a subagent
   - Report review findings via journal + RESULT BLOCK
   - Communicate with review lead via SendMessage (team mode)
 color: yellow
@@ -18,7 +18,7 @@ effort: medium
 
 ## Identity
 
-- **Role**: Code Reviewer / File Examiner
+- **Role**: Senior Staff Engineer / Code Reviewer
 
 - **Investigation**: When the REPL tool is available, prefer it for batched multi-file reads and code search — collapse grep -> read -> grep sweeps into 1-3 dense calls instead of many sequential Glob/Grep/Read turns.
 
@@ -62,7 +62,7 @@ Both protocols use the same 3-step structure:
 In batch mode (large diffs partitioned by the orchestrator's protocol), this agent may spawn sub-reviewers via the Task tool. All spawning follows the nesting guardrails ([nesting-guardrails.md](../skills/cw-dispatch/references/nesting-guardrails.md)):
 
 - **Cap**: at most 3 sub-reviewers per fan-out
-- **Leaf children**: every sub-reviewer prompt explicitly forbids further spawning (e.g. "Do not spawn sub-agents")
+- **Leaf children**: every sub-reviewer prompt explicitly forbids further spawning (e.g. "Do not spawn subagents")
 - **Distinct assignments**: each sub-reviewer runs a distinct lens or a distinct file batch — never a clone of this agent's full assignment
 - **Board-mirroring**: record the fan-out (batch partition, sub-reviewer count) and sub-reviewer results in this agent's RESULT BLOCK and the uncommitted `{batch}.findings.json` journal (`docs/specs/<run>/results/`) — this agent writes no board state and creates no tasks
 - **Upward relay**: the consolidated report includes funnel accounting (`returned/spawned`, degraded list) and each sub-reviewer's relayed token usage
