@@ -119,7 +119,11 @@ git -C "$WORKDIR" add -A
 git -C "$WORKDIR" -c user.email=bench@fixture -c user.name=bench-fixture \
   commit -q -m baseline
 
-record_checksums "$WORKDIR" "$BASELINE" "${TEST_FILE_ARR[@]}"
+# "${arr[@]+"${arr[@]}"}" is the bash-3.2-safe empty-array idiom: macOS's
+# default /bin/bash (3.2.57) trips `set -u` on "${arr[@]}" when arr has zero
+# elements (an empty --test-files is a legitimate case); fixed only in
+# bash 4.4+. See bench/tests/test_run_instance.sh for the regression case.
+record_checksums "$WORKDIR" "$BASELINE" "${TEST_FILE_ARR[@]+"${TEST_FILE_ARR[@]}"}"
 
 # Optional real-run on-ramp: build the LOCAL fixture image. Never pulls an
 # external swebench/* image. Off by default so proofs need no docker/network.
@@ -147,7 +151,7 @@ git -C "$WORKDIR" add -A
 git -C "$WORKDIR" diff --cached > "$PATCH_FILE" || true
 
 # Post-run checksum comparison of the designated test files.
-CHANGED="$(compare_checksums "$WORKDIR" "$BASELINE" "${TEST_FILE_ARR[@]}")"
+CHANGED="$(compare_checksums "$WORKDIR" "$BASELINE" "${TEST_FILE_ARR[@]+"${TEST_FILE_ARR[@]}"}")"
 FINISHED_AT="$(date -u +%FT%TZ)"
 
 if [ "$CHANGED" -gt 0 ]; then
@@ -158,9 +162,16 @@ else
   TEST_TAMPERING="false"
 fi
 
-# designated test files as a JSON array
-TEST_FILES_JSON="$(printf '%s\n' "${TEST_FILE_ARR[@]}" \
-  | awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{printf "]"}')"
+# designated test files as a JSON array. Guarded on length rather than the
+# empty-array idiom here: printf still runs its format once with an empty %s
+# when given zero arguments, which would otherwise render an empty
+# --test-files as the JSON array ["" ] instead of the accurate [].
+if [ "${#TEST_FILE_ARR[@]}" -gt 0 ]; then
+  TEST_FILES_JSON="$(printf '%s\n' "${TEST_FILE_ARR[@]}" \
+    | awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{printf "]"}')"
+else
+  TEST_FILES_JSON="[]"
+fi
 
 cat > "$METRICS_FILE" <<EOF
 {
