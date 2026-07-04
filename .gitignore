@@ -2,7 +2,5 @@
 .claude/worktrees/
 docs/specs/
 
-tests/
-
 .autoresearch/
 __pycache__/

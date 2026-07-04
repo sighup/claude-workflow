@@ -23,7 +23,7 @@ fi
 # to a non-existent path and the [ -x ] guard below trips, falling through
 # to the legacy output.
 if [ -z "$HERDR_OPEN_BIN" ] || [ ! -x "$HERDR_OPEN_BIN" ]; then
-  HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/bin/cw-herdr-open"
+  HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/plugin/bin/cw-herdr-open"
 fi
 
 # Probe once for the whole multi-create call.
@@ -681,7 +681,7 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
      HERDR_OPEN_BIN="$CLAUDE_PLUGIN_ROOT/bin/cw-herdr-open"
    fi
    if [ -z "$HERDR_OPEN_BIN" ] || [ ! -x "$HERDR_OPEN_BIN" ]; then
-     HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/bin/cw-herdr-open"
+     HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/plugin/bin/cw-herdr-open"
    fi
 
    HERDR_EXIT=2  # default: treat as unavailable
