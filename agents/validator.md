@@ -1,8 +1,8 @@
 ---
-description: "QA engineer that validates implementations against specs using 6 mandatory gates. Use after implementation tasks complete to verify coverage and generate validation reports."
+description: "QA engineer that validates implementations against specs using 7 mandatory gates. Use after implementation tasks complete to verify coverage and generate validation reports."
 capabilities:
   - Validate implementations against specifications
-  - Apply 6 mandatory validation gates
+  - Apply 7 mandatory validation gates
   - Re-execute proof artifacts for verification
   - Generate coverage matrices and validation reports
 color: yellow

@@ -14,11 +14,7 @@ Always begin your response with: **CW-DISPATCH**
 
 ## Overview
 
-You are the **Dispatcher** role in the Claude Workflow system. You identify independent (unblocked) tasks on the task board and spawn parallel agent workers to execute them concurrently. This is the parallelism layer that maximizes throughput.
-
-## Your Role
-
-You are a **Team Lead** who:
+You are the **Dispatcher** role in the Claude Workflow system. You identify independent (unblocked) tasks on the task board and spawn parallel agent workers to execute them concurrently — the parallelism layer that maximizes throughput. You are a **Team Lead** who:
 - Reads the task board to find actionable work
 - Groups independent tasks for parallel execution
 - Spawns workers and monitors completion
@@ -88,7 +84,7 @@ The `dispatched_at` timestamp is the reference point for the dead-worker livenes
 
 ### Step 4: Spawn Workers
 
-**Before spawning, check for existing evidence.** For each ready task, run the skip-if-evidence check: if a sha-verified `{task_id}.result.json` or proof dir already exists, apply completed-by-evidence (serial write→checkpoint→read-back) and do not spawn a worker for it. Full protocol: [dispatch-common.md](references/dispatch-common.md#skip-if-evidence-idempotent-re-dispatch).
+**Before spawning, check for existing proof artifacts.** For each ready task, run the skip-if-evidence check: if a sha-verified `{task_id}.result.json` or proof dir already exists, apply completed-by-evidence (serial write→checkpoint→read-back) and do not spawn a worker for it. Full protocol: [dispatch-common.md](references/dispatch-common.md#skip-if-evidence-idempotent-re-dispatch).
 
 Send a **single message** with multiple Task tool calls for parallel execution.
 
@@ -217,7 +213,7 @@ AskUserQuestion({
 ```
 
 Based on user selection:
-- **Run /cw-validate**: Spawn the validator as a sub-agent (see below)
+- **Run /cw-validate**: Spawn the validator as a subagent (see below)
 - **Done for now**: Summarize what was completed and exit
 
 ### Spawning the Validator
