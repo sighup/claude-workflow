@@ -395,7 +395,7 @@ Both conditions must hold simultaneously — 10 clean runs reached before day 30
 - "Consecutive clean runs" resets to 0 on any run that produces a non-empty `incidents.log` entry.
 - "Active days" counts calendar days on which at least one production dispatch run started, not wall-clock elapsed time.
 
-**When the threshold is met:** remove `scripts/task-store-guard.sh`, remove the SessionStart hook entry in `.claude-plugin/plugin.json` that spawns the guard, and note the removal in the commit message.
+**When the threshold is met:** remove `scripts/task-store-guard.sh`, remove the SessionStart hook entry in `plugin/.claude-plugin/plugin.json` that spawns the guard, and note the removal in the commit message.
 
 ## Post-Completion Synthesis
 
