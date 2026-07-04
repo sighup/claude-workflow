@@ -132,13 +132,13 @@ For each proof artifact in completed tasks:
 **Manual confirmation is valid proof** when:
 - Proof file exists with `User Confirmed: yes`
 - Timestamp is from the implementation session
-- No conflicting evidence (e.g., broken tests)
+- No conflicting proof (e.g., broken tests)
 
 3. Compare current output to expected
-4. Record status with evidence:
+4. Record status with proof:
    - `Verified` - Automated proof passes or manual confirmation recorded
    - `Verified (manual)` - User confirmed during execution
-   - `Verified (code)` - Skipped visual, code evidence sufficient
+   - `Verified (code)` - Skipped visual, code proof sufficient
    - `Failed` - Proof failed or user rejected
    - `Missing` - No proof file found
 
@@ -163,7 +163,7 @@ Analyze the code and existing tests against these categories (skip categories ir
 1. Document the category and what you analyzed
 2. Reference specific file and line numbers
 3. Mark as PASS (correctly handled) or CONCERN (gap found)
-4. Include evidence (code snippets showing the handling or lack thereof)
+4. Include proof (code snippets showing the handling or lack thereof)
 
 **Add adversarial findings to the report** in a dedicated section (see Report Format below).
 
@@ -216,7 +216,7 @@ Produce the validation report and save to:
 | T01 | Login test suite | test | auto | Verified | 5/5 tests pass |
 | T01 | Curl login endpoint | cli | auto | Verified | 200 + JWT |
 | T01 | Dashboard screenshot | screenshot | manual | Verified (manual) | User confirmed |
-| T01 | Error state visual | visual | skip | Verified (code) | Code evidence |
+| T01 | Error state visual | visual | skip | Verified (code) | Code proof |
 
 ## Manifest Coverage
 
@@ -238,7 +238,7 @@ Produce the validation report and save to:
 
 | Severity | Issue | Impact | Recommendation |
 |----------|-------|--------|----------------|
-| [severity] | [description with evidence] | [what breaks] | [actionable fix] |
+| [severity] | [description with proof] | [what breaks] | [actionable fix] |
 
 ## Evidence Appendix
 
