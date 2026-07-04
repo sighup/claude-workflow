@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.5.0 (2026-07-04)
+
+### Features
+
+- **hooks**: Name worktree sessions from task-list ID
+  ([#41](https://github.com/sighup/claude-workflow/pull/41),
+  [`4bc3ad3`](https://github.com/sighup/claude-workflow/commit/4bc3ad3db398b1a2e2545b2656226357a964ec32))
+
+
 ## v3.4.0 (2026-07-02)
 
 ### Features
