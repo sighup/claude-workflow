@@ -46,6 +46,8 @@ All 7 gates must pass for overall PASS:
 
 See [validation-gates.md](references/validation-gates.md) for detailed gate definitions.
 
+**Drift Signal is non-gating.** The report's Drift Signal section (Step 7) surfaces per-task deviation-log evidence for human review, but it is not a gate: it never appears in the Gates A-G table above and cannot by itself flip the Overall PASS/FAIL verdict, no matter how many deviations a task reports.
+
 ## Process
 
 ### Step 1: Locate Inputs
@@ -89,6 +91,7 @@ A manifest `task_id` that is **board-missing or still `in_progress`** but has co
 
 5. **Git history**: `git log --stat` for implementation commits across the run.
 6. **Changed files**: `git diff --name-only <base>..HEAD`.
+7. **Deviation log (when reported)**: if the result journal's `deviation_count` is greater than 0, read `docs/specs/<run>/results/{task_id}.deviations.jsonl` from the same results directory — each line carries `deviation`, `conservative_choice`, `requirement_ref` (optional), `lesson`, and `timestamp` (see [deviation-log-schema.md](../cw-execute/references/deviation-log-schema.md)). This feeds the **Drift Signal** section of the report (Step 7) only — it is informational, never a gate input, and a task with `deviation_count: 0` or no journal entry contributes nothing here.
 
 #### Manifest-vs-Spec Skew
 
@@ -178,6 +181,8 @@ Check each gate in order (A through G). See [validation-gates.md](references/val
 Produce the validation report and save to:
 `./docs/specs/[NN]-spec-[feature-name]/[NN]-validation-[feature-name].md`
 
+Include a **Drift Signal** section (positioned after Adversarial Analysis Results, before Validation Issues): one table row per task whose result journal reports `deviation_count > 0`, drawn from the Step 2 deviation-log evidence. This section is informational only — never treat its contents as a gate input or as evidence for the Overall verdict.
+
 ## Report Format
 
 ```markdown
@@ -233,6 +238,16 @@ Produce the validation report and save to:
 | Boundary values | Empty email handling | src/auth/login.ts:42 | PASS | Validates with `z.string().email()` before DB query |
 | Concurrency | Shared session state | src/auth/session.ts:15 | CONCERN | No mutex on concurrent session writes |
 | Input validation | SQL injection | src/db/queries.ts:28 | PASS | Uses parameterized queries throughout |
+
+## Drift Signal
+
+*Non-gating: informational only. Does not appear in Gates A-G and cannot change the Overall PASS/FAIL verdict.*
+
+| Task | Deviations | Conservative Choices | Lessons for Next Attempt |
+|------|-----------|----------------------|---------------------------|
+| T02 | 2 | Added a row to the existing Field Definitions table instead of a new section; treated absent `deviation_count` as 0 | Spec should name the exact table/section when asking to "document" a field |
+
+When no task in the run reports any deviations, replace the table with: "No deviations reported for this run."
 
 ## Validation Issues
 

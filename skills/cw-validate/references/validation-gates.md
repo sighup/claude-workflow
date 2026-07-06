@@ -115,6 +115,12 @@ Seven mandatory gates that determine PASS/FAIL for implementation validation.
 - Error handler catches and re-throws without sanitizing sensitive details
 - Shared state accessed without synchronization
 
+## Drift Signal (Non-Gating)
+
+The report's Drift Signal section surfaces each task's deviation-log evidence (`{task_id}.deviations.jsonl` — see [deviation-log-schema.md](../../cw-execute/references/deviation-log-schema.md)) as a table of deviations, conservative choices, and lessons for whoever refines the next spec or plan.
+
+**This is not a gate.** Drift Signal is non-gating: it does not appear in the Gate A-G table above, is never scored against the Severity Rubric below, and cannot by itself change the Overall PASS/FAIL verdict — regardless of how many deviations any single task reports. A task with a high deviation count that otherwise passes Gates A-G still passes; Drift Signal exists to inform future spec/plan quality, not to block the current run.
+
 ## Severity Rubric
 
 | Score | Severity | Meaning |
