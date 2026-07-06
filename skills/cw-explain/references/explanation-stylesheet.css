@@ -401,8 +401,9 @@ figcaption b { color: var(--ink-soft); font-weight: 600; }
   font-weight: 600;
   font-size: 0.86rem;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
-.node .box .sub { display: block; font-family: var(--mono); font-weight: 400; font-size: 0.66rem; color: var(--ink-faint); margin-top: 0.2rem; }
+.node .box .sub { display: block; font-family: var(--mono); font-weight: 400; font-size: 0.66rem; color: var(--ink-faint); margin-top: 0.2rem; overflow-wrap: anywhere; }
 .node.db .box    { border-color: #cbb8e6; background: #f4eefc; }
 .node.cache .box { border-color: #a9d3bd; background: #e8f5ee; }
 .node.client .box{ border-color: #d3e0f4; background: var(--accent-dim); }
@@ -428,7 +429,8 @@ figcaption b { color: var(--ink-soft); font-weight: 600; }
   text-align: center;
   line-height: 1.3;
   margin-bottom: 0.2rem;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .arrow .line {
   width: 100%;
