@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.7.0 (2026-07-06)
+
+### Features
+
+- **cw-research,cw-spec**: Add blindspot section, reorder questions by blast radius
+  ([#45](https://github.com/sighup/claude-workflow/pull/45),
+  [`e690704`](https://github.com/sighup/claude-workflow/commit/e690704d742fd7d0e15deb174a65df6a80ab6d5e))
+
+
 ## v3.6.0 (2026-07-06)
 
 ### Documentation
