@@ -315,6 +315,8 @@ Find tasks that can run simultaneously:
 - Don't modify the same files (check `metadata.scope.files_to_modify`)
 - Are all status=pending with no active blockers
 
+Sort this Ready set by `metadata.fragility` descending (`high` > `medium` > `low`) before selecting the batch of up to 3 — see [Fragility-Ordered Batch Selection](#fragility-ordered-batch-selection) below. Missing `fragility` (legacy task/manifest) sorts as `medium` — never an error, never excluded.
+
 Example grouping:
 ```
 Group 1: T01 (no deps), T04 (blocked by nothing relevant)
@@ -322,9 +324,17 @@ Group 2: T02 (blocked by T01) - must wait
 Group 3: T03 (blocked by T02) - must wait
 ```
 
+### Fragility-Ordered Batch Selection
+
+Once the Ready set is identified, sort it by `metadata.fragility` descending — `high` before `medium` before `low` — before selecting the batch of up to 3 (see [Batch Size](../SKILL.md#batch-size)). A task with no `fragility` field (legacy manifest or pre-fragility task) sorts as `medium` — never an error, never excluded from the batch.
+
+This sort is a pure tie-break:
+- It never reorders across a `blockedBy` dependency — a blocked task stays blocked regardless of its fragility, and an unblocked task never jumps ahead of one it depends on.
+- The pairwise file-conflict check below still applies after the fragility sort: sort first, then walk the ordered list applying Conflict Prevention (higher-fragility tasks keep their slot; lower-fragility conflicting tasks are the ones dropped to run sequentially), then take the top 3 survivors.
+
 ## Conflict Prevention
 
-Before spawning or assigning, verify no file conflicts between parallel tasks:
+Before spawning or assigning, verify no file conflicts between parallel tasks (walk the fragility-ordered list from [Fragility-Ordered Batch Selection](#fragility-ordered-batch-selection) above so higher-fragility tasks are preferred when a conflict forces a drop):
 
 ```
 For each pair of tasks (A, B) in the group:

@@ -148,8 +148,8 @@ Workers hold no Task tools — they never mark themselves done. **After each bat
 CW-DISPATCH COMPLETE
 =====================
 Workers spawned: 2
-  worker-1: T01 - [subject] -> COMPLETED
-  worker-2: T04 - [subject] -> COMPLETED
+  worker-1: T01 (fragility: high) - [subject] -> COMPLETED
+  worker-2: T04 (fragility: medium) - [subject] -> COMPLETED
 
 Integration Check:
   Build: PASS | FAIL
@@ -185,6 +185,7 @@ See [dispatch-common.md](references/dispatch-common.md#conflict-prevention) for 
 - **Default**: Spawn up to 3 workers simultaneously
 - **Reason**: More than 3 parallel agents risk git conflicts and resource contention
 - If more than 3 tasks are ready, dispatch in batches of 3
+- **Selection order**: among Ready tasks, batch selection is fragility-ordered (high -> medium -> low first), not board/creation order — see [Fragility-Ordered Batch Selection](references/dispatch-common.md#fragility-ordered-batch-selection)
 
 ## Error Handling
 
