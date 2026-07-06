@@ -128,6 +128,26 @@ Rules:
 - If unclear, implement most reasonable interpretation and note it
 - Max 3 retry attempts for failing tests
 
+**Deviation Logging**
+
+Logging a deviation is expected and normal — it is how you carry out the "if unclear, implement most reasonable interpretation and note it" rule above, not a failure condition to avoid triggering. Every time an ambiguous or under-specified requirement forces a conservative choice, append one JSON line immediately — don't batch these up for later — to:
+
+```
+docs/specs/<run>/results/{task_id}.deviations.jsonl
+```
+
+Create the results directory if it doesn't exist yet. Append only — never rewrite or truncate the file — so each deviation lands as its own line, independently parseable. Most tasks encounter zero deviations; when that happens, simply don't create the file (Step 8.5 treats an absent or empty file as zero).
+
+Each line is a standalone JSON object with these fields:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `deviation` | string | yes | The ambiguity or under-specified requirement encountered |
+| `conservative_choice` | string | yes | The reasonable interpretation you implemented instead |
+| `requirement_ref` | string | no | The requirement id this relates to, if applicable |
+| `lesson` | array of strings (1-3 entries) | yes | Takeaway(s) for whoever refines specs or plans next |
+| `timestamp` | string | yes | ISO 8601 timestamp of the append |
+
 ### Step 5: Verify Local
 
 Run pre-commit checks.
@@ -272,7 +292,8 @@ The Step 8 commit carries an ordinary implementation message — no metadata tra
 
 1. Capture the now-known sha: `commit_sha=$(git rev-parse HEAD)`
 2. Resolve the run's gitignored results dir `docs/specs/[spec-dir]/results/` (create it if absent)
-3. Write `{task_id}.result.json` there, conforming to [result-journal-schema.md](references/result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, and the Step 6 proof paths/results. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict; finalize the journal at the end of Step 9, before the Step 10 RESULT BLOCK.
+3. Seal the deviation log: from this point on, no further appends to `{task_id}.deviations.jsonl` are permitted, even if later steps surface more ambiguity. Compute `deviation_count` by counting lines in `docs/specs/[spec-dir]/results/{task_id}.deviations.jsonl` — `0` when the file is absent or empty.
+4. Write `{task_id}.result.json` there, conforming to [result-journal-schema.md](references/result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, the Step 6 proof paths/results, and the optional `deviation_count` integer from the previous step. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict; finalize the journal at the end of Step 9, before the Step 10 RESULT BLOCK.
 
 The journal is written once and never edited after finalization. `commit_sha` is the sole commit-to-task link; the dispatcher verifies it against git before accepting the record.
 
@@ -325,10 +346,13 @@ CW-RESULT-BLOCK-START
   "verification_mode": "spawned",
   "verifier_verdict": "PASS",
   "verifier_tokens": 12345,
+  "deviation_count": 0,
   "completed_at": "2026-01-24T15:30:00Z"
 }
 CW-RESULT-BLOCK-END
 ```
+
+`deviation_count` is optional but, when the Step 8.5 journal carries it, the sentinel must carry the identical value — it is sealed at Step 8.5 and never recomputed afterward.
 
 Format and contract: [result-journal-schema.md](references/result-journal-schema.md). Keep the sentinel block and the on-disk journal byte-identical — the orchestrator harvests the sentinel first (highest precedence) and falls back to the journal. The `proof_dir`/`proof_summary` fields let the orchestrator and cw-validate locate artifacts; `model_used` records which model executed the task for auditability.
 
