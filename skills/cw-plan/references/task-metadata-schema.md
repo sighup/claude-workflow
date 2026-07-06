@@ -56,6 +56,7 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
   "role": "implementer",                 // implementer | validator | spec-writer
   "complexity": "standard",             // trivial | standard | complex
   "model": "sonnet",                    // Model: "haiku" (trivial) | "sonnet" (standard) | "opus" (complex)
+  "fragility": "medium",                // low | medium | high — how likely this task's implementation is to be reworked
 
   // Results (filled by worker after execution)
   "proof_results": null,                 // Filled with pass/fail per artifact
@@ -98,6 +99,7 @@ Each requirement must be:
 | `role` | string | Yes | Worker role: `implementer`, `validator`, `spec-writer` |
 | `complexity` | string | Yes | Task complexity: `trivial`, `standard`, `complex` |
 | `model` | string | Yes | Intended model: `"haiku"` (trivial), `"sonnet"` (standard), `"opus"` (complex). After execution, the worker records the actual model in `model_used` (see Result Schema). |
+| `fragility` | string | Yes | How likely this task's implementation is to be revisited: `"low"` (mechanical change, established pattern — unlikely to be reworked), `"medium"` (some uncertainty, partial pattern match, or a loose relation to an open spec question), `"high"` (decision likely to be revisited — matches an unresolved spec decision, or breaks new ground with no established pattern). Missing values default to `"medium"` at dispatch time; not backfilled retroactively. |
 
 ### Proof Artifact Types
 

@@ -103,6 +103,16 @@ After restarting, run /cw-plan again to continue.
    - `complex` → `"opus"` (maximum capability)
 
    These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`).
+7. **Score Fragility**: Assign `low`, `medium`, or `high` to each task, independent of complexity. Cross-reference the task's `affected_areas`/requirements against the spec's `## Open Questions` section:
+   - A match against an Open Question → at least `medium`
+   - A match against an explicit *unresolved* decision in scope → `high`
+   - No match → fall through to the heuristics below
+
+   Then apply structural heuristics:
+   - New/greenfield `affected_areas` (marked `(new)`) or an empty `patterns_to_follow` → push the score up (at least `medium`, `high` if also matching an Open Question)
+   - Modifying established, pattern-matched code (non-empty `patterns_to_follow` pointing at real existing files, no Open Question match) → keep it `low`
+
+   Fragility is scored per-task, not per-unit — parent tasks and every sub-task created in Step 3 each get their own independently-assessed value (see Step 3).
 
 ### Step 1b: Proof Capture Capability
 
@@ -195,6 +205,7 @@ TaskCreate({
     role: "implementer",
     complexity: "trivial|standard|complex",
     model: "sonnet",  // "haiku" for trivial, "sonnet" for standard, "opus" for complex
+    fragility: "low|medium|high",  // scored per-task per Step 1.7 — never inherited by sub-tasks
     proof_results: null,
     completed_at: null
   }
@@ -225,8 +236,8 @@ Output the summary in this exact format:
 CW-PLAN COMPLETE
 ================
 Parent tasks: N
-  T01 [complexity] — Subject (no blockers)
-  T02 [complexity] — Subject (blocked by T01)
+  T01 [complexity/fragility] — Subject (no blockers)
+  T02 [complexity/fragility] — Subject (blocked by T01)
   ...
 
 Parallel groups: [T01, T03, T04] can run concurrently | none — linear dependency chain
@@ -235,6 +246,8 @@ Complex tasks: T01, T03 | none
 Recommendation: Generate sub-tasks | Execute as-is
 Reason: [one sentence — e.g. "T01 and T03 are complex and can run in parallel — sub-tasks enable finer-grained parallelism" or "All tasks are standard in a linear chain — cw-execute handles execution directly"]
 ```
+
+Each task line shows both ratings, e.g. `T01 [complex/high] — Subject`.
 
 ### Step 3: Sub-Task Creation (After User Approval)
 
@@ -246,6 +259,7 @@ For each parent task, create sub-tasks that:
 - Inherit `demoable_unit` and `demoable_unit_title` from the parent task
 - Use `addBlockedBy: [parent-native-id]` so parent can't complete until sub-tasks finish
 - Have their own scoped requirements and proof artifacts
+- Get their own independently-assessed `fragility` value — re-run the Step 1.7 scoring against the sub-task's own `scope` (its `affected_areas`/requirements vs. the spec's Open Questions, plus the new-area/empty-pattern heuristics). Never copy the parent's `fragility` value; a sub-task's score commonly differs from its parent's.
 - Are sized for a single implementation session
 
 Sub-task IDs use dot notation: T01.1, T01.2, T01.3
@@ -339,6 +353,7 @@ Before presenting to user:
 - [ ] Requirements are testable and atomic
 - [ ] Commit templates follow project conventions
 - [ ] Every task has `metadata` with `complexity` and `model` fields set
+- [ ] Every task (parent and sub-task) has a `fragility` value set (`low`/`medium`/`high`), independently assessed — not inherited from a parent
 - [ ] Every task has `demoable_unit` and `demoable_unit_title` in metadata
 - [ ] Sub-tasks inherit `demoable_unit` and `demoable_unit_title` from their parent
 - [ ] Model assignments match complexity (`trivial`→haiku, `standard`→sonnet, `complex`→opus)
@@ -357,8 +372,8 @@ The CW-PLAN COMPLETE block in Step 2 serves as the primary output block:
 CW-PLAN COMPLETE
 ================
 Parent tasks: N
-  T01 [complexity] — Subject (no blockers)
-  T02 [complexity] — Subject (blocked by T01)
+  T01 [complexity/fragility] — Subject (no blockers)
+  T02 [complexity/fragility] — Subject (blocked by T01)
 
 Parallel groups: [T01, T03] can run concurrently | none
 Complex tasks: T01, T03 | none
