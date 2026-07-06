@@ -10,7 +10,7 @@ Detailed process steps for each `/cw-worktree` command. Referenced from [SKILL.m
 
 Resolve the `cw-herdr-open` helper and probe herdr availability **once** for the whole multi-create call. The result is reused for every feature — there is no point probing the same daemon `N` times when the answer cannot change between worktrees on a single host.
 
-**Helper resolution** uses three lookups in priority order: PATH (the plugin's `bin/` is auto-added to Claude's session PATH at startup, so `command -v` works for marketplace installs), `CLAUDE_PLUGIN_ROOT` (set in hooks but not in Bash by default), and the git top-level (useful only when running from a plugin source checkout).
+**Helper resolution** uses three lookups in priority order: PATH (the plugin's `bin/` is auto-added to Claude's session PATH at startup, so `command -v` works for marketplace installs), `CLAUDE_PLUGIN_ROOT` (set in hooks but not in Bash by default — resolves directly to the plugin root, i.e. `plugin/`, so no extra path segment is needed), and the git top-level plus `plugin/bin/` (useful only when running from a plugin source checkout, where the plugin's shippable content lives under a `plugin/` subdirectory of the repo).
 
 ```bash
 # Primary: marketplace installs put plugin bin/ on Claude's PATH
@@ -23,7 +23,7 @@ fi
 # to a non-existent path and the [ -x ] guard below trips, falling through
 # to the legacy output.
 if [ -z "$HERDR_OPEN_BIN" ] || [ ! -x "$HERDR_OPEN_BIN" ]; then
-  HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/bin/cw-herdr-open"
+  HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/plugin/bin/cw-herdr-open"
 fi
 
 # Probe once for the whole multi-create call.
@@ -673,7 +673,7 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
 
 3. **Resolve helper path and invoke with --focus-if-exists:**
 
-   Helper lookup uses the same three-step resolution as the `create` command — PATH first (marketplace installs), then `CLAUDE_PLUGIN_ROOT`, then the git top-level fallback (plugin source checkout only).
+   Helper lookup uses the same three-step resolution as the `create` command — PATH first (marketplace installs), then `CLAUDE_PLUGIN_ROOT` (resolves directly to `plugin/`, no extra path segment), then the git top-level plus `plugin/bin/` fallback (plugin source checkout only).
 
    ```bash
    HERDR_OPEN_BIN="$(command -v cw-herdr-open 2>/dev/null || true)"
@@ -681,7 +681,7 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
      HERDR_OPEN_BIN="$CLAUDE_PLUGIN_ROOT/bin/cw-herdr-open"
    fi
    if [ -z "$HERDR_OPEN_BIN" ] || [ ! -x "$HERDR_OPEN_BIN" ]; then
-     HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/bin/cw-herdr-open"
+     HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/plugin/bin/cw-herdr-open"
    fi
 
    HERDR_EXIT=2  # default: treat as unavailable
