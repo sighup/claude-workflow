@@ -137,17 +137,21 @@ AskUserQuestion({
 
 ### Step 4: Clarifying Questions
 
-Ask questions to understand "what" and "why" (not "how"):
+Ask questions to understand "what" and "why" (not "how"). Order questions by **architectural blast radius, highest first** -- ask about the decisions that would be most expensive to get wrong or reverse later before asking about decisions that only affect one unit or that are easy to change after the fact. If the user's answers make later, lower-impact questions moot (e.g. the boundary answer already implies the success criteria), skip them rather than asking anyway.
 
-**Core Understanding:**
-- What problem does this solve and for whom?
-- What specific functionality does this feature provide?
-
-**Success & Boundaries:**
-- How will we know it's working correctly?
+**1. Scope Boundaries (highest blast radius -- reverses unit count and dependency structure):**
 - What should this NOT do?
 
-**Proof Artifacts:**
+**2. Problem & Audience (shapes the entire architecture and demoable-unit breakdown):**
+- What problem does this solve and for whom?
+
+**3. Functionality Specifics (drives requirement wording and unit sequencing):**
+- What specific functionality does this feature provide?
+
+**4. Success Criteria (drives verification design, not the architecture itself):**
+- How will we know it's working correctly?
+
+**5. Proof Artifacts (lowest blast radius -- tactical evidence, doesn't reshape the spec):**
 - What evidence will demonstrate this works? (URLs, CLI output, screenshots, tests)
 
 **Process:**

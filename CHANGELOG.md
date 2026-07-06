@@ -2,19 +2,32 @@
 
 <!-- version list -->
 
-## v3.7.0 (2026-07-06)
+## v3.7.1 (2026-07-06)
 
-### Refactoring
+### Bug Fixes
+
+- **plugin**: Update path references broken by the `plugin/` directory move
+  (`git rev-parse --show-toplevel` fallback in `cw-worktree`, semantic-release
+  version path in `pyproject.toml`)
+  ([`fb9ecd5`](https://github.com/sighup/claude-workflow/commit/fb9ecd527af8905e095c9645040f65ce67aac3de))
+
+### Chores
 
 - **plugin**: Move shippable content (`agents/`, `bin/`, `hooks/`, `scripts/`,
   `skills/`, `.claude-plugin/`) under a new top-level `plugin/` directory,
   establishing a structural package boundary for marketplace installs. Non-plugin
   content (`docs/`, `examples/`, `README.md`, `CHANGELOG.md`, `pyproject.toml`,
   `.github/`) remains unmoved at the repo root.
-  ([`f00d3c4`](https://github.com/sighup/claude-workflow/commit/f00d3c46f57a6aa2b3552c2b4b7a88b9677c7652),
-  [`fb9ecd5`](https://github.com/sighup/claude-workflow/commit/fb9ecd527af8905e095c9645040f65ce67aac3de))
+  ([`f00d3c4`](https://github.com/sighup/claude-workflow/commit/f00d3c46f57a6aa2b3552c2b4b7a88b9677c7652))
 
 
+## v3.7.0 (2026-07-06)
+
+### Features
+
+- **cw-research,cw-spec**: Add blindspot section, reorder questions by blast radius
+  ([#45](https://github.com/sighup/claude-workflow/pull/45),
+  [`e690704`](https://github.com/sighup/claude-workflow/commit/e690704d742fd7d0e15deb174a65df6a80ab6d5e))
 ## v3.6.0 (2026-07-06)
 
 ### Documentation

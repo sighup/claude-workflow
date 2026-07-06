@@ -87,6 +87,16 @@ Note any surprising patterns, potential risks, or areas of complexity.}
 ### Request/Response Shapes
 {Validation, serialization, key data contracts}
 
+## Unknowns & Blindspots
+
+{Surface unknown unknowns that exploration could not resolve -- gaps, unverified assumptions, and behaviors that could only be confirmed by reading code the subagents didn't reach, running the system, or asking a human. This section exists to catch blindspots during research, before they become expensive surprises during implementation.
+
+List 3-7 blindspots, ranked by architectural blast radius -- decisions that would be costly to reverse or that ripple across multiple modules first, minor or purely stylistic unknowns last. If genuinely fewer than 3 exist, write "Codebase is well-understood in this area" rather than padding the list with trivia.}
+
+| # | Blindspot | Why it matters | Suggested clarifying question for cw-spec |
+|---|-----------|-----------------|--------------------------------------------|
+| 1 | {area of uncertainty, e.g. "Token refresh behavior under concurrent requests is unverified"} | {what breaks or costs more later if this is guessed wrong} | {a question phrased so the answer can be pasted directly into the spec} |
+
 ## External Context
 
 {Overview of external sources consulted and their relevance to the research topic.
@@ -117,3 +127,4 @@ Each dimension section should contain key findings, not exhaustive listings:
 - Use `> See: path/to/file.ts` references for details
 - Keep the total report under 500 lines of markdown
 - If a dimension has minimal findings (e.g., no database in the project), note "Not applicable" or "Minimal" and move on
+- The Unknowns & Blindspots table is compiled by the main agent after all five subagents report back, not by any single subagent -- draw candidate blindspots from gaps or contradictions noticed across dimensions
