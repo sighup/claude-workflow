@@ -25,12 +25,37 @@ const QUESTIONS = [
 /* =========================================================
    RENDER + INTERACTION
    ========================================================= */
+
+/* Authors tend to place the correct option in the same slot
+   across every question (a known LLM bias — e.g. every answer
+   is "B"). Shuffle each question's options at render time so
+   the correct answer's on-screen position is unpredictable,
+   regardless of how QUESTIONS was authored. */
+function shuffledIndices(n) {
+  const order = Array.from({ length: n }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
+
+const RENDERED = QUESTIONS.map((item) => {
+  const order = shuffledIndices(item.opts.length);
+  return {
+    q: item.q,
+    why: item.why,
+    opts: order.map((i) => item.opts[i]),
+    correct: order.indexOf(item.correct)
+  };
+});
+
 const LETTERS = ["A", "B", "C", "D", "E"];
 const quizEl = document.getElementById("quiz");
-const answered = new Array(QUESTIONS.length).fill(false);
+const answered = new Array(RENDERED.length).fill(false);
 let correctCount = 0;
 
-QUESTIONS.forEach((item, qi) => {
+RENDERED.forEach((item, qi) => {
   const card = document.createElement("div");
   card.className = "q";
 
@@ -82,15 +107,15 @@ function choose(qi, oi, card, opts, item) {
 function updateScore() {
   const done = answered.filter(Boolean).length;
   const scoreEl = document.getElementById("score");
-  if (done < QUESTIONS.length) {
-    scoreEl.innerHTML = `Answered <b>${done}</b> of ${QUESTIONS.length}.`;
+  if (done < RENDERED.length) {
+    scoreEl.innerHTML = `Answered <b>${done}</b> of ${RENDERED.length}.`;
   } else {
-    let note = correctCount === QUESTIONS.length
+    let note = correctCount === RENDERED.length
       ? "Every one — you've got this change cold."
       : correctCount >= 3
         ? "Solid grasp of the idea."
         : "Worth a re-read of the Intuition section.";
-    scoreEl.innerHTML = `You scored <b>${correctCount} / ${QUESTIONS.length}</b>. ${note}`;
+    scoreEl.innerHTML = `You scored <b>${correctCount} / ${RENDERED.length}</b>. ${note}`;
   }
 }
 

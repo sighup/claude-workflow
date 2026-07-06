@@ -52,6 +52,8 @@ Interactive behavior (embedded JS):
 - Wrong answers show the explanation for why that choice is tempting but incorrect.
 - No score submission, no persistence — it's a self-check.
 
+Write each question's `opts` array with the correct choice wherever it reads most naturally — do not manually distribute correct answers across A/B/C/D/E. The canonical script shuffles each question's options at render time specifically so a natural (often clustered) authoring order never becomes a visible pattern; trying to hand-balance it would just fight a shuffle that already happens automatically.
+
 ## Micro-Interactions
 
 Interactivity in this artifact exists to explain, and it belongs inline with the content it explains. Requirements:
