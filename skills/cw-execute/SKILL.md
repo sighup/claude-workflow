@@ -148,6 +148,8 @@ Each line is a standalone JSON object with these fields:
 | `lesson` | array of strings (1-3 entries) | yes | Takeaway(s) for whoever refines specs or plans next |
 | `timestamp` | string | yes | ISO 8601 timestamp of the append |
 
+See [deviation-log-schema.md](references/deviation-log-schema.md) for the full schema and constraints.
+
 ### Step 5: Verify Local
 
 Run pre-commit checks.
@@ -292,7 +294,7 @@ The Step 8 commit carries an ordinary implementation message — no metadata tra
 
 1. Capture the now-known sha: `commit_sha=$(git rev-parse HEAD)`
 2. Resolve the run's gitignored results dir `docs/specs/[spec-dir]/results/` (create it if absent)
-3. Seal the deviation log: from this point on, no further appends to `{task_id}.deviations.jsonl` are permitted, even if later steps surface more ambiguity. Compute `deviation_count` by counting lines in `docs/specs/[spec-dir]/results/{task_id}.deviations.jsonl` — `0` when the file is absent or empty.
+3. Seal the deviation log: from this point on, no further appends to `{task_id}.deviations.jsonl` are permitted, even if later steps surface more ambiguity. Compute `deviation_count` by counting lines in `docs/specs/[spec-dir]/results/{task_id}.deviations.jsonl` — `0` when the file is absent or empty. See [deviation-log-schema.md](references/deviation-log-schema.md) for the sealing contract.
 4. Write `{task_id}.result.json` there, conforming to [result-journal-schema.md](references/result-journal-schema.md). Key it on the stable `task_id` (e.g. `T02.2`), never the native task-store integer. Include `commit_sha`, `status: "completed"`, the Step 6 proof paths/results, and the optional `deviation_count` integer from the previous step. The verifier fields (`verifier_verdict`, `verifier_tokens`, `verification_mode`) are filled in once Step 9 produces its verdict; finalize the journal at the end of Step 9, before the Step 10 RESULT BLOCK.
 
 The journal is written once and never edited after finalization. `commit_sha` is the sole commit-to-task link; the dispatcher verifies it against git before accepting the record.
