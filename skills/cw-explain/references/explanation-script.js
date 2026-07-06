@@ -1,14 +1,14 @@
 /* ============================================================
    EXPLAINER TEMPLATE — CANONICAL SCRIPT
-   Copy this file verbatim into the artifact's single <script>
+   Copy this file verbatim into the artifact's single script
    block, then:
      1. Replace the QUESTIONS array with the five real questions
-        for this change (omit the whole quiz block, including the
-        <section id="quiz"> markup, when quiz=off).
+        for this change (omit the whole quiz block, including its
+        section markup, when quiz=off).
      2. Append any page-specific micro-interaction handlers below
         the TOC scroll-spy block (before/after toggles, step-
-        through data flows) — keep them inline here, one <script>
-        total, per the self-containment rule.
+        through data flows) — keep them inline here, one script
+        block total, per the self-containment rule.
    ============================================================ */
 
 /* =========================================================

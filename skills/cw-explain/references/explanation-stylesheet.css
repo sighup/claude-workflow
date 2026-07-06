@@ -1,16 +1,16 @@
 /* ============================================================
    EXPLAINER TEMPLATE — CANONICAL STYLESHEET
-   Copy this file verbatim into the artifact's single <style>
+   Copy this file verbatim into the artifact's single style
    block. Do not re-derive the palette, type scale, or component
    styles per run — only the content inside them changes.
 
    Imported from the Claude Design project template
    (2026-07-02-explanation-single-flight-cache.html). One
-   deliberate change from that source: the Google Fonts <link>
-   tags are NOT part of this file and must never be added back —
-   Claude Code Artifacts block outbound requests via CSP, so any
-   <link href="https://fonts.googleapis.com/..."> tag will fail
-   to load. The --serif/--sans/--mono variables below still name
+   deliberate change from that source: the Google Fonts stylesheet
+   link tags are NOT part of this file and must never be added
+   back — Claude Code Artifacts block outbound requests via CSP,
+   so a fonts.googleapis.com stylesheet link will fail to load.
+   The --serif/--sans/--mono variables below still name
    "Newsreader" / "Space Grotesk" / "JetBrains Mono" as a first
    preference — that's harmless (no network fetch happens for an
    unavailable local font-family name) and simply falls through
