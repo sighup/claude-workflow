@@ -18,7 +18,7 @@
 
    Sections: Background · Intuition · Code · Quiz
    Design: quiet "essay" reading experience.
-     - reading column ~ 46rem, serif body for long-form comfort
+     - reading column ~ 54rem, serif body for long-form comfort
      - sticky table of contents with scroll-spy
      - two reusable diagram families (flow + timeline)
      - callouts, diff-aware code blocks, interactive quiz
@@ -138,7 +138,7 @@ nav.toc .sub a::after {
 
 /* ---------- article ---------- */
 article {
-  max-width: 46rem;
+  max-width: 54rem;
   padding: 3.5rem 0 6rem;
 }
 
