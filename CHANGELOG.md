@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v3.6.0 (2026-07-06)
+
+### Documentation
+
+- Language consistency, voice, and accuracy fixes
+  ([#42](https://github.com/sighup/claude-workflow/pull/42),
+  [`fa5e43c`](https://github.com/sighup/claude-workflow/commit/fa5e43cc04cdf79e52ea933bb345f342b4509e2a))
+
+### Features
+
+- **cw-explain**: Publish artifacts via Claude Code Artifact tool
+  ([#44](https://github.com/sighup/claude-workflow/pull/44),
+  [`b703572`](https://github.com/sighup/claude-workflow/commit/b703572bbe8206497ee2a50eea99d089a80aff76))
+
+
 ## v3.5.0 (2026-07-04)
 
 ### Features
