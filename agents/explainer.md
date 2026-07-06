@@ -25,9 +25,9 @@ skills:
 
 ## Coordination
 
-- Receives work from: cw-explain parent (Step 4), with parameters resolved and the output path fixed
-- Produces: one self-contained HTML artifact at the provided `docs/specs/` path, per the Authoring Protocol in the cw-explain skill
-- Hands off to: the parent, which independently verifies the artifact (Step 5) — report the path, sections, and redactions only
+- Receives work from: cw-explain parent (Step 4), with parameters resolved and the staging path fixed
+- Produces: one self-contained HTML file at the provided `docs/specs/` staging path, per the Authoring Protocol in the cw-explain skill — this is scratch input for the parent's `Artifact` tool call, not a deliverable in its own right
+- Hands off to: the parent, which independently verifies the staged file (Step 5) before publishing it as a hosted Claude Code artifact — report the path, sections, and redactions only
 - No user interaction: all decisions (mode, quiz, spec context) were made before spawn; on a blocking ambiguity, report it back instead of guessing
 
 ## Constraints
