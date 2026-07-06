@@ -173,6 +173,8 @@ See [report-template.md](references/report-template.md) for the full markdown te
 
 The report contains sections for each of the five dimensions (Summary, Tech Stack & Project Structure, Architecture & Patterns, Dependencies & Integrations, Test & Quality Patterns, Data Models & API Surface), with subsections for key findings in each area.
 
+**Compile the Unknowns & Blindspots section:** After assembling the five dimension sections, review them together for gaps, contradictions, and unverified assumptions -- things no subagent confirmed directly (e.g., "auth pattern uses JWT" but token refresh/revocation was never located; "tests exist" but coverage of the critical path is unknown). Rank candidate blindspots by architectural blast radius -- how expensive it would be to guess wrong and build on that guess -- and list the top 3-7 with a copy-pasteable clarifying question for each, per [report-template.md](references/report-template.md).
+
 ### Step 4: Interactive Refinement
 
 Present the auto-explore findings to the user and allow them to confirm, refine, or redirect focus areas before proceeding to deep-dive exploration.
@@ -316,7 +318,11 @@ For each dimension that received a deep-dive, update the corresponding section i
 
 If external context sources were provided in Step 5, add an "External Context" section to the report. See [external-context-protocol.md](references/external-context-protocol.md) for the report integration format and source attribution rules.
 
-**7c. Update the summary:**
+**7c. Revise the Unknowns & Blindspots section:**
+
+Deep-dives and external context often resolve some initial blindspots and surface new ones. Remove any blindspot the deep-dive findings answered directly, and add newly discovered ones. Re-rank by architectural blast radius so the list still reads highest-impact-first.
+
+**7d. Update the summary:**
 
 Revise the Summary section at the top of the report to incorporate key insights from deep-dive findings and external context. The summary should reflect the complete picture, not just the initial auto-explore.
 
@@ -368,11 +374,15 @@ Report: docs/specs/research-{topic_slug}/research-{topic_slug}.md
 Dimensions explored: 5/5
 Deep-dives completed: {N}
 External sources incorporated: {N} ({M} inaccessible)
+Blindspots surfaced: {N}
 
 Key findings:
 - {finding 1}
 - {finding 2}
 - {finding 3}
+
+Top blindspot:
+- {highest blast-radius blindspot from the Unknowns & Blindspots section}
 
 A meta-prompt for /cw-spec has been generated at the end of the report.
 ```
