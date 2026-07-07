@@ -40,12 +40,14 @@ log_success() {
     echo -e "${GREEN}[OK]${NC} $1"
 }
 
+# Warnings and errors go to stderr so they never pollute $(...) command
+# substitutions in callers.
 log_warning() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${YELLOW}[WARN]${NC} $1" >&2
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
 print_banner() {

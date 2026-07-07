@@ -34,12 +34,14 @@ log_success() {
     echo -e "${GREEN}[OK]${NC} $1"
 }
 
+# Warnings and errors go to stderr so they never pollute $(...) command
+# substitutions in callers.
 log_warning() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${YELLOW}[WARN]${NC} $1" >&2
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
 # =============================================================================
@@ -110,7 +112,7 @@ cw_worktree_names() {
 
     # Derive repo name from the main worktree (not a nested worktree path)
     local main_worktree
-    main_worktree=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
+    main_worktree=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
     if [ -z "$main_worktree" ]; then
         # Fallback: parent of git-common-dir
         local common_dir
