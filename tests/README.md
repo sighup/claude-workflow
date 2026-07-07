@@ -27,6 +27,7 @@ leading-paren form).
 | `provision-worktree.test.sh` | `provision_worktree()` end-to-end in throwaway git repos: branch/dir creation, settings.local.json, gitignore idempotency, existing-branch reuse, minimal mode, base refs, `.worktreeinclude` |
 | `logging.test.sh` | `log_warning`/`log_error` route to stderr (both `scripts/lib` and `bin/lib` copies) |
 | `doc-snippets.test.sh` | Worktree-lookup snippet extracted from the reference markdown and executed against a fixture repo; regression greps for space-unsafe awk, bash-3.2 case patterns, ORIG_HEAD rollback, namespaced permission rules |
+| `manifest.test.sh` | Marketplace manifest at the repo root with `source: ./plugin`, plugin.json name match, and every hook command resolving under `plugin/` |
 
 ## Conventions
 
