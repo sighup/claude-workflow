@@ -8,8 +8,9 @@
 # Source this file from hook handlers:
 #   source "$(dirname "${BASH_SOURCE[0]}")/../lib/cw-common.sh"
 #
-# This is the single source of truth for the relocated provisioning functions.
-# bin/lib/cw-common.sh sources this file to avoid duplicated definitions.
+# This is the single source of truth for the provisioning functions.
+# bin/lib/cw-common.sh is a separate, self-contained library backing the bin/
+# tools (cw-status, cw-herdr-open); provisioning lives only here.
 #
 
 # =============================================================================
