@@ -151,9 +151,9 @@ Use `/cw-worktree status <feature-name>` to see:
 ```bash
 # Check for commits on branch (branch name is {type}/{slug}, e.g. fix/login)
 # Resolve the worktree path via git (matches both .claude/worktrees/ and legacy .worktrees/)
-WT=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+WT=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print}' \
   | grep -E "/(\.claude/worktrees|\.worktrees)/" \
-  | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
+  | while IFS= read -r _wt; do _b=$(basename "$_wt"); case "$_b" in ("$FEATURE"|*-"$FEATURE") printf '%s\n' "$_wt"; break;; esac; done)
 BRANCH=$(cd "$WT" && git branch --show-current)
 COMMITS=$(git log main..${BRANCH} --oneline | wc -l)
 
