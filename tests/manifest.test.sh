@@ -42,4 +42,16 @@ missing=$(jq -r '.. | .command? // empty' "$PLG" 2>/dev/null \
     | while IFS= read -r p; do [ -f "$p" ] || printf '%s\n' "$p"; done)
 assert_empty "$missing"
 
+HJS="$PLUGIN_DIR/hooks/hooks.json"
+
+t "hooks/hooks.json exists and is valid JSON"
+jq empty "$HJS" >/dev/null 2>&1
+assert_success $?
+
+t "every hook command in hooks/hooks.json resolves under plugin/"
+missing=$(jq -r '.. | .command? // empty' "$HJS" 2>/dev/null \
+    | sed "s|\${CLAUDE_PLUGIN_ROOT}|$PLUGIN_DIR|" \
+    | while IFS= read -r p; do [ -f "$p" ] || printf '%s\n' "$p"; done)
+assert_empty "$missing"
+
 finish
