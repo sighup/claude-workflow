@@ -192,7 +192,7 @@ When you open a Claude Code session in a worktree via any of these methods:
 - `/cw-worktree create` (creating a new worktree)
 - Plain `cd <worktree-path> && claude` (starting a session in the worktree directory)
 
-The **SessionStart hook** (registered in `.claude-plugin/plugin.json` with matcher `startup|resume`) automatically sets the session title to the resolved task-list ID. This occurs only when:
+The **SessionStart hook** (registered in `.claude-plugin/plugin.json` — `plugin/.claude-plugin/plugin.json` in a source checkout — with matcher `startup|resume`) automatically sets the session title to the resolved task-list ID. This occurs only when:
 - The session is being started (not resumed with an existing title)
 - The source is `startup` or `resume` (not programmatic)
 - No `session_title` was already set on the session input
