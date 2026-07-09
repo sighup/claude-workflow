@@ -69,32 +69,34 @@ Gate on the preflight script — this decides your entire execution path:
 
 1. `mkdir -p` the results dir if needed; write the self-contained prompt to
    `$RESULTS_DIR/{task_id}-codex-prompt.md` per the template in codex-execution.md — map the
-   assignment's requirements, scope limits, verification.pre, and commit template verbatim.
-   Codex sees none of your context; the prompt must stand alone.
+   assignment's requirements, scope limits, and verification.pre verbatim, and instruct codex
+   to leave all changes **uncommitted** (its sandbox keeps `.git` read-only; you commit in
+   Step 3). Codex sees none of your context; the prompt must stand alone.
 2. Run (with `CODEX_MODEL` set to the assignment's model value verbatim):
    ```bash
    codex exec -C "$PWD" --add-dir "$RESULTS_DIR" -s workspace-write -m "${CODEX_MODEL:?}" - < "$RESULTS_DIR/{task_id}-codex-prompt.md"
    ```
 3. Capture codex's stdout to `$RESULTS_DIR/{task_id}-codex-output.txt`.
 
-### Step 3: Independent Verification (codex output is untrusted)
+### Step 3: Independent Verification + Commit (codex output is untrusted)
 
-Never relay codex's self-report as evidence. Verify everything yourself:
+Never relay codex's self-report as evidence. Codex leaves its changes uncommitted (its
+sandbox cannot write `.git`). Verify everything yourself, then commit yourself:
 
-1. **Commit exists**: `git log -1 --format='%H %s'` shows a new commit matching the commit
-   template; `git status --porcelain` is clean.
-2. **Scope honored**: `git show --stat HEAD` touches only files in the assignment's
-   `files_to_create`/`files_to_modify`.
-3. **Verification passes**: run every `verification.post` command; capture output.
-4. **Proof artifacts**: execute each `proof_artifacts` entry, capture output files named
+1. **Changes exist and scope honored**: `git status --porcelain` / `git diff --stat` show
+   changes touching only files in the assignment's `files_to_create`/`files_to_modify`.
+2. **Verification passes**: run every `verification.post` command; capture output.
+3. **Proof artifacts**: execute each `proof_artifacts` entry, capture output files named
    `{task_id}-NN-<type>.txt` in the results dir.
-5. **Sanitize**: scan all artifacts for credentials/secrets before anything is committed —
-   same bar as cw-execute; never proceed past sanitize with findings.
+4. **Sanitize**: scan the diff and all artifacts for credentials/secrets — same bar as
+   cw-execute; never proceed past sanitize with findings.
+5. **Commit**: one atomic commit with exactly the assignment's commit template. You always
+   make the commit; `model_used` still records codex's model because codex authored the
+   accepted content.
 
-If any check fails: uncommitted damage → `git stash`; then retry Step 2 **once** with a
-corrected prompt naming the specific failure. If the retry also fails → Step 4 with
-`fallback_reason: "codex-exec-failed"` (stash first; never amend or reset codex's bad commit —
-if a bad commit landed, stop and emit a failure record instead, naming the sha).
+If any check fails: `git stash` the damage; then retry Step 2 **once** with a corrected
+prompt naming the specific failure. If the retry also fails → Step 4 with
+`fallback_reason: "codex-exec-failed"`.
 
 ### Step 4: Fallback Path
 
@@ -109,8 +111,9 @@ sentinel as the last content of your final message, per the
 [result journal schema](../skills/cw-execute/references/result-journal-schema.md), with two
 engine fields on top of the standard record:
 
-- `model_used`: the assignment's model value verbatim (e.g. `"gpt-5.5"`, `"gpt-5.6"`) when
-  codex produced the accepted commit; `"sonnet"` when you fell back.
+- `model_used`: the assignment's model value verbatim (e.g. `"gpt-5.6-sol"`) when codex
+  authored the accepted implementation (you make the commit either way — authorship, not
+  committer, decides); `"sonnet"` when you fell back and implemented it yourself.
 - `fallback_reason`: omit on the codex path; `"codex-cli-missing"` or `"codex-exec-failed"`
   on the fallback path.
 
@@ -122,6 +125,7 @@ your own tools.
 - **Only** modifies files listed in task scope (and holds codex to the same limit)
 - **Always** sanitizes proof artifacts before commit; never proceeds past sanitize with findings
 - **Never** trusts codex output without the Step 3 verification
+- **Always** makes the commit itself — codex's sandbox cannot and must not write `.git`
 - **Never** pushes to remote; never amends or rebases existing commits
 - **Never** spawns children — you are a leaf agent
 - **Never** raises codex absence as an error — fall back silently and record it
