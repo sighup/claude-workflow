@@ -107,7 +107,7 @@ Review all changed non-test files directly. For each file:
    - `incomingCalls` to understand the impact of modified functions on their consumers
 6. Record findings
 
-After reviewing all files, skip to **Step 3: Create FIX Tasks**.
+After reviewing all files, proceed to **Step 2e: External Perspective** (skipping Steps 2b–2d).
 
 ### Step 2b: Partition Files into Batches (large diffs)
 
@@ -205,6 +205,30 @@ TaskUpdate({
 })
 ```
 
+### Step 2e: External Perspective (gpt-5.5, optional)
+
+An independent second-opinion review from the Codex CLI. **Strictly optional and silent when
+unavailable** — this step must never add friction to environments without codex:
+
+```bash
+command -v codex >/dev/null 2>&1 || true   # absent → skip this step entirely, no report section, no note
+```
+
+When codex is present:
+
+1. Run the review against the same base: `codex review --base main` (or `--uncommitted` when
+   reviewing working-tree changes). Command reference:
+   [codex-execution.md](../cw-dispatch/references/codex-execution.md).
+2. Save the raw output to the results dir (`docs/specs/<run>/results/codex-review.txt`) when a
+   spec run exists; otherwise keep it in-context only.
+3. Merge parsed findings into the consolidated list tagged `source: "gpt-5.5"`. Codex-only
+   findings are **advisory** unless corroborated by your own review (Step 2a) or a sub-reviewer
+   (Step 2d), or self-evidently blocking (e.g. a demonstrable credential leak) — only
+   corroborated or self-evident findings may drive FIX tasks.
+
+If `codex review` errors mid-run, treat it exactly like absence: skip, no report section,
+never an error.
+
 ### Step 3: Create FIX Tasks
 
 This step is the same for both inline and parallel review paths.
@@ -294,6 +318,11 @@ Produce a structured review report from the consolidated findings:
 
 ### [ISSUE-2] ...
 
+## External Reviewer (gpt-5.5)
+
+- **Findings**: [count merged, or "none"] — advisory unless corroborated
+- **Raw output**: [path to codex-review.txt]
+
 ## Advisory Notes
 
 ### [NOTE-1] [Category D]: [Title]
@@ -319,7 +348,7 @@ Produce a structured review report from the consolidated findings:
 - [ ] No obvious performance regressions
 ```
 
-The **Sub-Reviewer Fan-Out** section appears only when batch mode ran (Step 2b–2d). Spawned batches carry real funnel and token numbers from Step 2d; if every batch ran via the inline fallback, the funnel line reads `0/0 — inline fallback` and the token line is omitted. Omit the whole section for inline review (≤200-line diffs).
+The **Sub-Reviewer Fan-Out** section appears only when batch mode ran (Step 2b–2d). Spawned batches carry real funnel and token numbers from Step 2d; if every batch ran via the inline fallback, the funnel line reads `0/0 — inline fallback` and the token line is omitted. Omit the whole section for inline review (≤200-line diffs). The **External Reviewer (gpt-5.5)** section appears only when Step 2e actually ran codex — omit it entirely when codex was absent or failed.
 
 Save the report to: `./docs/specs/[NN]-spec-[feature-name]/[NN]-review-[feature-name].md`
 
@@ -361,6 +390,7 @@ Funnel and token lines follow the Step 4 rules: real numbers when sub-reviewers 
 | Git commands fail | Report error, suggest manual review |
 | Subagent failure | Record it in the degraded list with unreviewed files (Step 2d funnel), let user decide (re-run or manual review) |
 | Task tool unavailable | Inline fallback (Step 2c): review batches sequentially in your own context — complete the review with no spawn error |
+| codex CLI missing or `codex review` fails | Skip Step 2e silently — omit the External Reviewer report section, never surface an error or note |
 | Too many files (>24) | Cap at 3 batches of 8, prioritize new files and security-sensitive paths |
 
 ## What Comes Next

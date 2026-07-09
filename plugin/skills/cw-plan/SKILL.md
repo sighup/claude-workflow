@@ -97,12 +97,12 @@ After restarting, run /cw-plan again to continue.
 4. **Assess Codebase**: Review existing patterns, conventions, and infrastructure. Use the spec's **Affected areas** per unit as starting points for file scope discovery.
 5. **Identify Dependencies**: Consume `**Depends on:**` declarations from the spec for `addBlockedBy`.
 6. **Evaluate Complexity**: Assign `trivial`, `standard`, or `complex` to each unit
-6. **Assign Model**: Map complexity to model recommendation:
-   - `trivial` → `"haiku"` (fast, cost-effective)
+6. **Assign Model**: Map complexity to model recommendation, consulting [model-selection.md](references/model-selection.md):
+   - `trivial` → `"gpt-5.5"` when the task meets the rubric's eligibility bar (bulk/mechanical, fully specified scope, silent sonnet fallback acceptable), otherwise `"sonnet"`
    - `standard` → `"sonnet"` (capable for most implementation tasks)
    - `complex` → `"opus"` (maximum capability)
 
-   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`).
+   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `gpt-5.5`, `haiku`). `gpt-5.5` runs via the Codex CLI wrapper and is runtime-gated: environments without the codex CLI silently execute the task on sonnet. `haiku` is plumbing-only per the rubric — never assign it to authored work products.
 
 ### Step 1b: Proof Capture Capability
 
@@ -194,7 +194,7 @@ TaskCreate({
     },
     role: "implementer",
     complexity: "trivial|standard|complex",
-    model: "sonnet",  // "haiku" for trivial, "sonnet" for standard, "opus" for complex
+    model: "sonnet",  // per references/model-selection.md: "gpt-5.5"|"sonnet" for trivial, "sonnet" for standard, "opus" for complex
     proof_results: null,
     completed_at: null
   }
@@ -341,7 +341,7 @@ Before presenting to user:
 - [ ] Every task has `metadata` with `complexity` and `model` fields set
 - [ ] Every task has `demoable_unit` and `demoable_unit_title` in metadata
 - [ ] Sub-tasks inherit `demoable_unit` and `demoable_unit_title` from their parent
-- [ ] Model assignments match complexity (`trivial`→haiku, `standard`→sonnet, `complex`→opus)
+- [ ] Model assignments match complexity per [model-selection.md](references/model-selection.md) (`trivial`→gpt-5.5/sonnet, `standard`→sonnet, `complex`→opus; haiku only for non-authoring plumbing)
 - [ ] Explicit `Depends on` declarations from the spec are respected in `addBlockedBy`
 - [ ] Requirement IDs match the spec's R-IDs (R1.1, R2.1 format)
 - [ ] Verification arrays are empty for pre-bootstrap greenfield tasks

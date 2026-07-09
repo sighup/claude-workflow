@@ -25,7 +25,7 @@ You are the **Dispatcher** role in the Claude Workflow system. You identify inde
 - **NEVER** execute tasks yourself — always delegate to workers
 - **NEVER** spawn workers for blocked tasks
 - **NEVER** assign the same task to multiple workers
-- **NEVER** give workers direct implementation instructions — they **MUST** invoke `cw-execute`
+- **NEVER** give workers direct implementation instructions — they **MUST** invoke `cw-execute`. The one exception is `codex-implementer` on its codex path: it drives the external engine per its agent protocol ([codex-execution.md](references/codex-execution.md)), and still invokes `cw-execute` itself whenever it falls back
 - **NEVER** use TodoWrite — use the native TaskList/TaskUpdate tools only
 - **ALWAYS** set task ownership before spawning
 - **ALWAYS** respect dependency ordering
@@ -90,6 +90,8 @@ Send a **single message** with multiple Task tool calls for parallel execution.
 
 **Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override.
 
+**External engine (`gpt-5.5`)**: when `metadata.model` is `"gpt-5.5"`, never pass it to Task()'s `model` parameter — Task() accepts Claude models only. Spawn the wrapper instead: `subagent_type: "claude-workflow:codex-implementer"`, `model: "sonnet"`, and prefix the description with `gpt-5.5:` (e.g. `description: "gpt-5.5: Execute task T01"`) — the platform UI shows the wrapper's Claude model, so the label is the only visible indication the real worker is the Codex CLI. The spawn prompt keeps the exact assignment shape below, replacing the first line with "Run your codex protocol to implement it" and adding one line: `Codex mechanics: see references/codex-execution.md (plugin skills/cw-dispatch/references/).` The wrapper degrades on its own — if the codex CLI is absent or fails, it executes the task itself via cw-execute on sonnet and records the fallback in its journal; the dispatcher never checks for codex.
+
 **Workers hold no Task tools** — they cannot read the board. `TaskGet` the task once here and inline its **complete** assignment into the spawn prompt: `task_id`, `requirements`, `scope` (`files_to_create`, `files_to_modify`, `patterns_to_follow`), `proof_artifacts`, `proof_capture`, `spec_path`, `commit.template`, and `verification.pre`/`verification.post`. A worker with stripped tools has no board fallback, so an incomplete prompt cannot be recovered — verify the serialized assignment is complete before spawning.
 
 **CRITICAL: Use EXACTLY this prompt shape. Do NOT give workers direct implementation instructions — inline the task metadata only.**
@@ -129,7 +131,7 @@ Repeat for each worker with incrementing worker-N identifiers, inlining that tas
 
 ### Step 4.5: Harvest and Apply
 
-Workers hold no Task tools — they never mark themselves done. **After each batch joins, you harvest their durable evidence and apply every completion yourself.** For each joined worker's `task_id`, resolve its outcome by evidence order (RESULT BLOCK → `{task_id}.result.json` → proof-dir scan by `task_id`), verify the journal's `commit_sha` is reachable in git, then apply **one** `TaskUpdate(completed)` at a time — writing a harvest-checkpoint line **before** each and doing a `TaskGet` read-back **after** each. Never a burst. Full protocol: [dispatch-common.md](references/dispatch-common.md#harvest-and-apply).
+Workers hold no Task tools — they never mark themselves done. **After each batch joins, you harvest their durable evidence and apply every completion yourself.** For each joined worker's `task_id`, resolve its outcome by evidence order (RESULT BLOCK → `{task_id}.result.json` → proof-dir scan by `task_id`), verify the journal's `commit_sha` is reachable in git, then apply **one** `TaskUpdate(completed)` at a time. Apply the journal's `model_used` (and `fallback_reason`, when present) to the task's result metadata verbatim — a `gpt-5.5` task that fell back records `model_used: "sonnet"` plus the reason, never the planned value — writing a harvest-checkpoint line **before** each and doing a `TaskGet` read-back **after** each. Never a burst. Full protocol: [dispatch-common.md](references/dispatch-common.md#harvest-and-apply).
 
 ### Step 5: Refresh, Monitor, and Report
 

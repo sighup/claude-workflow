@@ -113,6 +113,8 @@ Send a **single message** with multiple Task tool calls for parallel launch. Spa
 
 **Model Selection**: Read `metadata.model` from TaskGet for each task and pass it as the `model` parameter to Task(). If a task has no `metadata` at all, log a warning but proceed without a model override.
 
+**External engine (`gpt-5.5`)**: when `metadata.model` is `"gpt-5.5"`, never pass it to Task()'s `model` parameter — Task() accepts Claude models only. Spawn `subagent_type: "claude-workflow:codex-implementer"` with `model: "sonnet"` and a `gpt-5.5:`-prefixed description instead, keeping the same team template below (the wrapper participates in team messaging like any teammate). Its EXECUTION LOOP line 1 becomes "Run your codex protocol (falling back to cw-execute if codex is unavailable)". See [codex-execution.md](../cw-dispatch/references/codex-execution.md); the wrapper degrades on its own and records `model_used`/`fallback_reason` in its journal.
+
 **CRITICAL: Use EXACTLY this prompt template. Do NOT give teammates direct implementation instructions.**
 
 ```
