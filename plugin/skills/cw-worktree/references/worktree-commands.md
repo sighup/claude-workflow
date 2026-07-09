@@ -8,9 +8,22 @@ Detailed process steps for each `/cw-worktree` command. Referenced from [SKILL.m
 
 **Per-invocation setup (runs once, before the per-feature loop):**
 
+**Anchor to the project root first.** Every path below is anchored to `PROJECT_ROOT` — the main worktree's root, resolved once per invocation. Never rely on the shell's current directory: dependency installation `cd`s into the new worktree, and a relative `.claude/worktrees/…` resolved from inside a worktree silently creates a phantom nested directory (the goal file and the herdr pane then land in the wrong tree).
+
+```bash
+PROJECT_ROOT=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
+if [ -z "$PROJECT_ROOT" ] || [ ! -d "$PROJECT_ROOT" ]; then
+  echo "ERROR: not inside a git repository"
+  exit 1
+fi
+cd "$PROJECT_ROOT"
+```
+
+`git worktree list` prints the main worktree first, so this anchors to the main checkout even when invoked from inside a feature worktree — new branches base on the main worktree's HEAD and new worktrees always nest under the main root (`sub()` instead of `print $2` keeps paths containing spaces intact).
+
 Resolve the `cw-herdr-open` helper and probe herdr availability **once** for the whole multi-create call. The result is reused for every feature — there is no point probing the same daemon `N` times when the answer cannot change between worktrees on a single host.
 
-**Helper resolution** uses three lookups in priority order: PATH (the plugin's `bin/` is auto-added to Claude's session PATH at startup, so `command -v` works for marketplace installs), `CLAUDE_PLUGIN_ROOT` (set in hooks but not in Bash by default), and the git top-level (useful only when running from a plugin source checkout).
+**Helper resolution** uses three lookups in priority order: PATH (the plugin's `bin/` is auto-added to Claude's session PATH at startup, so `command -v` works for marketplace installs), `CLAUDE_PLUGIN_ROOT` (set in hooks but not in Bash by default — resolves directly to the plugin root, i.e. `plugin/`, so no extra path segment is needed), and the git top-level plus `plugin/bin/` (useful only when running from a plugin source checkout, where the plugin's shippable content lives under a `plugin/` subdirectory of the repo).
 
 ```bash
 # Primary: marketplace installs put plugin bin/ on Claude's PATH
@@ -23,7 +36,7 @@ fi
 # to a non-existent path and the [ -x ] guard below trips, falling through
 # to the legacy output.
 if [ -z "$HERDR_OPEN_BIN" ] || [ ! -x "$HERDR_OPEN_BIN" ]; then
-  HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/bin/cw-herdr-open"
+  HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/plugin/bin/cw-herdr-open"
 fi
 
 # Probe once for the whole multi-create call.
@@ -74,7 +87,7 @@ Fire the question even under a standing "work without clarifying questions" inst
      echo "ERROR: slug is empty after keyword stripping (input: $FEATURE)"
      exit 1
    fi
-   _MAIN_WT=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
+   _MAIN_WT="$PROJECT_ROOT"  # main worktree root — resolved once in per-invocation setup
    _REPO=$(basename "$_MAIN_WT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//')
    WORKTREE_DIR="${_TYPE}-${_REPO}-${_SLUG}"
    BRANCH="${_TYPE}/${_SLUG}"
@@ -82,14 +95,17 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 2. **Ensure .claude/worktrees is gitignored:**
    ```bash
-   if ! grep -qxF '.claude/worktrees/' .gitignore 2>/dev/null; then
-     printf '\n.claude/worktrees/\n' >> .gitignore
+   # Respect a pre-existing broader ignore rule before appending — mirrors
+   # provision_worktree() in scripts/lib/cw-common.sh
+   if ! git check-ignore -q ".claude/worktrees/" 2>/dev/null \
+      && ! grep -qxF '.claude/worktrees/' "$PROJECT_ROOT/.gitignore" 2>/dev/null; then
+     printf '\n.claude/worktrees/\n' >> "$PROJECT_ROOT/.gitignore"
    fi
    ```
 
 3. **Check for existing worktree:**
    ```bash
-   if [ -d ".claude/worktrees/${WORKTREE_DIR}" ]; then
+   if [ -d "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}" ]; then
      echo "ERROR: Worktree already exists at .claude/worktrees/${WORKTREE_DIR}"
      exit 1
    fi
@@ -99,42 +115,49 @@ Fire the question even under a standing "work without clarifying questions" inst
    ```bash
    if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
      echo "WARNING: Branch ${BRANCH} already exists"
-     # Ask user: use existing branch or create fresh?
+     # Ask user: use existing branch (step 5 checks it out) or create fresh with a suffixed slug (recompute step-1 names)?
    fi
    ```
 
 5. **Create worktree:**
    ```bash
-   mkdir -p .claude/worktrees
-   git worktree add ".claude/worktrees/${WORKTREE_DIR}" -b "${BRANCH}"
+   mkdir -p "$PROJECT_ROOT/.claude/worktrees"
+   if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
+     # User chose "use existing" in step 4 — check the branch out; -b would error
+     git worktree add "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}" "${BRANCH}"
+   else
+     git worktree add "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}" -b "${BRANCH}"
+   fi
    ```
 
 6. **Configure isolated task list:**
    ```bash
    # WORKTREE_DIR=${_TYPE}-${_REPO}-${_SLUG} and BRANCH=${_TYPE}/${_SLUG} from step 1.
    # Create .claude directory if it doesn't exist
-   mkdir -p ".claude/worktrees/${WORKTREE_DIR}/.claude"
+   mkdir -p "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}/.claude"
 
-   # Create settings.local.json with task list ID matching the worktree directory name
-   # Pre-approve workflow agent types so autonomous execution isn't interrupted
-   cat > ".claude/worktrees/${WORKTREE_DIR}/.claude/settings.local.json" << EOF
+   # Create settings.local.json with task list ID matching the worktree directory name.
+   # Pre-approve workflow skills and agent types so autonomous execution isn't
+   # interrupted. Each skill needs BOTH the bare and the plugin-namespaced rule:
+   # skills loaded from the installed plugin match only the claude-workflow: form.
+   cat > "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}/.claude/settings.local.json" << EOF
    {
      "env": {
        "CLAUDE_CODE_TASK_LIST_ID": "${WORKTREE_DIR}"
      },
      "permissions": {
        "allow": [
-         "Skill({ skill: \"cw-research\" })",
-         "Skill({ skill: \"cw-spec\" })",
-         "Skill({ skill: \"cw-plan\" })",
-         "Skill({ skill: \"cw-execute\" })",
-         "Skill({ skill: \"cw-dispatch\" })",
-         "Skill({ skill: \"cw-dispatch-team\" })",
-         "Skill({ skill: \"cw-validate\" })",
-         "Skill({ skill: \"cw-review\" })",
-         "Skill({ skill: \"cw-review-team\" })",
-         "Skill({ skill: \"cw-testing\" })",
-         "Skill({ skill: \"cw-worktree\" })",
+         "Skill(cw-research)", "Skill(claude-workflow:cw-research)",
+         "Skill(cw-spec)", "Skill(claude-workflow:cw-spec)",
+         "Skill(cw-plan)", "Skill(claude-workflow:cw-plan)",
+         "Skill(cw-execute)", "Skill(claude-workflow:cw-execute)",
+         "Skill(cw-dispatch)", "Skill(claude-workflow:cw-dispatch)",
+         "Skill(cw-dispatch-team)", "Skill(claude-workflow:cw-dispatch-team)",
+         "Skill(cw-validate)", "Skill(claude-workflow:cw-validate)",
+         "Skill(cw-review)", "Skill(claude-workflow:cw-review)",
+         "Skill(cw-review-team)", "Skill(claude-workflow:cw-review-team)",
+         "Skill(cw-testing)", "Skill(claude-workflow:cw-testing)",
+         "Skill(cw-worktree)", "Skill(claude-workflow:cw-worktree)",
          "Task(claude-workflow:researcher)",
          "Task(claude-workflow:spec-writer)",
          "Task(claude-workflow:planner)",
@@ -153,37 +176,48 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 7. **Setup dependencies (auto-detect project type):**
    ```bash
-   cd ".claude/worktrees/${WORKTREE_DIR}"
+   # Subshell: the cd must not leak — later steps (and the next feature in a
+   # multi-create call) resolve paths from $PROJECT_ROOT
+   (
+     cd "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}"
 
-   # Node.js
-   if [ -f package.json ]; then
-     npm install
-   fi
+     # Node.js
+     if [ -f package.json ]; then
+       npm install
+     fi
 
-   # Rust
-   if [ -f Cargo.toml ]; then
-     cargo build
-   fi
+     # Rust
+     if [ -f Cargo.toml ]; then
+       cargo build
+     fi
 
-   # Python
-   if [ -f requirements.txt ]; then
-     pip install -r requirements.txt
-   elif [ -f pyproject.toml ]; then
-     pip install -e .
-   fi
+     # Python — install only into an active virtualenv, never a global interpreter
+     if [ -n "${VIRTUAL_ENV:-}" ]; then
+       if [ -f requirements.txt ]; then
+         pip install -r requirements.txt
+       elif [ -f pyproject.toml ]; then
+         pip install -e .
+       fi
+     elif [ -f requirements.txt ] || [ -f pyproject.toml ]; then
+       echo "Note: Python project detected but no active virtualenv — skipping dependency install"
+     fi
 
-   # Go
-   if [ -f go.mod ]; then
-     go mod download
-   fi
+     # Go
+     if [ -f go.mod ]; then
+       go mod download
+     fi
+   )
    ```
 
 8. **Run baseline tests:**
    ```bash
-   # Detect and run tests
-   if [ -f package.json ]; then
-     npm test 2>/dev/null || echo "Note: Tests may need configuration"
-   fi
+   # Detect and run tests — subshell so the cd doesn't leak into later steps
+   (
+     cd "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}"
+     if [ -f package.json ]; then
+       npm test 2>/dev/null || echo "Note: Tests may need configuration"
+     fi
+   )
    ```
 
 9. **Invoke herdr integration (optional, silent on failure):**
@@ -198,16 +232,16 @@ Fire the question even under a standing "work without clarifying questions" inst
 
    | `DRIVE_MODE` | Bash invocation |
    |---|---|
-   | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
-   | `autonomous` | Write the goal file (below), then `"$HERDR_OPEN_BIN" --max-prompt-chars 4000 --prompt "$(cat "$GOAL_FILE")" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
-   | `empty` | `"$HERDR_OPEN_BIN" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `starter` | `"$HERDR_OPEN_BIN" --prompt "$STARTER_PROMPT" "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `autonomous` | Write the goal file (below), then `"$HERDR_OPEN_BIN" --max-prompt-chars 4000 --prompt "$(cat "$GOAL_FILE")" "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
+   | `empty` | `"$HERDR_OPEN_BIN" "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?` |
    | `skip_herdr` | `HERDR_EXIT=2` (do not invoke the helper) |
 
    **`autonomous` — author the goal within its 4000-char budget, persist it to a committed file, then inline-forward it.** 4000 characters is the limit for a `/goal` directive: produce the goal so the file is ≤ 4000 chars (condense if it would run over — never truncate). Authoring it once in a *quoted* heredoc (no `$`/backtick/quote expansion) and forwarding it via `--prompt "$(cat …)"` means the goal text is never re-quoted on a command line — this is what makes long, punctuation-heavy goals safe to forward. The `--max-prompt-chars 4000` flag is a non-truncating backstop: it *rejects* a runaway (exit 2), it never cuts the prompt.
 
    ```bash
-   GOAL_FILE=".claude/worktrees/${WORKTREE_DIR}/docs/specs/goal-${WORKTREE_DIR}.md"
-   mkdir -p ".claude/worktrees/${WORKTREE_DIR}/docs/specs"
+   GOAL_FILE="$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}/docs/specs/goal-${WORKTREE_DIR}.md"
+   mkdir -p "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}/docs/specs"
    cat > "$GOAL_FILE" <<'CW_GOAL_EOF'
    <STARTER_PROMPT_GOAL verbatim — the full /goal … directive, placeholders
     already resolved; see starter-prompts.md "Autonomous variant" for the template>
@@ -218,7 +252,7 @@ Fire the question even under a standing "work without clarifying questions" inst
      echo "NOTE: goal-${WORKTREE_DIR}.md exceeds 4000 chars — condense the /goal directive and rewrite before forwarding."
    fi
    # then forward inline (the autonomous row above), with a non-truncating backstop:
-   "$HERDR_OPEN_BIN" --max-prompt-chars 4000 --prompt "$(cat "$GOAL_FILE")" ".claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?
+   "$HERDR_OPEN_BIN" --max-prompt-chars 4000 --prompt "$(cat "$GOAL_FILE")" "$PROJECT_ROOT/.claude/worktrees/${WORKTREE_DIR}/" 2>/dev/null; HERDR_EXIT=$?
    ```
 
    Write `$GOAL_FILE` even when `HERDR_AVAILABLE=0` (skip only the `"$HERDR_OPEN_BIN"` line) so the artifact persists for step 11.
@@ -365,10 +399,17 @@ Fire the question even under a standing "work without clarifying questions" inst
 1. **Resolve worktree directory:**
    Look up the actual worktree directory under `.claude/worktrees/` or `.worktrees/` by matching against `git worktree list` — do not assume a `feature-` prefix.
    ```bash
-   # Find the worktree directory for the given name, regardless of prefix or location
-   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+   # Find the worktree directory for the given name, regardless of prefix or location;
+   # error on ambiguity instead of silently taking the first match
+   _MATCHES=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print}' \
      | grep -E "/(\.claude/worktrees|\.worktrees)/" \
-     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
+     | while IFS= read -r _wt; do _b=$(basename "$_wt"); case "$_b" in ("$FEATURE"|*-"$FEATURE") printf '%s\n' "$_wt";; esac; done)
+   if [ "$(printf '%s' "$_MATCHES" | grep -c .)" -gt 1 ]; then
+     echo "ERROR: '${FEATURE}' matches multiple worktrees:"
+     printf '%s\n' "$_MATCHES"
+     exit 1
+   fi
+   WORKTREE_DIR="$_MATCHES"
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'"
      echo "Run /cw-worktree list to see available worktrees"
@@ -426,16 +467,26 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 1. **Pre-merge validation:**
    ```bash
-   # Verify in project root
-   if [ ! -d ".git" ]; then
-     echo "ERROR: Must run from project root"
+   # Anchor to the main worktree root — works from anywhere in the repo. (In a
+   # linked worktree .git is a file, so a bare [ -d .git ] check is wrong.)
+   PROJECT_ROOT=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
+   if [ -z "$PROJECT_ROOT" ] || [ ! -d "$PROJECT_ROOT" ]; then
+     echo "ERROR: not inside a git repository"
      exit 1
    fi
+   cd "$PROJECT_ROOT"
 
-   # Resolve worktree directory — match against git worktree list, not a fixed prefix or location
-   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+   # Resolve worktree directory — match against git worktree list, not a fixed prefix
+   # or location; error on ambiguity instead of silently taking the first match
+   _MATCHES=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print}' \
      | grep -E "/(\.claude/worktrees|\.worktrees)/" \
-     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
+     | while IFS= read -r _wt; do _b=$(basename "$_wt"); case "$_b" in ("$FEATURE"|*-"$FEATURE") printf '%s\n' "$_wt";; esac; done)
+   if [ "$(printf '%s' "$_MATCHES" | grep -c .)" -gt 1 ]; then
+     echo "ERROR: '${FEATURE}' matches multiple worktrees:"
+     printf '%s\n' "$_MATCHES"
+     exit 1
+   fi
+   WORKTREE_DIR="$_MATCHES"
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'"
      exit 1
@@ -461,7 +512,8 @@ Fire the question even under a standing "work without clarifying questions" inst
      cargo test
    elif [ -f go.mod ]; then
      go test ./...
-   elif [ -f pytest.ini ] || [ -f pyproject.toml ]; then
+   elif [ -f pytest.ini ] || { [ -f pyproject.toml ] && grep -q '^\[tool\.pytest' pyproject.toml; }; then
+     # a pyproject.toml alone is not evidence of pytest — require pytest config
      pytest
    fi
 
@@ -498,10 +550,21 @@ Fire the question even under a standing "work without clarifying questions" inst
    })
    ```
 
+   If the user picks **Rebase first**:
+   ```bash
+   cd "$WORKTREE_DIR"
+   if ! git rebase main; then
+     git rebase --abort
+     echo "ERROR: Rebase hit conflicts — resolve via /cw-worktree sync ${FEATURE}, then retry merge"
+     exit 1
+   fi
+   ```
+   Then re-run the step-2 tests in the worktree before continuing — the rebase may have changed behavior.
+
 4. **Perform merge:**
    ```bash
-   # Return to project root
-   cd "${PROJECT_ROOT}"
+   # Return to project root (PROJECT_ROOT resolved in step 1)
+   cd "$PROJECT_ROOT"
 
    # Ensure on main and up to date
    git checkout main
@@ -522,9 +585,10 @@ Fire the question even under a standing "work without clarifying questions" inst
    fi
 
    if [ $? -ne 0 ]; then
-     echo "ERROR: Tests failing after merge"
-     echo "Resolve conflicts and fix tests"
-     git merge --abort 2>/dev/null || true
+     echo "ERROR: Tests failing after merge — rolling back the merge commit"
+     # The merge has already been committed, so 'git merge --abort' would be a
+     # no-op; ORIG_HEAD points at pre-merge main
+     git reset --hard ORIG_HEAD
      exit 1
    fi
    ```
@@ -546,8 +610,9 @@ Fire the question even under a standing "work without clarifying questions" inst
 
    If cleanup confirmed:
    ```bash
-   git branch -d "${BRANCH}"
+   # Worktree first — git refuses to delete a branch still checked out in a worktree
    git worktree remove "${WORKTREE_DIR}"
+   git branch -d "${BRANCH}"
    ```
 
 7. **Report success:**
@@ -572,10 +637,17 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 1. **Resolve worktree directory:**
    ```bash
-   # Find the worktree directory by name, regardless of prefix or location
-   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+   # Find the worktree directory by name, regardless of prefix or location;
+   # error on ambiguity instead of silently taking the first match
+   _MATCHES=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print}' \
      | grep -E "/(\.claude/worktrees|\.worktrees)/" \
-     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
+     | while IFS= read -r _wt; do _b=$(basename "$_wt"); case "$_b" in ("$FEATURE"|*-"$FEATURE") printf '%s\n' "$_wt";; esac; done)
+   if [ "$(printf '%s' "$_MATCHES" | grep -c .)" -gt 1 ]; then
+     echo "ERROR: '${FEATURE}' matches multiple worktrees:"
+     printf '%s\n' "$_MATCHES"
+     exit 1
+   fi
+   WORKTREE_DIR="$_MATCHES"
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for feature '${FEATURE}'"
      echo "Run /cw-worktree list to see available worktrees"
@@ -595,20 +667,26 @@ Fire the question even under a standing "work without clarifying questions" inst
 
 3. **Fetch and check if sync needed:**
    ```bash
-   git fetch origin main
-   BEHIND=$(git rev-list HEAD..origin/main --count)
+   # Tolerate repos without a remote (create and merge do) — fall back to local main
+   git fetch origin main 2>/dev/null || true
+   if git rev-parse --verify --quiet origin/main >/dev/null; then
+     UPSTREAM=origin/main
+   else
+     UPSTREAM=main
+   fi
+   BEHIND=$(git rev-list HEAD.."$UPSTREAM" --count)
 
    if [ "$BEHIND" -eq 0 ]; then
-     echo "Already up to date with main"
+     echo "Already up to date with $UPSTREAM"
      exit 0
    fi
 
-   echo "Main has $BEHIND new commits"
+   echo "$UPSTREAM has $BEHIND new commits"
    ```
 
 4. **Perform rebase:**
    ```bash
-   git rebase origin/main
+   git rebase "$UPSTREAM"
    ```
 
 5. **Handle conflicts if any:**
@@ -635,7 +713,7 @@ Fire the question even under a standing "work without clarifying questions" inst
    SYNC COMPLETE
    =============
    Branch: {branch-name}
-   Rebased on: origin/main
+   Rebased on: {UPSTREAM — origin/main, or local main when no remote}
    Commits replayed: {count}
 
    The feature branch is now up to date with main.
@@ -656,9 +734,16 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
    # Resolve the actual worktree directory — match against git worktree list,
    # not a hardcoded feature- prefix, so both new {type}-{repo}-{slug} and
    # legacy feature-* directories are found, in both .claude/worktrees/ and .worktrees/.
-   WORKTREE_DIR=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+   # Errors on ambiguity instead of silently taking the first match.
+   _MATCHES=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print}' \
      | grep -E "/(\.claude/worktrees|\.worktrees)/" \
-     | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
+     | while IFS= read -r _wt; do _b=$(basename "$_wt"); case "$_b" in ("$FEATURE"|*-"$FEATURE") printf '%s\n' "$_wt";; esac; done)
+   if [ "$(printf '%s' "$_MATCHES" | grep -c .)" -gt 1 ]; then
+     echo "ERROR: '${FEATURE}' matches multiple worktrees:" >&2
+     printf '%s\n' "$_MATCHES" >&2
+     exit 1
+   fi
+   WORKTREE_DIR="$_MATCHES"
    if [ -z "$WORKTREE_DIR" ] || [ ! -d "$WORKTREE_DIR" ]; then
      echo "ERROR: No worktree found for '${FEATURE}'" >&2
      echo "Run /cw-worktree list to see available worktrees." >&2
@@ -673,7 +758,7 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
 
 3. **Resolve helper path and invoke with --focus-if-exists:**
 
-   Helper lookup uses the same three-step resolution as the `create` command — PATH first (marketplace installs), then `CLAUDE_PLUGIN_ROOT`, then the git top-level fallback (plugin source checkout only).
+   Helper lookup uses the same three-step resolution as the `create` command — PATH first (marketplace installs), then `CLAUDE_PLUGIN_ROOT` (resolves directly to `plugin/`, no extra path segment), then the git top-level plus `plugin/bin/` fallback (plugin source checkout only).
 
    ```bash
    HERDR_OPEN_BIN="$(command -v cw-herdr-open 2>/dev/null || true)"
@@ -681,7 +766,7 @@ Retrospectively attaches a herdr pane to an existing worktree. If a matching wor
      HERDR_OPEN_BIN="$CLAUDE_PLUGIN_ROOT/bin/cw-herdr-open"
    fi
    if [ -z "$HERDR_OPEN_BIN" ] || [ ! -x "$HERDR_OPEN_BIN" ]; then
-     HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/bin/cw-herdr-open"
+     HERDR_OPEN_BIN="$(git rev-parse --show-toplevel 2>/dev/null)/plugin/bin/cw-herdr-open"
    fi
 
    HERDR_EXIT=2  # default: treat as unavailable

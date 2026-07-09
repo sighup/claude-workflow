@@ -151,9 +151,9 @@ Use `/cw-worktree status <feature-name>` to see:
 ```bash
 # Check for commits on branch (branch name is {type}/{slug}, e.g. fix/login)
 # Resolve the worktree path via git (matches both .claude/worktrees/ and legacy .worktrees/)
-WT=$(git worktree list --porcelain | awk '/^worktree /{print $2}' \
+WT=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print}' \
   | grep -E "/(\.claude/worktrees|\.worktrees)/" \
-  | while read -r _wt; do _b=$(basename "$_wt"); case "$_b" in "$FEATURE"|*-"$FEATURE") echo "$_wt"; break;; esac; done)
+  | while IFS= read -r _wt; do _b=$(basename "$_wt"); case "$_b" in ("$FEATURE"|*-"$FEATURE") printf '%s\n' "$_wt"; break;; esac; done)
 BRANCH=$(cd "$WT" && git branch --show-current)
 COMMITS=$(git log main..${BRANCH} --oneline | wc -l)
 
@@ -192,7 +192,7 @@ When you open a Claude Code session in a worktree via any of these methods:
 - `/cw-worktree create` (creating a new worktree)
 - Plain `cd <worktree-path> && claude` (starting a session in the worktree directory)
 
-The **SessionStart hook** (registered in `.claude-plugin/plugin.json` with matcher `startup|resume`) automatically sets the session title to the resolved task-list ID. This occurs only when:
+The **SessionStart hook** (registered in `.claude-plugin/plugin.json` — `plugin/.claude-plugin/plugin.json` in a source checkout — with matcher `startup|resume`) automatically sets the session title to the resolved task-list ID. This occurs only when:
 - The session is being started (not resumed with an existing title)
 - The source is `startup` or `resume` (not programmatic)
 - No `session_title` was already set on the session input

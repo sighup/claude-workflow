@@ -11,7 +11,7 @@
     {
       "name": "claude-workflow",
       "description": "Unified spec-to-execution workflow system. Combines spec rigor, autonomous execution, and native task orchestration with parallel agent dispatch.",
-      "source": "./",
+      "source": "./plugin",
       "strict": true
     }
   ]

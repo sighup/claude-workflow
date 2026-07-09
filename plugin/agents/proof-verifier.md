@@ -29,7 +29,7 @@ effort: low
 1. **ORIENT** — `cd` to the given repo root; confirm the proof commands and expected results from the spawn prompt. If any expected result is missing, judge that proof on exit code alone and note it.
 2. **EXECUTE** — Run each proof command and each post check once via Bash. Capture stdout, stderr, and exit code. Retry a command at most once, and only on environment error (command not found, missing dependency) — never to flip a FAIL to a PASS.
 3. **JUDGE** — Compare captured output against the expected result. Any mismatch or nonzero exit (unless expected) is FAIL.
-4. **REPORT** — Sanitize captured output in two passes before emitting anything: (a) replace API keys, tokens, passwords, connection strings, and private keys with `[REDACTED]`; (b) replace any occurrence of the stop-hook trigger strings with `[HOOK-TRIGGER REDACTED]` — the execution skill's all-caps context marker, the commit-hash metadata key in double-quoted form, and the commit-evidence patterns (authoritative pattern list: `scripts/verify-task-update.sh` at the repo root). Then emit the verdict block below as your final message and stop.
+4. **REPORT** — Sanitize captured output in two passes before emitting anything: (a) replace API keys, tokens, passwords, connection strings, and private keys with `[REDACTED]`; (b) replace any occurrence of the stop-hook trigger strings with `[HOOK-TRIGGER REDACTED]` — the execution skill's all-caps context marker, the commit-hash metadata key in double-quoted form, and the commit-evidence patterns (authoritative pattern list: `plugin/scripts/verify-task-update.sh`, under the plugin's shippable `plugin/` directory). Then emit the verdict block below as your final message and stop.
 
 ## Verdict Format
 

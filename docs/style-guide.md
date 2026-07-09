@@ -43,5 +43,5 @@ These are current, verified system facts. Treat any file stating a different cou
 
 | Fact | Current value | Source of truth |
 |---|---|---|
-| `cw-validate` mandatory gate count | 7 gates, A-G (including **Gate G: Adversarial Analysis**) | `skills/cw-validate/references/validation-gates.md` |
-| `cw-review` shared category count | 5 categories, A-E (including **Category E: Reuse**) | `skills/cw-review/references/review-categories.md` |
+| `cw-validate` mandatory gate count | 7 gates, A-G (including **Gate G: Adversarial Analysis**) | `plugin/skills/cw-validate/references/validation-gates.md` |
+| `cw-review` shared category count | 5 categories, A-E (including **Category E: Reuse**) | `plugin/skills/cw-review/references/review-categories.md` |
