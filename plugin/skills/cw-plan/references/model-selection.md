@@ -56,7 +56,10 @@ via the codex wrapper, which passes the value verbatim to `codex exec -m`.** So 
 external model ships (e.g. `gpt-5.6`, released 2026-07-09):
 
 1. Add a row above with its cost/intelligence/taste rankings — judge from real output, not
-   marketing.
+   marketing. Use the **exact CLI model id**, not the marketing name — new models often ship
+   as variants (e.g. the gpt-5.6 generation is `gpt-5.6-sol`/`-terra`/`-luna`; bare
+   `gpt-5.6` is rejected). Verify with codex's model picker or a one-line
+   `codex exec -m <id> -s read-only` probe.
 2. Update the "How to Apply" bullets if its profile changes which tier owns bulk/mechanical
    work.
 3. Nothing else: no dispatcher, wrapper, schema, or hook changes. Codex must recognize the

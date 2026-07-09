@@ -73,7 +73,7 @@ Gate on the preflight script — this decides your entire execution path:
    Codex sees none of your context; the prompt must stand alone.
 2. Run (with `CODEX_MODEL` set to the assignment's model value verbatim):
    ```bash
-   codex exec -C "$PWD" --add-dir "$RESULTS_DIR" -s workspace-write -m "$CODEX_MODEL" - < "$RESULTS_DIR/{task_id}-codex-prompt.md"
+   codex exec -C "$PWD" --add-dir "$RESULTS_DIR" -s workspace-write -m "${CODEX_MODEL:?}" - < "$RESULTS_DIR/{task_id}-codex-prompt.md"
    ```
 3. Capture codex's stdout to `$RESULTS_DIR/{task_id}-codex-output.txt`.
 

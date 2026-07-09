@@ -43,7 +43,7 @@ codex exec \
   -C "$PWD" \
   --add-dir "$RESULTS_DIR" \
   -s workspace-write \
-  -m "$CODEX_MODEL" \
+  -m "${CODEX_MODEL:?set to the assignment model value}" \
   - < "$PROMPT_FILE"
 ```
 
