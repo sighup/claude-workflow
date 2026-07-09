@@ -141,14 +141,23 @@ WRAP="$CW_TEST_TMP/codex-exec-wrapper.sh"
     echo '#!/bin/bash'
     echo "RESULTS_DIR=\"$RESULTS_DIR\""
     echo 'TASK_ID="T01"'
+    echo 'CODEX_MODEL="gpt-5.6"'
     echo 'echo "stub prompt" > "$RESULTS_DIR/${TASK_ID}-codex-prompt.md"'
     cat "$SNIP"
 } > "$WRAP"
 PATH="$STUB_BIN:/usr/bin:/bin" /bin/bash "$WRAP" >/dev/null 2>&1
 argv=$(cat "$CODEX_ARGV_FILE" 2>/dev/null | tr '\n' ' ')
 case "$argv" in
-    (exec*-C*--add-dir*-s\ workspace-write*-\ *) pass ;;
+    (exec*-C*--add-dir*-s\ workspace-write*-m\ gpt-5.6*-\ *) pass ;;
     (*) fail "argv was: '$argv'" ;;
 esac
+
+t "model value passes through verbatim (new-model extensibility, no enum anywhere)"
+out_new=$(make_task_input "gpt-5.6" | /bin/bash "$VALIDATE"); rc=$?
+if [ $rc -eq 0 ] && [ -z "$out_new" ] && grep -q 'any non-Claude model' "$PLUGIN_DIR/skills/cw-dispatch/SKILL.md"; then
+    pass
+else
+    fail "rc=$rc out='$out_new' or dispatch lacks the structural (non-enumerated) routing rule"
+fi
 
 finish

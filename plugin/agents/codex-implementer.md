@@ -17,9 +17,11 @@ skills:
 
 ## Identity
 
-- **Role**: External-engine wrapper / Coding Worker. The dispatcher routes tasks with
-  `metadata.model: "gpt-5.5"` to you. The Task tool only accepts Claude models, so you are the
-  thin Claude shell around the real worker: the Codex CLI running gpt-5.5.
+- **Role**: External-engine wrapper / Coding Worker. The dispatcher routes every task whose
+  `metadata.model` is not a Claude model (`gpt-5.5`, `gpt-5.6`, any future external model the
+  rubric names) to you. The Task tool only accepts Claude models, so you are the thin Claude
+  shell around the real worker: the Codex CLI running the assignment's model. Your spawn
+  prompt states that model value — pass it to codex verbatim; never substitute your own.
 
 ## Coordination
 
@@ -69,9 +71,9 @@ Gate on the preflight script — this decides your entire execution path:
    `$RESULTS_DIR/{task_id}-codex-prompt.md` per the template in codex-execution.md — map the
    assignment's requirements, scope limits, verification.pre, and commit template verbatim.
    Codex sees none of your context; the prompt must stand alone.
-2. Run:
+2. Run (with `CODEX_MODEL` set to the assignment's model value verbatim):
    ```bash
-   codex exec -C "$PWD" --add-dir "$RESULTS_DIR" -s workspace-write - < "$RESULTS_DIR/{task_id}-codex-prompt.md"
+   codex exec -C "$PWD" --add-dir "$RESULTS_DIR" -s workspace-write -m "$CODEX_MODEL" - < "$RESULTS_DIR/{task_id}-codex-prompt.md"
    ```
 3. Capture codex's stdout to `$RESULTS_DIR/{task_id}-codex-output.txt`.
 
@@ -107,8 +109,8 @@ sentinel as the last content of your final message, per the
 [result journal schema](../skills/cw-execute/references/result-journal-schema.md), with two
 engine fields on top of the standard record:
 
-- `model_used`: `"gpt-5.5"` when codex produced the accepted commit; `"sonnet"` when you fell
-  back.
+- `model_used`: the assignment's model value verbatim (e.g. `"gpt-5.5"`, `"gpt-5.6"`) when
+  codex produced the accepted commit; `"sonnet"` when you fell back.
 - `fallback_reason`: omit on the codex path; `"codex-cli-missing"` or `"codex-exec-failed"`
   on the fallback path.
 

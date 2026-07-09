@@ -40,10 +40,30 @@ and copy.
 
 ## Mechanics
 
-- `gpt-5.5` is reachable only through the Codex CLI. The dispatcher spawns the
-  `codex-implementer` wrapper (a sonnet agent that runs `codex exec` and independently
-  verifies the result); see
+- External models (`gpt-5.5` and successors) are reachable only through the Codex CLI. The
+  dispatcher spawns the `codex-implementer` wrapper (a sonnet agent that runs
+  `codex exec -m "<model>"` and independently verifies the result); see
   [codex-execution.md](../../cw-dispatch/references/codex-execution.md).
 - Claude models (`sonnet`, `opus`, `haiku`) pass straight through Task()'s `model` parameter.
 - After execution the journal records `model_used` (and `fallback_reason` if the codex path
   degraded) — plan-time `model` is intent; the journal is fact.
+
+## Adding a New Model
+
+This table is the single point of change — the routing rule downstream is structural, not
+enumerated: **any `model` value that is not a Claude model (`haiku`/`sonnet`/`opus`) dispatches
+via the codex wrapper, which passes the value verbatim to `codex exec -m`.** So when a new
+external model ships (e.g. `gpt-5.6`, released 2026-07-09):
+
+1. Add a row above with its cost/intelligence/taste rankings — judge from real output, not
+   marketing.
+2. Update the "How to Apply" bullets if its profile changes which tier owns bulk/mechanical
+   work.
+3. Nothing else: no dispatcher, wrapper, schema, or hook changes. Codex must recognize the
+   model name (`~/.codex/config.toml` account/provider must support it) — if it doesn't, the
+   wrapper's codex run fails and the task silently falls back to sonnet, recorded in
+   `fallback_reason`.
+
+New *Claude* models are the platform's concern: once Task()'s `model` parameter accepts a
+name, it can be used here directly — extend the Claude-model list in the dispatch skills'
+External-engine paragraphs if the haiku/sonnet/opus set ever grows.

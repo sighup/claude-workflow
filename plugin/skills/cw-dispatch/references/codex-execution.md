@@ -1,8 +1,14 @@
-# Codex Execution Reference (gpt-5.5 via Codex CLI)
+# Codex Execution Reference (external models via Codex CLI)
 
 How the `codex-implementer` wrapper agent drives the external Codex CLI engine, and how
 `cw-review` invokes it as an independent review perspective. Command shapes verified against
-`codex-cli 0.142.5`.
+`codex-cli 0.142.5` and `0.144.0` (including `-m/--model`).
+
+The engine is model-agnostic: whatever value `metadata.model` carries (`gpt-5.5`, `gpt-5.6`,
+any future model the rubric names) is passed straight through `codex exec -m`. Adding a new
+external model touches only the model-selection rubric — never this doc's mechanics, the
+wrapper, or the dispatchers. When no `-m` is given, codex uses the default in
+`~/.codex/config.toml`.
 
 **This capability is runtime-gated.** Nothing in the pipeline requires the codex CLI.
 Every consumer runs the preflight first and degrades silently to the normal Claude path when
@@ -27,7 +33,8 @@ When `CLAUDE_PLUGIN_ROOT` is not set in your context, the equivalent inline gate
 
 Codex runs non-interactively with the prompt on stdin, sandboxed to the workspace plus the
 results directory. `RESULTS_DIR` is the run's gitignored results directory
-(`docs/specs/<run>/results/`); `TASK_ID` is the stable planner-assigned id.
+(`docs/specs/<run>/results/`); `TASK_ID` is the stable planner-assigned id; `CODEX_MODEL` is
+the assignment's `metadata.model` value verbatim.
 
 ```bash
 PROMPT_FILE="$RESULTS_DIR/${TASK_ID}-codex-prompt.md"
@@ -36,12 +43,14 @@ codex exec \
   -C "$PWD" \
   --add-dir "$RESULTS_DIR" \
   -s workspace-write \
+  -m "$CODEX_MODEL" \
   - < "$PROMPT_FILE"
 ```
 
 Flag meanings: `-C` pins codex's working root to the repo; `--add-dir` grants write access to
 the results directory for artifacts; `-s workspace-write` is the sandbox level (codex may edit
-repo files and commit, nothing outside); `-` reads the prompt from stdin.
+repo files and commit, nothing outside); `-m` selects the model (the assignment's value,
+verbatim); `-` reads the prompt from stdin.
 
 ### Prompt Template (assignment → codex prompt)
 
@@ -104,9 +113,10 @@ reviewer or self-evidently blocking (e.g. a demonstrable credential leak).
 
 ## Reporting the Engine
 
-Whatever executed the work is recorded in the result journal: `model_used: "gpt-5.5"` when
-codex ran the implementation, or the wrapper's own model (e.g. `"sonnet"`) plus
-`fallback_reason` (`"codex-cli-missing"` | `"codex-exec-failed"`) when it fell back. The
-dispatcher applies these fields verbatim at harvest. Spawn labels use the `gpt-5.5:` prefix —
+Whatever executed the work is recorded in the result journal: `model_used` carries the
+assignment's model value verbatim (e.g. `"gpt-5.5"`, `"gpt-5.6"`) when codex ran the
+implementation, or the wrapper's own model (e.g. `"sonnet"`) plus `fallback_reason`
+(`"codex-cli-missing"` | `"codex-exec-failed"`) when it fell back. The dispatcher applies
+these fields verbatim at harvest. Spawn labels use the model value as prefix (`gpt-5.6:`) —
 the platform UI shows the wrapper's Claude model, so the label is the only visible indication
 the real worker is codex.

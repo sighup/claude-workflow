@@ -97,7 +97,7 @@ Each requirement must be:
 |-------|------|----------|-------------|
 | `role` | string | Yes | Worker role: `implementer`, `validator`, `spec-writer` |
 | `complexity` | string | Yes | Task complexity: `trivial`, `standard`, `complex` |
-| `model` | string | Yes | Intended model per [model-selection.md](model-selection.md): `"gpt-5.5"` or `"sonnet"` (trivial), `"sonnet"` (standard), `"opus"` (complex); `"haiku"` only for non-authoring plumbing. `"gpt-5.5"` dispatches via the `codex-implementer` wrapper and is runtime-gated — without the codex CLI the task silently executes on sonnet. After execution, the worker records the actual model in `model_used` (see Result Schema). |
+| `model` | string | Yes | Intended model per [model-selection.md](model-selection.md): `"gpt-5.5"` or `"sonnet"` (trivial), `"sonnet"` (standard), `"opus"` (complex); `"haiku"` only for non-authoring plumbing. Any non-Claude value (`"gpt-5.5"`, `"gpt-5.6"`, future rubric entries) dispatches via the `codex-implementer` wrapper (`codex exec -m "<model>"`) and is runtime-gated — without the codex CLI the task silently executes on sonnet. After execution, the worker records the actual model in `model_used` (see Result Schema). |
 
 ### Proof Artifact Types
 
