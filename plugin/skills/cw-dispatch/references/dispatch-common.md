@@ -136,11 +136,12 @@ b. **Apply the single completion**, resolving the live native id for the `task_i
        proof_dir, proof_results, proof_summary,
        commit_sha, completed_at,
        verifier_verdict, verifier_tokens, verification_mode,
-       model_used
+       model_used,
+       fallback_reason   // only when present in the journal
      }
    })
    ```
-   Populate `metadata` from the resolved evidence record (the RESULT BLOCK / journal fields).
+   Populate `metadata` from the resolved evidence record (the RESULT BLOCK / journal fields), applying `model_used` and `fallback_reason` verbatim.
 
 c. **Read back with `TaskGet` after** — in a separate message, never batched with the write:
    ```
