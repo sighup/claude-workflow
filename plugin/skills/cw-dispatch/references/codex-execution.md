@@ -73,36 +73,31 @@ Scope (HARD limits):
 - Follow the conventions in: <scope.patterns_to_follow>
 - Do NOT touch any other file.
 
-Run these checks and make them pass: <verification.pre>
-Do NOT run any git commands — .git is read-only in your sandbox. Leave all changes
-uncommitted in the working tree; the invoking agent verifies and commits them.
+Before finishing, these must pass: <verification.pre>
+Do NOT commit — leave all changes uncommitted in the working tree. (Your sandbox keeps
+.git read-only; the wrapper reviews the diff and commits.) Do not push.
 
 Write a short report of what you changed and why to: <RESULTS_DIR>/<task_id>-codex-report.md
 ```
 
-Codex cannot commit: the `workspace-write` sandbox keeps `.git` read-only (verified on
-codex-cli 0.144.0 — `index.lock` creation is denied). The wrapper always makes the commit,
-after verification. This is the trust boundary working as intended: the external engine
-authors content; it never writes history.
-
 ### Trust Boundary
 
-**Codex output is untrusted evidence.** The wrapper never relays codex's self-report as
-completion proof. After every `codex exec` the wrapper itself must:
+**Codex output is untrusted evidence, and codex never commits** — its `workspace-write`
+sandbox keeps `.git` read-only by design (verified live on 0.144.0). The wrapper owns commit
+responsibility, which means history only ever receives independently verified work. After
+every `codex exec` the wrapper itself must:
 
-1. Inspect the working tree (`git status --porcelain`, `git diff --stat`): changes exist and
-   touch only files within the assignment's scope. Codex leaves everything uncommitted.
+1. Confirm the working tree holds the change (`git status --porcelain` non-empty) and that
+   `git diff --stat` plus any untracked files touch only files within the assignment's scope.
 2. Run `verification.post` commands and capture their output as proof artifacts.
-3. Sanitize the diff and all artifacts (credential scan) before committing — same sanitize
-   bar as cw-execute.
-4. **Commit the changes itself**: one atomic commit using exactly the assignment's commit
-   template. The commit is always wrapper-made (see sandbox note above); the *content* is
-   what determines `model_used`.
-5. Write the result journal from its own observations, never from codex's claims.
+3. Sanitize all artifacts and the diff (credential scan) — same sanitize bar as cw-execute.
+4. **Commit the verified change itself**: ONE atomic commit using exactly the assignment's
+   commit template.
+5. Write the result journal itself from its own observations, never from codex's claims.
 
-If codex produced nothing, a scope violation, or failing verification: `git stash` the
-damage, retry once with a corrected prompt naming the specific failure, then fall back to
-executing the task via cw-execute.
+If codex produced no changes, a scope violation, or failing verification: `git stash` the
+rejected working-tree changes, retry once with a corrected prompt naming the specific
+failure, then fall back to executing the task via cw-execute.
 
 ## Review Runs (`codex review`)
 
@@ -120,11 +115,11 @@ reviewer or self-evidently blocking (e.g. a demonstrable credential leak).
 
 ## Reporting the Engine
 
-`model_used` records **who authored the accepted implementation**, not who ran `git commit`
-(the wrapper always commits): the assignment's model value verbatim (e.g. `"gpt-5.6-sol"`)
-when codex authored the changes that passed verification, or the wrapper's own model (e.g.
-`"sonnet"`) plus `fallback_reason` (`"codex-cli-missing"` | `"codex-exec-failed"`) when the
-wrapper had to implement the task itself. The dispatcher applies these fields verbatim at
-harvest. Spawn labels use the model value as prefix (`gpt-5.6-sol:`) — the platform UI shows
-the wrapper's Claude model, so the label is the only visible indication the real worker is
-codex.
+`model_used` reports who **authored** the accepted change: the assignment's model value
+verbatim (e.g. `"gpt-5.5"`, `"gpt-5.6-sol"`) when codex wrote it — the wrapper performing
+the commit does not change authorship — or the wrapper's own model (e.g. `"sonnet"`) plus
+`fallback_reason` (`"codex-cli-missing"` | `"codex-exec-failed"`) when it fell back and
+implemented the task itself. The dispatcher applies
+these fields verbatim at harvest. Spawn labels use the model value as prefix (`gpt-5.6:`) —
+the platform UI shows the wrapper's Claude model, so the label is the only visible indication
+the real worker is codex.
