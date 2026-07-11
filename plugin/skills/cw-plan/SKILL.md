@@ -98,11 +98,11 @@ After restarting, run /cw-plan again to continue.
 5. **Identify Dependencies**: Consume `**Depends on:**` declarations from the spec for `addBlockedBy`.
 6. **Evaluate Complexity**: Assign `trivial`, `standard`, or `complex` to each unit
 6. **Assign Model**: Map complexity to model recommendation, consulting [model-selection.md](references/model-selection.md):
-   - `trivial` → `"gpt-5.5"` when the task meets the rubric's eligibility bar (bulk/mechanical, fully specified scope, silent sonnet fallback acceptable), otherwise `"sonnet"`
+   - `trivial` → the rubric's current external default (`"gpt-5.6-sol"`) when the task meets the eligibility bar (bulk/mechanical, fully specified scope, silent sonnet fallback acceptable), otherwise `"sonnet"`
    - `standard` → `"sonnet"` (capable for most implementation tasks)
    - `complex` → `"opus"` (maximum capability)
 
-   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `gpt-5.5`, `haiku`). `gpt-5.5` runs via the Codex CLI wrapper and is runtime-gated: environments without the codex CLI silently execute the task on sonnet. `haiku` is plumbing-only per the rubric — never assign it to authored work products.
+   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`, or an external model id from the rubric table such as `gpt-5.6-sol` or `gpt-5.5`). External models run via the Codex CLI wrapper and are runtime-gated: environments without the codex CLI silently execute the task on sonnet. `haiku` is plumbing-only per the rubric — never assign it to authored work products.
 
 ### Step 1b: Proof Capture Capability
 
@@ -194,7 +194,7 @@ TaskCreate({
     },
     role: "implementer",
     complexity: "trivial|standard|complex",
-    model: "sonnet",  // per references/model-selection.md: "gpt-5.5"|"sonnet" for trivial, "sonnet" for standard, "opus" for complex
+    model: "sonnet",  // per references/model-selection.md: external default (gpt-5.6-sol)|"sonnet" for trivial, "sonnet" for standard, "opus" for complex
     proof_results: null,
     completed_at: null
   }
@@ -341,7 +341,7 @@ Before presenting to user:
 - [ ] Every task has `metadata` with `complexity` and `model` fields set
 - [ ] Every task has `demoable_unit` and `demoable_unit_title` in metadata
 - [ ] Sub-tasks inherit `demoable_unit` and `demoable_unit_title` from their parent
-- [ ] Model assignments match complexity per [model-selection.md](references/model-selection.md) (`trivial`→gpt-5.5/sonnet, `standard`→sonnet, `complex`→opus; haiku only for non-authoring plumbing)
+- [ ] Model assignments match complexity per [model-selection.md](references/model-selection.md) (`trivial`→external default (gpt-5.6-sol)/sonnet, `standard`→sonnet, `complex`→opus; haiku only for non-authoring plumbing)
 - [ ] Explicit `Depends on` declarations from the spec are respected in `addBlockedBy`
 - [ ] Requirement IDs match the spec's R-IDs (R1.1, R2.1 format)
 - [ ] Verification arrays are empty for pre-bootstrap greenfield tasks
