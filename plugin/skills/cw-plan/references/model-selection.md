@@ -18,9 +18,9 @@ and copy.
 | opus        | 4    | 7            | 8     |
 | fable       | 2    | 9            | 9     |
 
-`gpt-5.6-sol` is the **current external default** (verified end-to-end 2026-07-10: authored,
-wrapper-verified, honest journal). `gpt-5.5` remains valid — it is codex's config-default
-model and the fallback recommendation when a host's account lacks the 5.6 generation.
+`gpt-5.6-sol` is the **current external default**. `gpt-5.5` remains valid — it is codex's
+config-default model and the fallback recommendation when a host's account lacks the 5.6
+generation.
 
 ## How to Apply
 
