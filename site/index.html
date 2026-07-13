@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>claude-workflow — how it works</title>
+<meta name="description" content="Architecture reference for the claude-workflow Claude Code plugin: a spec-to-execution pipeline with structured specs, a dependency-aware task graph, parallel agent dispatch, and evidence-based verification.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚙️</text></svg>">
+<style>
+  :root {
+    --paper: #f4f6f5;
+    --panel: #ffffff;
+    --panel-tint: #eef2f1;
+    --ink: #12161c;
+    --slate: #5b6472;
+    --slate-2: #7c8590;
+    --line: #dde2e1;
+    --accent: #0f8c82;
+    --accent-ink: #086158;
+    --accent-soft: #e4f3f1;
+    --amber: #a8631c;
+    --amber-soft: #f6ead9;
+    --code-bg: #10151a;
+    --code-ink: #d9e2e4;
+    --code-key: #7fd9cd;
+    --code-str: #e3b878;
+    --shadow: 0 1px 2px rgba(18, 22, 28, 0.04), 0 6px 20px rgba(18, 22, 28, 0.05);
+  }
+  :root[data-theme="dark"] {
+    --paper: #13171d;
+    --panel: #1a1f26;
+    --panel-tint: #1f252d;
+    --ink: #e8ecee;
+    --slate: #97a3ae;
+    --slate-2: #7c8896;
+    --line: #2a313a;
+    --accent: #3fd9c7;
+    --accent-ink: #8fece2;
+    --accent-soft: rgba(63, 217, 199, 0.1);
+    --amber: #e3a458;
+    --amber-soft: rgba(227, 164, 88, 0.12);
+    --code-bg: #0c1014;
+    --code-ink: #d9e2e4;
+    --code-key: #7fd9cd;
+    --code-str: #e3b878;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 24px rgba(0, 0, 0, 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #13171d;
+      --panel: #1a1f26;
+      --panel-tint: #1f252d;
+      --ink: #e8ecee;
+      --slate: #97a3ae;
+      --slate-2: #7c8896;
+      --line: #2a313a;
+      --accent: #3fd9c7;
+      --accent-ink: #8fece2;
+      --accent-soft: rgba(63, 217, 199, 0.1);
+      --amber: #e3a458;
+      --amber-soft: rgba(227, 164, 88, 0.12);
+      --code-bg: #0c1014;
+      --code-ink: #d9e2e4;
+      --code-key: #7fd9cd;
+      --code-str: #e3b878;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  ::selection { background: var(--accent-soft); }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  .doc {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 64px 28px 96px;
+  }
+
+  header.title-block {
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+    font-weight: 400;
+    font-size: 40px;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  .dek {
+    font-size: 17px;
+    color: var(--slate);
+    max-width: 62ch;
+    margin: 0 0 18px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--slate-2);
+  }
+  .meta-row span {
+    padding: 3px 9px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--panel-tint);
+  }
+
+  section { margin-bottom: 52px; }
+  section:last-of-type { margin-bottom: 24px; }
+
+  h2 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+    font-weight: 400;
+    font-size: 24px;
+    letter-spacing: -0.005em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  .section-num {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--accent-ink);
+    display: block;
+    margin-bottom: 6px;
+  }
+  .section-dek {
+    color: var(--slate);
+    font-size: 15px;
+    max-width: 68ch;
+    margin: 0 0 22px;
+  }
+  p { max-width: 68ch; }
+  p.tight { margin: 0 0 12px; }
+  code.inline {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    background: var(--panel-tint);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.1em 0.4em;
+  }
+
+  /* pipeline rail */
+  .pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    overflow-x: auto;
+    padding: 4px 2px 14px;
+    margin-bottom: 6px;
+  }
+  .stage {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 96px;
+    position: relative;
+    padding-top: 4px;
+  }
+  .stage:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 21px;
+    left: 50%;
+    width: calc(100% + 2px);
+    height: 1.5px;
+    background: var(--line);
+    z-index: 0;
+  }
+  .stage.optional:not(:last-child)::after {
+    background-image: linear-gradient(to right, var(--line) 50%, transparent 50%);
+    background-size: 8px 1.5px;
+    background-color: transparent;
+  }
+  .node {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 1.5px solid var(--accent);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 1;
+    box-shadow: var(--shadow);
+  }
+  .stage.optional .node {
+    border-style: dashed;
+    color: var(--slate);
+    border-color: var(--slate-2);
+  }
+  .stage-label {
+    margin-top: 8px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    text-align: center;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .stage.optional .stage-label { color: var(--slate); }
+  .pipeline-legend {
+    display: flex;
+    gap: 18px;
+    font-size: 12.5px;
+    color: var(--slate);
+    margin-bottom: 28px;
+  }
+  .pipeline-legend .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .pipeline-legend .dot.opt {
+    background: transparent;
+    border: 1.5px dashed var(--slate-2);
+  }
+
+  /* walkthrough rail */
+  .steps { border-left: 1px solid var(--line); margin-left: 6px; }
+  .step {
+    position: relative;
+    padding: 2px 0 26px 26px;
+  }
+  .step::before {
+    content: attr(data-n);
+    position: absolute;
+    left: -9.5px;
+    top: 2px;
+    width: 19px;
+    height: 19px;
+    border-radius: 50%;
+    background: var(--paper);
+    border: 1.5px solid var(--accent);
+    color: var(--accent-ink);
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step h3 {
+    font-size: 15.5px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  .step h3 .cmd {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-weight: 600;
+    color: var(--accent-ink);
+    font-size: 13.5px;
+    margin-right: 8px;
+  }
+  .step p { font-size: 14.5px; color: var(--slate); margin: 0; }
+
+  /* tables */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--panel); }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--slate-2);
+    background: var(--panel-tint);
+    font-weight: 600;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td code, .table-wrap code {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  td.desc { color: var(--slate); }
+  td.agent code { color: var(--amber); background: var(--amber-soft); }
+
+  /* code panel */
+  .code-panel {
+    background: var(--code-bg);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .code-panel .code-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .code-panel .code-head .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+  .code-panel .code-head .path {
+    margin-left: 6px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: rgba(217,226,228,0.55);
+  }
+  .code-panel pre {
+    margin: 0;
+    padding: 16px 18px 20px;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 12.8px;
+    line-height: 1.65;
+    color: var(--code-ink);
+  }
+  .k { color: var(--code-key); }
+  .s { color: var(--code-str); }
+  .c { color: var(--slate-2); font-style: italic; }
+
+  .callouts { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+  .callout {
+    display: flex;
+    gap: 10px;
+    font-size: 13.5px;
+    color: var(--slate);
+    background: var(--panel-tint);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 13px;
+  }
+  .callout b { color: var(--ink); }
+  .callout .tag {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: var(--accent-ink);
+    flex: 0 0 auto;
+    padding-top: 1px;
+  }
+
+  footer {
+    border-top: 1px solid var(--line);
+    margin-top: 8px;
+    padding-top: 20px;
+    font-size: 13px;
+    color: var(--slate-2);
+  }
+
+  @media (max-width: 560px) {
+    h1 { font-size: 30px; }
+    .doc { padding: 40px 18px 72px; }
+  }
+
+  /* GitHub Pages additions: header repo links + theme toggle */
+  .repo-row { margin-top: 8px; }
+  .meta-row a {
+    color: var(--accent-ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .meta-row a:hover { border-bottom-color: var(--accent); }
+  .theme-toggle {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 10;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--slate);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  .theme-toggle:hover { color: var(--accent-ink); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+
+<div class="doc">
+
+  <header class="title-block">
+    <p class="eyebrow">Claude Code plugin · architecture reference</p>
+    <h1>claude-workflow</h1>
+    <p class="dek">A spec-to-execution pipeline that turns a feature idea into validated, committed code — through structured specs, a dependency-aware task graph, parallel agent dispatch, and evidence-based verification at every handoff.</p>
+    <div class="meta-row">
+      <span>v3.7.1</span>
+      <span>13 skills</span>
+      <span>10 agent roles</span>
+      <span>8 lifecycle hooks</span>
+    </div>
+    <div class="meta-row repo-row">
+      <a href="https://github.com/sighup/claude-workflow">github.com/sighup/claude-workflow</a>
+      <span>claude plugin marketplace add https://github.com/sighup/claude-workflow.git</span>
+    </div>
+  </header>
+
+  <section>
+    <span class="section-num">01 — the pipeline</span>
+    <h2>Nine stages, one task board</h2>
+    <p class="section-dek">Each stage is its own slash command / skill. Solid nodes run every time; dashed nodes are optional add-ons you can slot in without changing the rest of the flow.</p>
+
+    <div class="pipeline">
+      <div class="stage optional"><div class="node">R</div><div class="stage-label">cw-research</div></div>
+      <div class="stage"><div class="node">S</div><div class="stage-label">cw-spec</div></div>
+      <div class="stage optional"><div class="node">G</div><div class="stage-label">cw-gherkin</div></div>
+      <div class="stage"><div class="node">P</div><div class="stage-label">cw-plan</div></div>
+      <div class="stage"><div class="node">D</div><div class="stage-label">cw-dispatch</div></div>
+      <div class="stage optional"><div class="node">V</div><div class="stage-label">cw-review</div></div>
+      <div class="stage optional"><div class="node">T</div><div class="stage-label">cw-testing</div></div>
+      <div class="stage"><div class="node">✓</div><div class="stage-label">cw-validate</div></div>
+    </div>
+    <div class="pipeline-legend">
+      <span><i class="dot"></i>core stage</span>
+      <span><i class="dot opt"></i>optional add-on</span>
+    </div>
+
+    <div class="steps">
+      <div class="step" data-n="1">
+        <h3><span class="cmd">cw-research</span>survey the codebase</h3>
+        <p>Explores the codebase across five dimensions and writes a structured report that seeds the spec with real context instead of assumptions.</p>
+      </div>
+      <div class="step" data-n="2">
+        <h3><span class="cmd">cw-spec</span>write the specification</h3>
+        <p>Produces demoable units, functional requirements, and proof-artifact definitions — the contract every later stage checks its work against.</p>
+      </div>
+      <div class="step" data-n="3">
+        <h3><span class="cmd">cw-gherkin</span>derive BDD scenarios</h3>
+        <p>Called automatically from cw-spec. Emits one <code class="inline">.feature</code> file per demoable unit and, optionally, matching cw-testing task stubs.</p>
+      </div>
+      <div class="step" data-n="4">
+        <h3><span class="cmd">cw-plan</span>build the task graph</h3>
+        <p>Transforms the spec into dependency-aware tasks on the native Claude Code task board, each carrying self-contained execution metadata.</p>
+      </div>
+      <div class="step" data-n="5">
+        <h3><span class="cmd">cw-dispatch</span> / <span class="cmd">cw-execute</span>run the work</h3>
+        <p>Independent tasks fan out to parallel subagent workers (no setup) or a persistent agent team (opt-in). <code class="inline">cw-execute</code> drives a single task through an 11-step orient-to-commit protocol.</p>
+      </div>
+      <div class="step" data-n="6">
+        <h3><span class="cmd">cw-review</span>catch what execution missed</h3>
+        <p>Reviews for bugs, security issues, and spec compliance — file-partitioned or, as a team, concern-partitioned across security/correctness/compliance lenses — and opens fix tasks.</p>
+      </div>
+      <div class="step" data-n="7">
+        <h3><span class="cmd">cw-testing</span>prove it end-to-end</h3>
+        <p>Generates tests from the spec, runs them in isolated sub-agents, and auto-fixes application bugs the tests surface.</p>
+      </div>
+      <div class="step" data-n="8">
+        <h3><span class="cmd">cw-validate</span>gate on evidence</h3>
+        <p>Runs seven validation gates against the coverage matrix — the last checkpoint before a PR, and the one nothing skips.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="section-num">02 — who does the work</span>
+    <h2>Skills call agents; agents hold roles</h2>
+    <p class="section-dek">A skill is the entry point you invoke. Underneath, it spawns one or more of ten fixed agent roles — each scoped to a narrow job, so a worker never has more authority than its stage needs.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Skill</th><th>Agent(s)</th><th>Job</th></tr></thead>
+        <tbody>
+          <tr><td><code>/cw-research</code></td><td class="agent"><code>researcher</code></td><td class="desc">Deep codebase exploration, structured findings for the spec.</td></tr>
+          <tr><td><code>/cw-spec</code></td><td class="agent"><code>spec-writer</code></td><td class="desc">Requirements, demoable units, proof-artifact definitions.</td></tr>
+          <tr><td><code>/cw-plan</code></td><td class="agent"><code>planner</code></td><td class="desc">Spec → dependency-aware task graph with execution metadata.</td></tr>
+          <tr><td><code>/cw-execute</code></td><td class="agent"><code>implementer</code></td><td class="desc">11-step protocol: orient, implement, prove, commit, exit clean.</td></tr>
+          <tr><td><code>/cw-dispatch(-team)</code></td><td class="agent"><code>implementer</code> ×N</td><td class="desc">Parallel workers over independent tasks; team mode adds a coordinating lead.</td></tr>
+          <tr><td>execute (auto)</td><td class="agent"><code>bug-fixer</code></td><td class="desc">Invoked when a proof fails — fixes application code, never test code.</td></tr>
+          <tr><td>execute (auto)</td><td class="agent"><code>proof-verifier</code></td><td class="desc">Read-only re-run of a task's proof commands — independent of the implementer's self-report.</td></tr>
+          <tr><td><code>/cw-validate</code></td><td class="agent"><code>validator</code></td><td class="desc">Six/seven gate check, coverage matrix report.</td></tr>
+          <tr><td><code>/cw-review(-team)</code></td><td class="agent"><code>reviewer</code></td><td class="desc">Bugs, security, spec compliance; opens fix tasks.</td></tr>
+          <tr><td><code>/cw-testing</code></td><td class="agent"><code>test-executor</code></td><td class="desc">Runs one generated test scenario, reports pass/fail.</td></tr>
+          <tr><td><code>/cw-explain</code></td><td class="agent"><code>explainer</code></td><td class="desc">Self-contained interactive HTML walkthrough of a diff, for review before a PR.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callouts">
+      <div class="callout"><span class="tag">why it matters</span><span><b>proof-verifier</b> exists because an implementer's own "tests pass" claim isn't trusted — the gate re-runs the proof commands itself before a task can close.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="section-num">03 — the unit of work</span>
+    <h2>Every task is self-contained</h2>
+    <p class="section-dek">Tasks live on Claude Code's native task board, not a bespoke store. Each one carries everything an agent needs to execute it without re-reading the whole spec.</p>
+
+    <div class="code-panel">
+      <div class="code-head">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="path">task metadata · T01</span>
+      </div>
+      <pre>{
+  <span class="k">"task_id"</span>: <span class="s">"T01"</span>,
+  <span class="k">"spec_path"</span>: <span class="s">"docs/specs/01-spec-auth/01-spec-auth.md"</span>,
+  <span class="k">"scope"</span>: {
+    <span class="k">"files_to_create"</span>: [<span class="s">"src/auth/login.ts"</span>],
+    <span class="k">"files_to_modify"</span>: [<span class="s">"src/routes/index.ts"</span>],
+    <span class="k">"patterns_to_follow"</span>: [<span class="s">"src/routes/health.ts"</span>]
+  },
+  <span class="k">"requirements"</span>: [
+    { <span class="k">"id"</span>: <span class="s">"R01.1"</span>, <span class="k">"text"</span>: <span class="s">"POST /auth/login accepts credentials"</span>, <span class="k">"testable"</span>: <span class="k">true</span> }
+  ],
+  <span class="k">"proof_artifacts"</span>: [
+    { <span class="k">"type"</span>: <span class="s">"test"</span>, <span class="k">"command"</span>: <span class="s">"npm test -- src/auth/login.test.ts"</span>, <span class="k">"expected"</span>: <span class="s">"All pass"</span> }
+  ],
+  <span class="k">"commit"</span>: { <span class="k">"template"</span>: <span class="s">"feat(auth): add login endpoint"</span> },
+  <span class="k">"verification"</span>: { <span class="k">"pre"</span>: [<span class="s">"npm run lint"</span>], <span class="k">"post"</span>: [<span class="s">"npm test"</span>] },
+  <span class="k">"role"</span>: <span class="s">"implementer"</span>,
+  <span class="k">"complexity"</span>: <span class="s">"standard"</span>
+}</pre>
+    </div>
+    <p class="tight" style="margin-top:14px; font-size: 14.5px; color: var(--slate);">Scope bounds what a worker may touch. Requirements and proof artifacts are the contract cw-validate checks against. Commit template and verification commands mean a task can close itself — orient, implement, prove, commit — without a human relaying instructions between stages.</p>
+  </section>
+
+  <section>
+    <span class="section-num">04 — guardrails</span>
+    <h2>Hooks enforce what agents can't be trusted to self-report</h2>
+    <p class="section-dek">Eight lifecycle hooks run around the agents rather than inside them, so the protocol holds even when a worker misbehaves or a session gets interrupted.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Trigger</th><th>Hook</th><th>Guards against</th></tr></thead>
+        <tbody>
+          <tr><td><code>SessionStart</code></td><td class="desc"><code class="inline">worktree-session-init</code></td><td class="desc">Session resuming without its worktree/task-list context restored.</td></tr>
+          <tr><td><code>SessionStart</code></td><td class="desc"><code class="inline">task-store-guard</code></td><td class="desc">Starting a session against a corrupt or malformed task store.</td></tr>
+          <tr><td><code>SubagentStop</code></td><td class="desc"><code class="inline">verify-task-update</code></td><td class="desc">A worker claiming a task is done without actually updating it on the board.</td></tr>
+          <tr><td><code>StopFailure</code></td><td class="desc"><code class="inline">stop-failure-handler</code></td><td class="desc">A failed stop leaving the board or worktree in an inconsistent state.</td></tr>
+          <tr><td><code>TaskCreated</code></td><td class="desc"><code class="inline">validate-task-metadata</code></td><td class="desc">Malformed metadata (bad scope, missing proof artifacts) entering the board at all.</td></tr>
+          <tr><td><code>PostToolBatch</code></td><td class="desc"><code class="inline">detect-board-wipe</code></td><td class="desc">A tool batch accidentally clearing the entire task board.</td></tr>
+          <tr><td><code>CwdChanged</code></td><td class="desc"><code class="inline">cwd-changed-worktree</code></td><td class="desc">Losing track of which worktree's task list is active after a directory change.</td></tr>
+          <tr><td><code>WorktreeCreate</code> / <code>Remove</code></td><td class="desc"><code class="inline">worktree-*-handler</code></td><td class="desc">A new worktree missing its isolated <code>CLAUDE_CODE_TASK_LIST_ID</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="section-num">05 — parallel development</span>
+    <h2>Worktrees give every feature its own task list</h2>
+    <p class="section-dek"><code class="inline">/cw-worktree</code> creates an isolated git worktree and feature branch, and stamps its <code class="inline">.claude/settings.local.json</code> with a dedicated <code class="inline">CLAUDE_CODE_TASK_LIST_ID</code> — so tasks for that feature persist under <code class="inline">~/.claude/tasks/&#123;worktree-name&#125;/</code> and resume cleanly across sessions, without colliding with any other feature's board.</p>
+    <p style="font-size: 14.5px; color: var(--slate);">Two dispatch models sit on top of that isolation: <code class="inline">cw-dispatch</code> spins up subagent workers with zero setup and is the default; <code class="inline">cw-dispatch-team</code> runs a persistent team with a coordinating lead, gated behind <code class="inline">CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1</code> for when tasks need cross-worker coordination rather than independent execution.</p>
+  </section>
+
+  <footer>
+    Reference generated from the installed plugin at <code class="inline">plugin/.claude-plugin/plugin.json</code> (v3.7.1) and <code class="inline">README.md</code> — <span class="mono">claude-workflow</span> repo, main branch.
+  </footer>
+
+</div>
+
+<button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">theme: auto</button>
+
+<script>
+(function () {
+  var root = document.documentElement, KEY = "cw-theme";
+  var saved = localStorage.getItem(KEY);
+  if (saved === "light" || saved === "dark") root.dataset.theme = saved;
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    var t = root.dataset.theme;
+    btn.textContent = "theme: " + (t === "dark" ? "dark" : t === "light" ? "light" : "auto");
+  }
+  btn.addEventListener("click", function () {
+    var cur = root.dataset.theme || "auto";
+    var next = cur === "auto" ? "dark" : cur === "dark" ? "light" : "auto";
+    if (next === "auto") { delete root.dataset.theme; localStorage.removeItem(KEY); }
+    else { root.dataset.theme = next; localStorage.setItem(KEY, next); }
+    label();
+  });
+  label();
+})();
+</script>
+
+</body>
+</html>
