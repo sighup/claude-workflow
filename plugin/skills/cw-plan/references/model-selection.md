@@ -3,24 +3,37 @@
 Consulted by `cw-plan` when assigning `metadata.model` to each task. Ships inside the plugin
 so model policy loads at plan time everywhere — it never depends on a user-level CLAUDE.md.
 
-## Rankings
+## Model Profiles
 
-Higher = better. **Cost** reflects what is actually paid, **intelligence** how hard a problem
-the model takes unsupervised, **taste** UI/UX, code quality, API design, and copy.
+Each model is judged on three axes, relative to this roster rather than in absolute terms:
+**cost** — what you actually pay, in tokens and (for Claude models) usage-limit pressure;
+**intelligence** — how hard a problem it handles unsupervised; **taste** — UI/UX, code
+quality, API design, and copy.
 
-| model         | cost | intelligence | taste |
-|---------------|------|--------------|-------|
-| gpt-5.6-sol   | 9    | 9            | 5     |
-| gpt-5.6-terra | 9    | 8            | 4     |
-| sonnet        | 5    | 5            | 7     |
-| opus          | 4    | 7            | 8     |
-| fable         | 2    | 9            | 9     |
+**gpt-5.6-sol** — the external default, frontier tier.
+- Cost: among the most expensive options; reserve it for work that genuinely needs the intelligence.
+- Intelligence: the strongest in the roster — takes on the hardest problems with no supervision.
+- Taste: middling — competent structure and code, but no distinctive design sense. Keep it off anything user-facing.
 
-`gpt-5.6-sol` is the external default (frontier tier). `gpt-5.6-terra` is the balanced
-5.6-generation tier — comparable context, ~half the token cost, lighter on Codex usage
-limits, in exchange for some intelligence and noticeably less design sense. Reach for terra
-only on the highest-volume, purely-mechanical bulk work where conserving sol's budget matters
-and taste is irrelevant.
+**gpt-5.6-terra** — the balanced 5.6 tier.
+- Cost: roughly half sol's token cost and noticeably lighter on Codex usage limits — the whole reason to reach for it.
+- Intelligence: a notch below sol, still comfortably ahead of the Claude models on hard unsupervised work.
+- Taste: the weakest here — trust its design sense even less than sol's. Highest-volume, purely-mechanical bulk work only, where conserving sol's budget matters and taste is irrelevant.
+
+**sonnet** — the default Claude executor.
+- Cost: cheap — the economical default, and the tier a codex task silently falls back to.
+- Intelligence: solid on well-specified work; not the model for open-ended or research-heavy problems.
+- Taste: good — the reliable choice for most user-facing implementation.
+
+**opus** — the design-strong Claude model.
+- Cost: a premium Claude model, pricier than sonnet.
+- Intelligence: strong — below the frontier external tier but well above sonnet.
+- Taste: excellent; the default for reviews and design-sensitive work.
+
+**fable** — the taste-and-intelligence ceiling.
+- Cost: premium — the priciest Claude option.
+- Intelligence: frontier-class, on par with sol.
+- Taste: the best in the roster; the ceiling for design and copy, and the reviewer to orchestrate with.
 
 ## How to Apply
 
@@ -32,7 +45,8 @@ and taste is irrelevant.
   design judgment left to the executor); scope exhaustive
   (`files_to_create`/`files_to_modify` complete); and sonnet is an acceptable executor — the
   tier is **runtime-gated**, so a host without the codex CLI silently runs the task on sonnet.
-- **Anything user-facing** (UI, copy, API surface) needs taste ≥ 7 → never the external tier.
+- **Anything user-facing** (UI, copy, API surface) needs a model with real design sense
+  (sonnet, opus, or fable) → never the external tier.
 - **Reviews** → opus (fable when orchestrating), optionally an extra independent Codex
   perspective (cw-review Step 2e).
 - **Haiku is plumbing-only** — proof-verifier re-runs, mechanical action batches; never
@@ -50,12 +64,12 @@ and taste is irrelevant.
 
 ## Adding a New Model
 
-The table is the single point of change — routing is structural, not enumerated: **any
+The profile list is the single point of change — routing is structural, not enumerated: **any
 non-Claude `model` dispatches via the wrapper, which passes it verbatim to `codex exec -m`.**
 To add one:
 
-1. Add a row with cost/intelligence/taste judged from real output, not marketing. Use the
-   exact CLI model id (see the cw-codex skill's model-id guidance).
+1. Add a profile with a sentence per axis (cost/intelligence/taste), judged from real output,
+   not marketing. Use the exact CLI model id (see the cw-codex skill's model-id guidance).
 2. Update the How-to-Apply bullets only if its profile changes which tier owns bulk work.
 
 No dispatcher, wrapper, schema, or hook change is ever needed. If Codex does not recognize the

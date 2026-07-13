@@ -109,7 +109,7 @@ Use the **exact CLI model id**, not the marketing name — new models often ship
 (e.g. the gpt-5.6 generation is `gpt-5.6-sol`/`-terra`/`-luna`; bare `gpt-5.6` is rejected).
 Verify with codex's model picker or a one-line `codex exec -m <id> -s read-only` probe. If
 codex's account/provider does not recognize the id, the run fails and the caller falls back,
-recorded in `fallback_reason`. Rankings and tier policy:
+recorded in `fallback_reason`. Model profiles and tier policy:
 [model-selection.md](../cw-plan/references/model-selection.md).
 
 ## Reporting the Engine
