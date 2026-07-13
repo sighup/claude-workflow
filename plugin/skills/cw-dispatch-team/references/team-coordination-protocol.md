@@ -11,7 +11,7 @@ CREATE  →  SPAWN  →  MONITOR  →  SHUTDOWN  →  CLEANUP
 1. **CREATE**: `Teammate({ operation: "spawnTeam", team_name: "{task-list-id}-team" })`
 2. **SPAWN**: One `Task()` call per ready task, all in a single message for parallel launch
 3. **MONITOR**: Lead receives auto-delivered messages, assigns new tasks, tracks idle workers
-4. **SHUTDOWN**: `SendMessage({ type: "shutdown_request" })` to each teammate
+4. **SHUTDOWN**: `SendMessage({ to: "worker-N", message: { type: "shutdown_request" } })` to each teammate
 5. **CLEANUP**: `Teammate({ operation: "cleanup" })`
 
 ## Task List Access
@@ -161,7 +161,7 @@ On blocker report from worker-N:
 ```
 1. All workers idle AND no unblocked tasks remaining
 2. For each worker:
-   SendMessage({ type: "shutdown_request", recipient: "worker-N" })
+   SendMessage({ to: "worker-N", message: { type: "shutdown_request" } })
 3. Workers approve shutdown (unless mid-commit)
 4. After all workers confirmed:
    Teammate({ operation: "cleanup" })
