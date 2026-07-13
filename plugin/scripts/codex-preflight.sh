@@ -1,6 +1,6 @@
 #!/bin/bash
 # codex-preflight.sh
-# Runtime gate for the optional gpt-5.5 (Codex CLI) executor tier.
+# Runtime gate for the optional external (Codex CLI) executor tier.
 #
 # Part of claude-workflow plugin - invoked by the codex-implementer agent and
 # cw-review before any codex invocation. No side effects, no hook wiring.

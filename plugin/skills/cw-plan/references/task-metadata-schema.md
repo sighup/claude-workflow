@@ -55,7 +55,7 @@ This document defines the metadata structure for tasks created by `cw-plan`. Eac
   // Worker Assignment
   "role": "implementer",                 // implementer | validator | spec-writer
   "complexity": "standard",             // trivial | standard | complex
-  "model": "sonnet",                    // Model: "gpt-5.5"|"sonnet" (trivial) | "sonnet" (standard) | "opus" (complex); see cw-plan references/model-selection.md
+  "model": "sonnet",                    // Model: "gpt-5.6-sol"|"sonnet" (trivial) | "sonnet" (standard) | "opus" (complex); see cw-plan references/model-selection.md
 
   // Results (filled by worker after execution)
   "proof_results": null,                 // Filled with pass/fail per artifact
@@ -97,7 +97,7 @@ Each requirement must be:
 |-------|------|----------|-------------|
 | `role` | string | Yes | Worker role: `implementer`, `validator`, `spec-writer` |
 | `complexity` | string | Yes | Task complexity: `trivial`, `standard`, `complex` |
-| `model` | string | Yes | Intended model per [model-selection.md](model-selection.md): `"gpt-5.5"` or `"sonnet"` (trivial), `"sonnet"` (standard), `"opus"` (complex); `"haiku"` only for non-authoring plumbing. Any non-Claude value (`"gpt-5.5"`, `"gpt-5.6"`, future rubric entries) dispatches via the `codex-implementer` wrapper (`codex exec -m "<model>"`) and is runtime-gated — without the codex CLI the task silently executes on sonnet. After execution, the worker records the actual model in `model_used` (see Result Schema). |
+| `model` | string | Yes | Intended model per [model-selection.md](model-selection.md): `"gpt-5.6-sol"` or `"sonnet"` (trivial), `"sonnet"` (standard), `"opus"` (complex); `"haiku"` only for non-authoring plumbing. Any non-Claude value (`"gpt-5.6-sol"`, `"gpt-5.6-terra"`, future rubric entries) dispatches via the `codex-implementer` wrapper (`codex exec -m "<model>"`) and is runtime-gated — without the codex CLI the task silently executes on sonnet. After execution, the worker records the actual model in `model_used` (see Result Schema). |
 
 ### Proof Artifact Types
 
@@ -139,7 +139,7 @@ When a worker completes a task, it fills:
   ],
   "completed_at": "2026-01-24T15:30:00Z",
   "model_used": "sonnet",                 // Actual model that executed this task
-  "fallback_reason": "codex-cli-missing"  // Optional — only when a gpt-5.5 task degraded to the wrapper's model
+  "fallback_reason": "codex-cli-missing"  // Optional — only when an external-model task degraded to the wrapper's model
 }
 ```
 
@@ -149,5 +149,5 @@ When a worker completes a task, it fills:
 |-------|------|-------------|
 | `proof_results` | array | Pass/fail per proof artifact with output file references |
 | `completed_at` | string\|null | ISO 8601 timestamp when task was completed |
-| `model_used` | string\|null | The model that actually executed the task (e.g. `gpt-5.5`, `sonnet`, `opus`, `haiku`). Filled by the worker at completion. For `gpt-5.5` tasks this is `"gpt-5.5"` only when the codex path produced the accepted commit. |
-| `fallback_reason` | string | Optional. Present only when a `gpt-5.5` task fell back to the wrapper's own model: `"codex-cli-missing"` or `"codex-exec-failed"`. Absent otherwise — old records without it are valid. |
+| `model_used` | string\|null | The model that actually executed the task (e.g. `gpt-5.6-sol`, `sonnet`, `opus`, `haiku`). Filled by the worker at completion. For external-model tasks this is the external id (e.g. `"gpt-5.6-sol"`) only when the codex path produced the accepted commit. |
+| `fallback_reason` | string | Optional. Present only when an external-model task fell back to the wrapper's own model: `"codex-cli-missing"` or `"codex-exec-failed"`. Absent otherwise — old records without it are valid. |

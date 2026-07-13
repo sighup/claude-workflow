@@ -102,7 +102,7 @@ After restarting, run /cw-plan again to continue.
    - `standard` → `"sonnet"` (capable for most implementation tasks)
    - `complex` → `"opus"` (maximum capability)
 
-   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`, or an external model id from the rubric table such as `gpt-5.6-sol` or `gpt-5.5`). External models run via the Codex CLI wrapper and are runtime-gated: environments without the codex CLI silently execute the task on sonnet. `haiku` is plumbing-only per the rubric — never assign it to authored work products.
+   These are defaults — the model field can be set to any valid value (`sonnet`, `opus`, `haiku`, or an external model id from the rubric table such as `gpt-5.6-sol` or `gpt-5.6-terra`). External models run via the Codex CLI wrapper and are runtime-gated: environments without the codex CLI silently execute the task on sonnet. `haiku` is plumbing-only per the rubric — never assign it to authored work products.
 
 ### Step 1b: Proof Capture Capability
 

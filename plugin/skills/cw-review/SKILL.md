@@ -205,7 +205,7 @@ TaskUpdate({
 })
 ```
 
-### Step 2e: External Perspective (gpt-5.5, optional)
+### Step 2e: External Perspective (Codex, optional)
 
 An independent second-opinion review from the Codex CLI. **Strictly optional and silent when
 unavailable** — this step must never add friction to environments without codex:
@@ -221,7 +221,7 @@ When codex is present:
    [cw-codex SKILL.md](../cw-codex/SKILL.md).
 2. Save the raw output to the results dir (`docs/specs/<run>/results/codex-review.txt`) when a
    spec run exists; otherwise keep it in-context only.
-3. Merge parsed findings into the consolidated list tagged `source: "gpt-5.5"`. Codex-only
+3. Merge parsed findings into the consolidated list tagged `source: "codex"`. Codex-only
    findings are **advisory** unless corroborated by your own review (Step 2a) or a sub-reviewer
    (Step 2d), or self-evidently blocking (e.g. a demonstrable credential leak) — only
    corroborated or self-evident findings may drive FIX tasks.
@@ -318,7 +318,7 @@ Produce a structured review report from the consolidated findings:
 
 ### [ISSUE-2] ...
 
-## External Reviewer (gpt-5.5)
+## External Reviewer (Codex)
 
 - **Findings**: [count merged, or "none"] — advisory unless corroborated
 - **Raw output**: [path to codex-review.txt]
@@ -348,7 +348,7 @@ Produce a structured review report from the consolidated findings:
 - [ ] No obvious performance regressions
 ```
 
-The **Sub-Reviewer Fan-Out** section appears only when batch mode ran (Step 2b–2d). Spawned batches carry real funnel and token numbers from Step 2d; if every batch ran via the inline fallback, the funnel line reads `0/0 — inline fallback` and the token line is omitted. Omit the whole section for inline review (≤200-line diffs). The **External Reviewer (gpt-5.5)** section appears only when Step 2e actually ran codex — omit it entirely when codex was absent or failed.
+The **Sub-Reviewer Fan-Out** section appears only when batch mode ran (Step 2b–2d). Spawned batches carry real funnel and token numbers from Step 2d; if every batch ran via the inline fallback, the funnel line reads `0/0 — inline fallback` and the token line is omitted. Omit the whole section for inline review (≤200-line diffs). The **External Reviewer (Codex)** section appears only when Step 2e actually ran codex — omit it entirely when codex was absent or failed.
 
 Save the report to: `./docs/specs/[NN]-spec-[feature-name]/[NN]-review-[feature-name].md`
 

@@ -1,80 +1,62 @@
 # Model Selection Rubric
 
-Consulted by `cw-plan` when assigning `metadata.model` to each task. This rubric ships inside
-the plugin so model policy loads at plan time in every environment — it never depends on a
-user-level CLAUDE.md.
+Consulted by `cw-plan` when assigning `metadata.model` to each task. Ships inside the plugin
+so model policy loads at plan time everywhere — it never depends on a user-level CLAUDE.md.
 
 ## Rankings
 
-Higher = better. **Cost** reflects what is actually paid. **Intelligence** is how hard a
-problem the model can take unsupervised. **Taste** covers UI/UX, code quality, API design,
-and copy.
+Higher = better. **Cost** reflects what is actually paid, **intelligence** how hard a problem
+the model takes unsupervised, **taste** UI/UX, code quality, API design, and copy.
 
-| model       | cost | intelligence | taste |
-|-------------|------|--------------|-------|
-| gpt-5.6-sol | 9    | 9            | 5     |
-| gpt-5.5     | 9    | 8            | 5     |
-| sonnet      | 5    | 5            | 7     |
-| opus        | 4    | 7            | 8     |
-| fable       | 2    | 9            | 9     |
+| model         | cost | intelligence | taste |
+|---------------|------|--------------|-------|
+| gpt-5.6-sol   | 9    | 9            | 5     |
+| gpt-5.6-terra | 9    | 8            | 4     |
+| sonnet        | 5    | 5            | 7     |
+| opus          | 4    | 7            | 8     |
+| fable         | 2    | 9            | 9     |
 
-`gpt-5.6-sol` is the **current external default**. `gpt-5.5` remains valid — it is codex's
-config-default model and the fallback recommendation when a host's account lacks the 5.6
-generation.
+`gpt-5.6-sol` is the external default (frontier tier). `gpt-5.6-terra` is the balanced
+5.6-generation tier — comparable context, ~half the token cost, lighter on Codex usage
+limits, in exchange for some intelligence and noticeably less design sense. Reach for terra
+only on the highest-volume, purely-mechanical bulk work where conserving sol's budget matters
+and taste is irrelevant.
 
 ## How to Apply
 
-- These are defaults, not limits. If a cheaper model's output doesn't meet the bar, redo the
-  work with a smarter model. Judge the output, not the price tag — escalating costs less than
-  shipping mediocre work.
-- Cost is a tie-breaker only. When axes conflict for anything that ships:
-  **intelligence > taste > cost**.
+- These are defaults, not limits. If a cheaper model's output misses the bar, redo it with a
+  smarter one — judge the output, not the price tag. When axes conflict for anything that
+  ships: **intelligence > taste > cost** (cost breaks ties only).
 - **Bulk/mechanical work** (clear-spec implementation, migrations, data plumbing) → the
-  external tier (current default `gpt-5.6-sol`), it's effectively free. Eligibility bar, ALL
-  required:
-  - Requirements are fully specified (clear R-IDs, no design judgment left to the executor)
-  - Scope is exhaustive (`files_to_create`/`files_to_modify` complete)
-  - Silent fallback to sonnet is acceptable — external models are **runtime-gated**:
-    environments without the codex CLI execute the task on sonnet with no warning, so never
-    plan an external model for a task that would be mis-sized for sonnet
-- **Anything user-facing** (UI, copy, API surface design) needs taste ≥ 7 → never the
-  external tier.
-- **Reviews** of plans/implementations → opus (or fable when orchestrating), optionally
-  gpt-5.5 as an extra independent perspective (see cw-review Step 2e).
-- **Haiku is plumbing-only.** Legal for non-authoring mechanics — proof-verifier re-runs,
-  mechanical action batches — never for authored work products (code, copy, plans, specs).
-  Trivial *authoring* tasks route to the external default (`gpt-5.6-sol`) when eligible,
-  otherwise `sonnet`.
+  external tier. Eligible only when ALL hold: requirements fully specified (clear R-IDs, no
+  design judgment left to the executor); scope exhaustive
+  (`files_to_create`/`files_to_modify` complete); and sonnet is an acceptable executor — the
+  tier is **runtime-gated**, so a host without the codex CLI silently runs the task on sonnet.
+- **Anything user-facing** (UI, copy, API surface) needs taste ≥ 7 → never the external tier.
+- **Reviews** → opus (fable when orchestrating), optionally an extra independent Codex
+  perspective (cw-review Step 2e).
+- **Haiku is plumbing-only** — proof-verifier re-runs, mechanical action batches; never
+  authored work products. Trivial *authoring* routes to the external default when eligible,
+  else `sonnet`.
 
 ## Mechanics
 
-- External models (`gpt-5.5` and successors) are reachable only through the Codex CLI. The
-  dispatcher spawns the `codex-implementer` wrapper (a sonnet agent that runs
-  `codex exec -m "<model>"` and independently verifies the result); see the
-  [cw-codex skill](../../cw-codex/SKILL.md).
-- Claude models (`sonnet`, `opus`, `haiku`) pass straight through Task()'s `model` parameter.
-- After execution the journal records `model_used` (and `fallback_reason` if the codex path
-  degraded) — plan-time `model` is intent; the journal is fact.
+- Non-Claude models run through the Codex CLI wrapper (`codex-implementer`), which passes the
+  value to `codex exec -m` and independently verifies the result; reasoning effort scales with
+  the task's `complexity`. Mechanics: the [cw-codex skill](../../cw-codex/SKILL.md).
+- Claude models pass straight through Task()'s `model` parameter.
+- Plan-time `model` is intent; the journal's `model_used` (and `fallback_reason`, if the codex
+  path degraded) is fact.
 
 ## Adding a New Model
 
-This table is the single point of change — the routing rule downstream is structural, not
-enumerated: **any `model` value that is not a Claude model (`haiku`/`sonnet`/`opus`) dispatches
-via the codex wrapper, which passes the value verbatim to `codex exec -m`.** So when a new
-external model ships (e.g. `gpt-5.6`, released 2026-07-09):
+The table is the single point of change — routing is structural, not enumerated: **any
+non-Claude `model` dispatches via the wrapper, which passes it verbatim to `codex exec -m`.**
+To add one:
 
-1. Add a row above with its cost/intelligence/taste rankings — judge from real output, not
-   marketing. Use the **exact CLI model id**, not the marketing name — new models often ship
-   as variants (e.g. the gpt-5.6 generation is `gpt-5.6-sol`/`-terra`/`-luna`; bare
-   `gpt-5.6` is rejected). Verify with codex's model picker or a one-line
-   `codex exec -m <id> -s read-only` probe.
-2. Update the "How to Apply" bullets if its profile changes which tier owns bulk/mechanical
-   work.
-3. Nothing else: no dispatcher, wrapper, schema, or hook changes. Codex must recognize the
-   model name (`~/.codex/config.toml` account/provider must support it) — if it doesn't, the
-   wrapper's codex run fails and the task silently falls back to sonnet, recorded in
-   `fallback_reason`.
+1. Add a row with cost/intelligence/taste judged from real output, not marketing. Use the
+   exact CLI model id (see the cw-codex skill's model-id guidance).
+2. Update the How-to-Apply bullets only if its profile changes which tier owns bulk work.
 
-New *Claude* models are the platform's concern: once Task()'s `model` parameter accepts a
-name, it can be used here directly — extend the Claude-model list in the dispatch skills'
-External-engine paragraphs if the haiku/sonnet/opus set ever grows.
+No dispatcher, wrapper, schema, or hook change is ever needed. If Codex does not recognize the
+id, the run fails and the task falls back to sonnet, recorded in `fallback_reason`.

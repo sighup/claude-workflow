@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# codex-routing.test.sh - the gpt-5.5 (Codex CLI) executor tier is strictly
+# codex-routing.test.sh - the external (Codex CLI) executor tier is strictly
 # additive and runtime-gated. Guards:
 #   - no-codex environments behave identically to 3.7.1 (metadata hook accepts
 #     "gpt-5.5" exactly like "sonnet"; preflight degrades cleanly; no new hooks)
@@ -119,7 +119,7 @@ else
 fi
 
 # Extract the documented `codex exec` snippet and run it against the stub —
-# guards doc drift from the flag shape verified against codex-cli 0.142.5.
+# guards doc drift from the verified flag shape.
 SNIP="$CW_TEST_TMP/codex-exec-snippet.sh"
 awk '
     /^PROMPT_FILE="\$RESULTS_DIR/ { f = 1 }
@@ -143,6 +143,7 @@ WRAP="$CW_TEST_TMP/codex-exec-wrapper.sh"
     echo "RESULTS_DIR=\"$RESULTS_DIR\""
     echo 'TASK_ID="T01"'
     echo 'CODEX_MODEL="gpt-5.6"'
+    echo 'CODEX_EFFORT="high"'
     echo 'echo "stub prompt" > "$RESULTS_DIR/${TASK_ID}-codex-prompt.md"'
     cat "$SNIP"
 } > "$WRAP"
@@ -151,6 +152,12 @@ argv=$(cat "$CODEX_ARGV_FILE" 2>/dev/null | tr '\n' ' ')
 case "$argv" in
     (exec*-C*--add-dir*-s\ workspace-write*-m\ gpt-5.6*-\ *) pass ;;
     (*) fail "argv was: '$argv'" ;;
+esac
+
+t "codex exec snippet passes reasoning effort through (-c model_reasoning_effort)"
+case "$argv" in
+    (*-c\ model_reasoning_effort=high*) pass ;;
+    (*) fail "no model_reasoning_effort in argv: '$argv'" ;;
 esac
 
 t "model value passes through verbatim (new-model extensibility, no enum anywhere)"
