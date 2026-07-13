@@ -513,10 +513,46 @@ if [[ -n "$REPO_ROOT" ]] && _herdr_supports_worktree "$REPO_ROOT"; then
             WORKSPACE_ID="$(echo "$ROOT_PANE" | grep -o '"workspace_id":"[^"]*"' | head -1 | sed 's/.*:"//;s/"//')"
             TAB_ID="$(echo "$ROOT_PANE" | grep -o '"tab_id":"[^"]*"' | head -1 | sed 's/.*:"//;s/"//')"
         fi
+
+        # The native call executed and returned a response — it may already
+        # have created or reused a workspace server-side — but the ids failed
+        # to parse out of it. Falling through to the legacy per-repo-workspace
+        # path below would spawn a SECOND, duplicate pane while leaving the one
+        # the native call just opened orphaned and empty. Reconcile via
+        # `worktree list` (keyed on the worktree's own path, not the shared
+        # repo name) before ever considering the legacy fallback.
+        if [[ -z "$PANE_ID" || -z "$WORKSPACE_ID" || -z "$TAB_ID" ]]; then
+            RECONCILE_JSON="$(_herdr worktree list --cwd "$REPO_ROOT" --json 2>/dev/null)" || true
+            if [[ -n "$RECONCILE_JSON" ]] && command -v jq >/dev/null 2>&1; then
+                WORKSPACE_ID="$(echo "$RECONCILE_JSON" | jq -r --arg p "$WORKTREE_ABS" \
+                    '.result.worktrees[] | select(.path == $p) | .open_workspace_id // empty' 2>/dev/null | head -1)"
+            fi
+            if [[ -n "$WORKSPACE_ID" ]]; then
+                WS_JSON="$(_herdr workspace get "$WORKSPACE_ID" 2>/dev/null)" || true
+                if [[ -n "$WS_JSON" ]] && command -v jq >/dev/null 2>&1; then
+                    TAB_ID="$(echo "$WS_JSON" | jq -r '.result.workspace.active_tab_id // empty' 2>/dev/null)"
+                fi
+                if [[ -n "$TAB_ID" ]]; then
+                    PANE_ID="$(_first_pane_in_tab "$TAB_ID")" || true
+                fi
+            fi
+        fi
+
+        # Still unresolved — the native call clearly did something server-side
+        # (it returned a response) but its ids can't be recovered. Fail loudly
+        # instead of silently falling back to the legacy path, which would
+        # spawn a duplicate pane and leak whatever the native call just made.
+        if [[ -z "$PANE_ID" || -z "$WORKSPACE_ID" || -z "$TAB_ID" ]]; then
+            echo "cw-herdr-open: native worktree-open returned a response but its pane/workspace/tab ids could not be resolved even after reconciliation; refusing to fall back to the legacy path (would duplicate a live pane)" >&2
+            exit 4
+        fi
     fi
 fi
 
-# Legacy fallback: only when the native path produced no pane (older herdr).
+# Legacy fallback: only when the native path produced no response at all
+# (older herdr lacking the worktree subcommand). If the native call returned
+# something but its ids didn't resolve, we already exited above rather than
+# reaching here — see the reconciliation block.
 if [[ -z "$PANE_ID" || -z "$WORKSPACE_ID" ]]; then
 
 WORKSPACE_NAME="$(_repo_name_for_worktree "$WORKTREE_ABS")"
