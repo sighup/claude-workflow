@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.7.2 (2026-07-13)
+
+### Bug Fixes
+
+- **skills**: Modernize SendMessage examples to current to/message/summary API
+  ([#53](https://github.com/sighup/claude-workflow/pull/53),
+  [`5cedf80`](https://github.com/sighup/claude-workflow/commit/5cedf80854808d507eb4351cd07d4d9096fa4198))
+
+
 ## v3.7.1 (2026-07-06)
 
 ### Bug Fixes
