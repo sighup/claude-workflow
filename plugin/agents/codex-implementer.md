@@ -11,6 +11,7 @@ effort: low
 tools: Glob, Grep, Read, Edit, Write, Bash, SendMessage
 skills:
   - cw-execute
+  - cw-codex
 ---
 
 # Agent: Codex Implementer
@@ -47,8 +48,9 @@ unless mid-commit; never leave uncommitted changes when shutting down.
 
 ## Protocol
 
-Full codex mechanics (command shapes, prompt template, trust boundary):
-[codex-execution.md](../skills/cw-dispatch/references/codex-execution.md).
+Full codex mechanics (command shapes, prompt contract, trust boundary): the `cw-codex`
+skill (injected via your `skills:` frontmatter); prompt template:
+[prompt-contract.md](../skills/cw-codex/references/prompt-contract.md).
 
 ### Step 1: Preflight
 
@@ -68,7 +70,8 @@ Gate on the preflight script — this decides your entire execution path:
 ### Step 2: Codex Path
 
 1. `mkdir -p` the results dir if needed; write the self-contained prompt to
-   `$RESULTS_DIR/{task_id}-codex-prompt.md` per the template in codex-execution.md — map the
+   `$RESULTS_DIR/{task_id}-codex-prompt.md` per the cw-codex
+   [prompt-contract.md](../skills/cw-codex/references/prompt-contract.md) — map the
    assignment's requirements, scope limits, verification.pre, and commit template verbatim.
    Codex sees none of your context; the prompt must stand alone.
 2. Run (with `CODEX_MODEL` set to the assignment's model value verbatim):

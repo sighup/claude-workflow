@@ -50,8 +50,8 @@ generation.
 
 - External models (`gpt-5.5` and successors) are reachable only through the Codex CLI. The
   dispatcher spawns the `codex-implementer` wrapper (a sonnet agent that runs
-  `codex exec -m "<model>"` and independently verifies the result); see
-  [codex-execution.md](../../cw-dispatch/references/codex-execution.md).
+  `codex exec -m "<model>"` and independently verifies the result); see the
+  [cw-codex skill](../../cw-codex/SKILL.md).
 - Claude models (`sonnet`, `opus`, `haiku`) pass straight through Task()'s `model` parameter.
 - After execution the journal records `model_used` (and `fallback_reason` if the codex path
   degraded) — plan-time `model` is intent; the journal is fact.

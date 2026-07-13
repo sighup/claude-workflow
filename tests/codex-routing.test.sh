@@ -11,17 +11,18 @@ source "$(dirname "$0")/helpers.sh"
 
 VALIDATE="$PLUGIN_DIR/scripts/validate-task-metadata.sh"
 PREFLIGHT="$PLUGIN_DIR/scripts/codex-preflight.sh"
-CODEX_DOC="$PLUGIN_DIR/skills/cw-dispatch/references/codex-execution.md"
+CODEX_DOC="$PLUGIN_DIR/skills/cw-codex/SKILL.md"
+CODEX_PROMPT_CONTRACT="$PLUGIN_DIR/skills/cw-codex/references/prompt-contract.md"
 RUBRIC="$PLUGIN_DIR/skills/cw-plan/references/model-selection.md"
 WRAPPER_AGENT="$PLUGIN_DIR/agents/codex-implementer.md"
 
 echo "codex routing: runtime gating + no-codex parity"
 
 t "new files exist"
-if [ -f "$PREFLIGHT" ] && [ -f "$CODEX_DOC" ] && [ -f "$RUBRIC" ] && [ -f "$WRAPPER_AGENT" ]; then
+if [ -f "$PREFLIGHT" ] && [ -f "$CODEX_DOC" ] && [ -f "$CODEX_PROMPT_CONTRACT" ] && [ -f "$RUBRIC" ] && [ -f "$WRAPPER_AGENT" ]; then
     pass
 else
-    fail "missing one of preflight/doc/rubric/wrapper"
+    fail "missing one of preflight/cw-codex skill/prompt contract/rubric/wrapper"
 fi
 
 # --- (a) metadata hook parity: "gpt-5.5" is treated exactly like "sonnet" ---
@@ -126,7 +127,7 @@ awk '
     f && /- < "\$PROMPT_FILE"$/ { exit }
 ' "$CODEX_DOC" > "$SNIP"
 
-t "codex exec snippet extracted from codex-execution.md"
+t "codex exec snippet extracted from cw-codex SKILL.md"
 grep -q '^codex exec' "$SNIP"
 assert_success $?
 

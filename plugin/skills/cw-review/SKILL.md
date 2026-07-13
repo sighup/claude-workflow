@@ -218,7 +218,7 @@ When codex is present:
 
 1. Run the review against the same base: `codex review --base main` (or `--uncommitted` when
    reviewing working-tree changes). Command reference:
-   [codex-execution.md](../cw-dispatch/references/codex-execution.md).
+   [cw-codex SKILL.md](../cw-codex/SKILL.md).
 2. Save the raw output to the results dir (`docs/specs/<run>/results/codex-review.txt`) when a
    spec run exists; otherwise keep it in-context only.
 3. Merge parsed findings into the consolidated list tagged `source: "gpt-5.5"`. Codex-only
