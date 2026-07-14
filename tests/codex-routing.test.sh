@@ -2,8 +2,9 @@
 #
 # codex-routing.test.sh - the external (Codex CLI) executor tier is strictly
 # additive and runtime-gated. Guards:
-#   - no-codex environments behave identically to 3.7.1 (metadata hook accepts
-#     "gpt-5.5" exactly like "sonnet"; preflight degrades cleanly; no new hooks)
+#   - no-codex environments behave identically to the pre-codex plugin (metadata
+#     hook accepts "gpt-5.6-sol" exactly like "sonnet"; preflight degrades
+#     cleanly; no new hooks)
 #   - routing plumbing exists when codex is present (preflight OK path; the
 #     documented `codex exec` command shape parses and passes verified flags)
 #
@@ -25,25 +26,25 @@ else
     fail "missing one of preflight/cw-codex skill/prompt contract/rubric/wrapper"
 fi
 
-# --- (a) metadata hook parity: "gpt-5.5" is treated exactly like "sonnet" ---
+# --- (a) metadata hook parity: "gpt-5.6-sol" is treated exactly like "sonnet" ---
 
 make_task_input() { # model
     printf '{"task":{"metadata":{"task_id":"T01","demoable_unit":1,"spec_path":"docs/specs/x.md","scope":{"files_to_modify":["a.ts"]},"requirements":[{"id":"R1.1","text":"x","testable":true}],"model":"%s"}}}' "$1"
 }
 
-t "validate hook accepts gpt-5.5 fixture silently (exit 0)"
-out_gpt=$(make_task_input "gpt-5.5" | /bin/bash "$VALIDATE"); rc=$?
+t "validate hook accepts gpt-5.6-sol fixture silently (exit 0)"
+out_gpt=$(make_task_input "gpt-5.6-sol" | /bin/bash "$VALIDATE"); rc=$?
 assert_success $rc
 
-t "gpt-5.5 fixture output identical to sonnet fixture output"
+t "gpt-5.6-sol fixture output identical to sonnet fixture output"
 out_sonnet=$(make_task_input "sonnet" | /bin/bash "$VALIDATE")
 assert_eq "$out_sonnet" "$out_gpt"
 
-t "gpt-5.5 fixture output is empty (no warning)"
+t "gpt-5.6-sol fixture output is empty (no warning)"
 assert_empty "$out_gpt"
 
 t "legacy fixture (missing fields) still warns exactly as before"
-out_legacy=$(printf '{"task":{"metadata":{"model":"gpt-5.5"}}}' | /bin/bash "$VALIDATE")
+out_legacy=$(printf '{"task":{"metadata":{"model":"gpt-5.6-sol"}}}' | /bin/bash "$VALIDATE")
 assert_contains "$out_legacy" "missing metadata: task_id, demoable_unit, spec_path, scope, requirements"
 
 # --- (a) preflight degrades cleanly without codex ---
@@ -76,11 +77,11 @@ t "codex-implementer declares the cw-execute fallback skill"
 grep -q 'cw-execute' "$WRAPPER_AGENT"
 assert_success $?
 
-t "cw-dispatch routes gpt-5.5 to the wrapper"
+t "cw-dispatch routes external models to the wrapper"
 grep -q 'claude-workflow:codex-implementer' "$PLUGIN_DIR/skills/cw-dispatch/SKILL.md"
 assert_success $?
 
-t "cw-dispatch-team routes gpt-5.5 to the wrapper (parity)"
+t "cw-dispatch-team routes external models to the wrapper (parity)"
 grep -q 'claude-workflow:codex-implementer' "$PLUGIN_DIR/skills/cw-dispatch-team/SKILL.md"
 assert_success $?
 
@@ -142,7 +143,7 @@ WRAP="$CW_TEST_TMP/codex-exec-wrapper.sh"
     echo '#!/bin/bash'
     echo "RESULTS_DIR=\"$RESULTS_DIR\""
     echo 'TASK_ID="T01"'
-    echo 'CODEX_MODEL="gpt-5.6"'
+    echo 'CODEX_MODEL="gpt-5.6-sol"'
     echo 'CODEX_EFFORT="high"'
     echo 'echo "stub prompt" > "$RESULTS_DIR/${TASK_ID}-codex-prompt.md"'
     cat "$SNIP"
@@ -150,7 +151,7 @@ WRAP="$CW_TEST_TMP/codex-exec-wrapper.sh"
 PATH="$STUB_BIN:/usr/bin:/bin" /bin/bash "$WRAP" >/dev/null 2>&1
 argv=$(cat "$CODEX_ARGV_FILE" 2>/dev/null | tr '\n' ' ')
 case "$argv" in
-    (exec*-C*--add-dir*-s\ workspace-write*-m\ gpt-5.6*-\ *) pass ;;
+    (exec*-C*--add-dir*-s\ workspace-write*-m\ gpt-5.6-sol*-\ *) pass ;;
     (*) fail "argv was: '$argv'" ;;
 esac
 
@@ -161,7 +162,7 @@ case "$argv" in
 esac
 
 t "model value passes through verbatim (new-model extensibility, no enum anywhere)"
-out_new=$(make_task_input "gpt-5.6" | /bin/bash "$VALIDATE"); rc=$?
+out_new=$(make_task_input "gpt-5.7-nova" | /bin/bash "$VALIDATE"); rc=$?
 if [ $rc -eq 0 ] && [ -z "$out_new" ] && grep -q 'any non-Claude model' "$PLUGIN_DIR/skills/cw-dispatch/SKILL.md"; then
     pass
 else
